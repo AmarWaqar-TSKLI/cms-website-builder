@@ -65,6 +65,10 @@ dockerised Postgres. `make up` runs everything in containers.
 
 ---
 
+> **Showing this to someone?** `DEMO.md` is a full script: what to click in what
+> order, what to say while you do it, how to explain the architecture and the
+> schema, and the questions a senior developer will ask with answers to each.
+
 ## The 60-second tour
 
 1. **`/walkthrough`** → hit **Fire 10 autosaves**. `page_drafts` stays at 2 rows
