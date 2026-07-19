@@ -13,6 +13,7 @@ import { PrismaClient } from "@prisma/client";
 import { createNode } from "../src/lib/registry";
 import type { PageBody, PageNode } from "../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../src/lib/theme";
+import { toJson } from "../src/lib/json";
 
 const prisma = new PrismaClient();
 
@@ -26,9 +27,13 @@ function svgDataUri(from: string, to: string, label: string) {
   <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0%" stop-color="${from}"/><stop offset="100%" stop-color="${to}"/>
   </linearGradient></defs>
-  <rect width="1200" height="900" fill="url(#g)"/>
+  <rect width="1200" height="900" fill="url(#g)"/>${
+    label
+      ? `
   <text x="600" y="470" font-family="Inter,sans-serif" font-size="54" font-weight="600"
-        fill="rgba(255,255,255,.82)" text-anchor="middle">${label}</text>
+        fill="rgba(255,255,255,.82)" text-anchor="middle">${label}</text>`
+      : ""
+  }
 </svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
@@ -119,7 +124,7 @@ async function main() {
   const heroMedia = await prisma.media.create({
     data: {
       siteId: site.id,
-      storageKey: svgDataUri("#1b1b6f", "#0b0b0f", "acme"),
+      storageKey: svgDataUri("#1b1b6f", "#0b0b0f", ""),
       mime: "image/svg+xml",
       width: 1200,
       height: 900,
@@ -129,7 +134,7 @@ async function main() {
   const aboutMedia = await prisma.media.create({
     data: {
       siteId: site.id,
-      storageKey: svgDataUri("#2f6f5f", "#0b0b0f", "workshop"),
+      storageKey: svgDataUri("#2f6f5f", "#0b0b0f", ""),
       mime: "image/svg+xml",
       width: 1200,
       height: 900,
@@ -189,7 +194,7 @@ async function main() {
     data: {
       pageId: home.id,
       updatedBy: user.id,
-      body: body([
+      body: toJson(body([
         node("Hero", {
           headline: "Everything here is a description.",
           subhead:
@@ -213,7 +218,7 @@ async function main() {
         }),
         node("Button", { label: "Read the architecture", href: "/about", variant: "outline" }),
         node("Spacer", { height: 40 }),
-      ]) as never,
+      ])),
     },
   });
 
@@ -221,7 +226,7 @@ async function main() {
     data: {
       pageId: about.id,
       updatedBy: user.id,
-      body: body([
+      body: toJson(body([
         node("Hero", {
           headline: "Rollback is one column.",
           subhead: "UPDATE sites SET live_release_id = <older release>. Nothing rebuilds.",
@@ -238,7 +243,7 @@ async function main() {
         }),
         node("ImageBlock", { media: aboutMedia.id, caption: "Every release is still on disk.", width: "wide" }),
         node("Spacer", { height: 64 }),
-      ]) as never,
+      ])),
     },
   });
 

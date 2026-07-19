@@ -98,7 +98,7 @@ export default function ReleaseStack() {
     return (
       <section ref={sectionRef} className="mx-auto w-full max-w-5xl px-6">
         <div className="relative h-[320px] w-full sm:h-[420px]">
-          <ReleaseStackCanvas sectionRef={sectionRef} />
+          <ReleaseStackCanvas sectionRef={sectionRef} centered />
         </div>
         <div className="mt-10 space-y-16">
           <AppendCopy />
@@ -114,27 +114,33 @@ export default function ReleaseStack() {
   return (
     <section ref={sectionRef} className="relative h-[340vh]">
       <div className="sticky top-0 h-screen overflow-hidden">
-        <ReleaseStackCanvas sectionRef={sectionRef} />
+        {/* Below lg the stack gets its own band above the copy; at lg it goes
+            full-bleed and the copy sits over its left half. */}
+        <div className="absolute inset-x-0 top-0 h-[38%] lg:inset-0 lg:h-full">
+          <ReleaseStackCanvas sectionRef={sectionRef} />
+        </div>
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink-950/70 via-transparent to-ink-950/80 lg:bg-gradient-to-r lg:from-ink-950 lg:via-ink-950/70 lg:to-transparent"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-ink-950/60 to-ink-950 lg:bg-gradient-to-r lg:from-ink-950 lg:via-ink-950/75 lg:to-transparent"
         />
-        <div className="relative mx-auto flex h-full w-full max-w-5xl items-end px-6 pb-16 sm:items-center sm:pb-0">
-          <div className="grid w-full">
-            {blocks.map((block, i) => (
-              <div
-                key={i}
-                aria-hidden={phase !== i}
-                className={[
-                  "col-start-1 row-start-1 transition-[opacity,transform] duration-500 ease-out",
-                  phase === i
-                    ? "translate-y-0 opacity-100"
-                    : "pointer-events-none translate-y-3 opacity-0",
-                ].join(" ")}
-              >
-                {block}
-              </div>
-            ))}
+        <div className="absolute inset-x-0 top-[36%] bottom-0 lg:inset-0">
+          <div className="mx-auto flex h-full w-full max-w-5xl items-start px-6 lg:items-center">
+            <div className="grid w-full grid-cols-1">
+              {blocks.map((block, i) => (
+                <div
+                  key={i}
+                  aria-hidden={phase !== i}
+                  className={[
+                    "col-start-1 row-start-1 min-w-0 transition-[opacity,transform] duration-500 ease-out",
+                    phase === i
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-3 opacity-0",
+                  ].join(" ")}
+                >
+                  {block}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

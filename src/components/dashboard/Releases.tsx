@@ -32,6 +32,9 @@ interface ReleaseRow {
 
 export function Releases({ siteId, siteSlug }: { siteId: string; siteSlug: string }) {
   const [releases, setReleases] = useState<ReleaseRow[]>([]);
+  // Distinguished from "loaded and empty" so the panel never claims a site has
+  // no releases while it is still fetching them.
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(
     null,
@@ -45,6 +48,7 @@ export function Releases({ siteId, siteSlug }: { siteId: string; siteSlug: strin
     if (!res.ok) return;
     const data = await res.json();
     setReleases(data.releases);
+    setLoaded(true);
   }, [siteId]);
 
   useEffect(() => {
@@ -155,7 +159,9 @@ export function Releases({ siteId, siteSlug }: { siteId: string; siteSlug: strin
         </div>
       )}
 
-      {releases.length === 0 ? (
+      {!loaded ? (
+        <Note>Reading releases…</Note>
+      ) : releases.length === 0 ? (
         <Note>No releases yet. Publish from the editor to create v1.</Note>
       ) : (
         <ol className="space-y-2">

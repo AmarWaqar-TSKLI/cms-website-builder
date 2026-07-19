@@ -190,7 +190,16 @@ ${c.bold}CMS Website Builder — commands${c.reset}
   test() {
     ensureEnv();
     ensureDeps();
-    run("npx", ["vitest", "run", "tests/unit", "tests/integration"]);
+    // The worker tests start and stop the real worker process themselves. A
+    // second worker polling the same queue would make "who claimed this job"
+    // nondeterministic, so the container stands down for the duration.
+    say("stopping the worker container so the tests own the queue");
+    run("docker", ["compose", "stop", "worker"], { allowFail: true });
+    const code = run("npx", ["vitest", "run", "tests/unit", "tests/integration"], {
+      allowFail: true,
+    });
+    run("docker", ["compose", "start", "worker"], { allowFail: true });
+    if (code !== 0) die("tests failed");
   },
 
   e2e() {
@@ -243,8 +252,16 @@ ${c.bold}CMS Website Builder — commands${c.reset}
 
     await waitForHttp("http://localhost:3000/api/health", 240_000, "app");
 
-    say("running unit + integration tests");
-    run("npx", ["vitest", "run", "tests/unit", "tests/integration"]);
+    say("running unit + integration tests (worker container stands down)");
+    run("docker", ["compose", "stop", "worker"], { allowFail: true });
+    const testCode = run("npx", ["vitest", "run", "tests/unit", "tests/integration"], {
+      allowFail: true,
+    });
+    run("docker", ["compose", "start", "worker"], { allowFail: true });
+    if (testCode !== 0) die("tests failed — not proceeding to verification");
+
+    // Give the restarted worker a moment to start polling before verify publishes.
+    await sleep(2500);
 
     say("running verification gate");
     const code = run("npx", ["tsx", "scripts/verify.ts"], { allowFail: true });

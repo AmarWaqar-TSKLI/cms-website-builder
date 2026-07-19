@@ -8,9 +8,9 @@ export const RELEASE_COUNT = 9;
 /** The release the pointer snaps back to. Zero-indexed, chronological. */
 export const ROLLBACK_INDEX = 5;
 
-const SPACING = 0.78;
-const PLANE_W = 3.3;
-const PLANE_H = 2.05;
+const SPACING = 0.82;
+const PLANE_W = 2.9;
+const PLANE_H = 1.8;
 
 /** append → hold at head → rollback. Shared with the copy overlay so the words
  *  and the geometry are never out of step. */
@@ -31,8 +31,12 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
  */
 export default function ReleaseStackCanvas({
   sectionRef,
+  centered = false,
 }: {
   sectionRef: React.RefObject<HTMLElement | null>;
+  /** Reduced-motion layout stacks copy *below* the canvas, so nothing needs to
+   *  be kept clear on the left and the stack sits in the middle. */
+  centered?: boolean;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const reduced = usePrefersReducedMotion();
@@ -60,9 +64,16 @@ export default function ReleaseStackCanvas({
     const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 100);
     camera.position.set(0, 0, 8);
 
+    // pivot = where the *newest* release sits on screen. It never moves.
+    // stack = the log itself, which slides backwards along its own local Z as
+    // releases are appended. Separating them matters: if the slide happened in
+    // world space the rotated stack would drift sideways across the copy.
+    const pivot = new THREE.Group();
+    pivot.rotation.set(0.26, -0.62, 0);
+    scene.add(pivot);
+
     const group = new THREE.Group();
-    group.rotation.set(0.2, -0.52, 0);
-    scene.add(group);
+    pivot.add(group);
 
     // One geometry, reused. Nine releases, nine materials — the material is the
     // only per-release state, because "which one is live" is the only thing the
@@ -124,11 +135,12 @@ export default function ReleaseStackCanvas({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      const wide = camera.aspect > 1.15;
-      // Wide: stack sits right of the copy. Narrow: stack floats above it.
-      group.position.x = wide ? 1.5 : 0;
-      group.position.y = wide ? 0 : 1.15;
-      camera.position.z = wide ? 8 : 10.6;
+      // Wide: the stack sits clear to the right of the copy column. Narrow: the
+      // canvas already occupies its own band above the copy, so it centres.
+      const wide = !centered && camera.aspect > 1.5;
+      pivot.position.x = centered ? -0.6 : wide ? 2.85 : 0.9;
+      pivot.position.y = wide ? 0.15 : 0;
+      camera.position.z = wide ? 9 : camera.aspect > 1 ? 11 : 13.5;
       camera.updateProjectionMatrix();
     };
     resize();
@@ -147,8 +159,8 @@ export default function ReleaseStackCanvas({
         // Fade-in of a newly appended plane; older planes hold whatever they had.
         const born = clamp01(countF - i);
         const isLive = i === pointerIndex;
-        const targetFace = born * (isLive ? 0.3 : 0.075);
-        const targetRim = born * (isLive ? 0.95 : 0.3);
+        const targetFace = born * (isLive ? 0.34 : 0.06);
+        const targetRim = born * (isLive ? 1 : 0.26);
         faceMats[i].opacity += (targetFace - faceMats[i].opacity) * (instant ? 1 : 0.18);
         rimMats[i].opacity += (targetRim - rimMats[i].opacity) * (instant ? 1 : 0.18);
         faceMats[i].color.setHex(isLive ? 0x6d5cff : 0x2e2e39);
@@ -246,7 +258,7 @@ export default function ReleaseStackCanvas({
       renderer.forceContextLoss();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
     };
-  }, [sectionRef, reduced]);
+  }, [sectionRef, reduced, centered]);
 
   return <div ref={mountRef} aria-hidden className="absolute inset-0" />;
 }
