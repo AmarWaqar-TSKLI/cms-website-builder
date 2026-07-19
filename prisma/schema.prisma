@@ -1,0 +1,507 @@
+// CMS Website Builder — schema
+//
+// The tier split is load-bearing, not cosmetic:
+//   Tier 1 (engine)   — versioned. Pages, revisions, themes, releases. Rolls back.
+//   Tier 2 (modules)  — live. Products, orders, customers. NEVER versioned.
+//
+// Exactly one column crosses the boundary: sites.live_release_id.
+// That column is the rollback switch and the entire coupling between the two worlds.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIER 1 — ENGINE (versioned)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  plan      String   @default("free")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  memberships Membership[]
+  sites       Site[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model Membership {
+  orgId  String @map("org_id")
+  userId String @map("user_id")
+  role   String @default("owner")
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@map("memberships")
+}
+
+model Site {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  name         String
+  slug         String   @unique
+  customDomain String?  @unique @map("custom_domain")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // ── THE ROLLBACK SWITCH ──────────────────────────────────────────────────
+  // The only column connecting versioned content to what visitors actually see.
+  // Rollback is: UPDATE sites SET live_release_id = <older release>. That's all.
+  liveReleaseId String? @map("live_release_id")
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  liveRelease Release?     @relation("LiveRelease", fields: [liveReleaseId], references: [id])
+
+  modules   SiteModule[]
+  pages     Page[]
+  themes    Theme[]
+  releases  Release[]    @relation("SiteReleases")
+  media     Media[]
+  products  Product[]
+  collections Collection[]
+  customers Customer[]
+  orders    Order[]
+  posts     Post[]
+  tags      Tag[]
+
+  @@map("sites")
+}
+
+enum ModuleName {
+  blog
+  commerce
+  forms
+}
+
+/// Which Tier-2 modules a site has opted into. Drives palette filtering:
+/// engine + blog ≈ WordPress, engine + commerce ≈ Shopify.
+model SiteModule {
+  siteId    String     @map("site_id")
+  module    ModuleName
+  enabledAt DateTime   @default(now()) @map("enabled_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, module])
+  @@map("site_modules")
+}
+
+/// Identity only — a page has NO content column. Content lives in drafts
+/// (mutable, one row) and revisions (immutable, many rows).
+model Page {
+  id        String    @id @default(uuid())
+  siteId    String    @map("site_id")
+  path      String
+  type      String    @default("page")
+  title     String    @default("Untitled")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  site      Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  draft     PageDraft?
+  revisions PageRevision[]
+
+  // The real constraint is a PARTIAL unique index — UNIQUE(site_id, path)
+  // WHERE deleted_at IS NULL — added by raw SQL in the migration, because a
+  // soft-deleted page must not block reusing its path.
+  @@index([siteId])
+  @@map("pages")
+}
+
+/// OVERWRITE-ONLY. page_id is the primary key, so one draft per page is a
+/// database guarantee, not a convention. Autosave hammers this row every ~2s.
+/// This is crash protection. It is NOT history.
+model PageDraft {
+  pageId      String   @id @map("page_id")
+  body        Json
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+  /// Optimistic lock. A stale write gets 409 → "edited in another tab".
+  lockVersion Int      @default(0) @map("lock_version")
+
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@map("page_drafts")
+}
+
+/// APPEND-ONLY. Never updated, never deleted. One row per publish per page,
+/// holding the WHOLE tree — the arrangement is the information worth keeping.
+model PageRevision {
+  id        String   @id @default(uuid())
+  pageId    String   @map("page_id")
+  body      Json
+  versionNo Int      @map("version_no")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  page         Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  releaseItems ReleaseItem[]
+
+  @@unique([pageId, versionNo])
+  @@index([pageId])
+  @@map("page_revisions")
+}
+
+model Theme {
+  id                String  @id @default(uuid())
+  siteId            String  @map("site_id")
+  name              String
+  currentRevisionId String? @map("current_revision_id")
+
+  site      Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  revisions ThemeRevision[]
+
+  @@map("themes")
+}
+
+model ThemeRevision {
+  id        String   @id @default(uuid())
+  themeId   String   @map("theme_id")
+  tokens    Json
+  layout    Json
+  versionNo Int      @map("version_no")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  theme Theme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@unique([themeId, versionNo])
+  @@map("theme_revisions")
+}
+
+enum ReleaseStatus {
+  building
+  ready
+  failed
+}
+
+enum ArtifactType {
+  static
+  container
+}
+
+/// A release is a site-wide snapshot. Publish is site-wide, not per-page —
+/// a page that links to a page that no longer exists is not a "version".
+model Release {
+  id           String        @id @default(uuid())
+  siteId       String        @map("site_id")
+  versionNo    Int           @map("version_no")
+  status       ReleaseStatus @default(building)
+  artifactType ArtifactType  @default(static) @map("artifact_type")
+  artifactUrl  String?       @map("artifact_url")
+  buildError   String?       @map("build_error")
+  notes        String?
+  createdBy    String?       @map("created_by")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  site         Site                  @relation("SiteReleases", fields: [siteId], references: [id], onDelete: Cascade)
+  liveForSites Site[]                @relation("LiveRelease")
+  items        ReleaseItem[]
+  dependencies ReleaseDependency[]
+  buildJobs    BuildJob[]
+
+  @@unique([siteId, versionNo])
+  @@index([siteId, createdAt])
+  @@map("releases")
+}
+
+enum EntityType {
+  page
+  theme
+}
+
+/// THE MANIFEST. Pins exactly which revision of which entity belongs to this
+/// release. Building a release is a pure function of these rows — which is why
+/// an old release never needs rebuilding.
+model ReleaseItem {
+  releaseId  String     @map("release_id")
+  entityType EntityType @map("entity_type")
+  entityId   String     @map("entity_id")
+  revisionId String     @map("revision_id")
+
+  release      Release       @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  pageRevision PageRevision? @relation(fields: [revisionId], references: [id], onDelete: Cascade, map: "release_items_page_revision_fkey")
+
+  @@id([releaseId, entityType, entityId])
+  @@map("release_items")
+}
+
+enum RefType {
+  product
+  collection
+  post
+  media
+}
+
+/// The reverse index that makes D5's accepted cost VISIBLE rather than fatal.
+/// Extracted at publish time by walking each body against the component prop
+/// schemas. Answers: "what breaks if I delete this product?"
+model ReleaseDependency {
+  releaseId String  @map("release_id")
+  refType   RefType @map("ref_type")
+  refId     String  @map("ref_id")
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@id([releaseId, refType, refId])
+  @@index([refType, refId])
+  @@map("release_dependencies")
+}
+
+model Media {
+  id         String    @id @default(uuid())
+  siteId     String    @map("site_id")
+  storageKey String    @map("storage_key")
+  mime       String
+  width      Int?
+  height     Int?
+  sizeBytes  Int?      @map("size_bytes")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("media")
+}
+
+enum BuildJobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+/// The queue. DB-as-queue, claimed with SKIP LOCKED so multiple workers are safe.
+/// A separate OS process polls this table — kill it mid-build and nothing breaks.
+model BuildJob {
+  id         String         @id @default(uuid())
+  releaseId  String         @map("release_id")
+  status     BuildJobStatus @default(queued)
+  attempts   Int            @default(0)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  startedAt  DateTime?      @map("started_at")
+  finishedAt DateTime?      @map("finished_at")
+  error      String?
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("build_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIER 2 — COMMERCE (live, never versioned)
+//
+// No revision tables here on purpose. Rolling back a homepage design must not
+// un-place an order or resurrect a deleted product. Deletes are SOFT so a frozen
+// artifact referencing gone data degrades gracefully instead of 500-ing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  siteId      String        @map("site_id")
+  title       String
+  description String        @default("")
+  imageUrl    String?       @map("image_url")
+  status      ProductStatus @default(active)
+  deletedAt   DateTime?     @map("deleted_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  site        Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  variants    ProductVariant[]
+  collections CollectionProduct[]
+
+  @@index([siteId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id           String @id @default(uuid())
+  productId    String @map("product_id")
+  sku          String
+  priceCents   Int    @map("price_cents")
+  inventoryQty Int    @default(0) @map("inventory_qty")
+  options      Json   @default("{}")
+
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lineItems OrderLineItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model Collection {
+  id        String    @id @default(uuid())
+  siteId    String    @map("site_id")
+  title     String
+  handle    String
+  rules     Json      @default("{}")
+  deletedAt DateTime? @map("deleted_at")
+
+  site     Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  products CollectionProduct[]
+
+  @@unique([siteId, handle])
+  @@map("collections")
+}
+
+model CollectionProduct {
+  collectionId String @map("collection_id")
+  productId    String @map("product_id")
+  position     Int    @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, productId])
+  @@map("collection_products")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  siteId    String   @map("site_id")
+  email     String
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  site   Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([siteId, email])
+  @@map("customers")
+}
+
+enum OrderStatus {
+  pending
+  paid
+  fulfilled
+  cancelled
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  siteId     String      @map("site_id")
+  customerId String?     @map("customer_id")
+  status     OrderStatus @default(paid)
+  totalCents Int         @map("total_cents")
+  placedAt   DateTime    @default(now()) @map("placed_at")
+
+  site      Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  customer  Customer?       @relation(fields: [customerId], references: [id])
+  lineItems OrderLineItem[]
+
+  @@index([siteId, placedAt])
+  @@map("orders")
+}
+
+model OrderLineItem {
+  id        String @id @default(uuid())
+  orderId   String @map("order_id")
+  variantId String @map("variant_id")
+  qty       Int
+  /// SNAPSHOT. Never join to product_variants for a historical price — the
+  /// variant's price today has nothing to do with what this customer paid.
+  priceAtPurchaseCents Int @map("price_at_purchase_cents")
+  titleAtPurchase      String @default("") @map("title_at_purchase")
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@map("order_line_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIER 2 — BLOG (live; bodies versioned, but posts are NOT pinned by releases)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PostStatus {
+  draft
+  published
+}
+
+model Post {
+  id                String     @id @default(uuid())
+  siteId            String     @map("site_id")
+  title             String
+  slug              String
+  excerpt           String     @default("")
+  authorId          String?    @map("author_id")
+  status            PostStatus @default(draft)
+  currentRevisionId String?    @map("current_revision_id")
+  publishedAt       DateTime?  @map("published_at")
+  deletedAt         DateTime?  @map("deleted_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  site      Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  revisions PostRevision[]
+  tags      PostTag[]
+
+  @@unique([siteId, slug])
+  @@map("posts")
+}
+
+model PostRevision {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  body      Json
+  versionNo Int      @map("version_no")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, versionNo])
+  @@map("post_revisions")
+}
+
+model Tag {
+  id     String @id @default(uuid())
+  siteId String @map("site_id")
+  name   String
+  slug   String
+
+  site  Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  posts PostTag[]
+
+  @@unique([siteId, slug])
+  @@map("tags")
+}
+
+model PostTag {
+  postId String @map("post_id")
+  tagId  String @map("tag_id")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}

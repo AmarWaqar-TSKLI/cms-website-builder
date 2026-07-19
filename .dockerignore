@@ -1,0 +1,9 @@
+node_modules
+.next
+artifacts
+exports
+.git
+test-results
+playwright-report
+coverage
+*.log
