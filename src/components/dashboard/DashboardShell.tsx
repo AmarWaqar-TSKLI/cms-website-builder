@@ -16,6 +16,7 @@
  * and the export links at the same moment.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
 import { Btn, Card, CardHead, LinkBtn, Tile, UnderTheHood, exactTime, money } from "./dash-ui";
@@ -96,6 +97,8 @@ export function DashboardShell({
   } | null>(null);
   const [watching, setWatching] = useState<{ releaseId: string; versionNo: number } | null>(null);
 
+  const router = useRouter();
+
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/sites/${site.id}/releases`);
@@ -107,6 +110,10 @@ export function DashboardShell({
       /* the poll simply tries again */
     }
   }, [site.id]);
+
+  /* Page counts and draft timestamps are rendered on the server, so a finished
+     publish has to ask for fresh ones. */
+  const refreshServerData = useCallback(() => router.refresh(), [router]);
 
   const building = (releases ?? []).some((r) => r.status === "building") || watching !== null;
 
@@ -156,6 +163,7 @@ export function DashboardShell({
             text: `Version ${data.versionNo} is live. Your site was rebuilt and published.`,
           });
           load();
+          refreshServerData();
         } else if (data.status === "failed") {
           setWatching(null);
           setFlash({
@@ -172,7 +180,7 @@ export function DashboardShell({
       alive = false;
       clearInterval(timer);
     };
-  }, [watching, load]);
+  }, [watching, load, refreshServerData]);
 
   const restore = useCallback(
     async (releaseId: string, versionNo: number, acknowledge = false) => {
@@ -852,7 +860,7 @@ function ReleaseCard({
         ) : r.status === "failed" ? (
           <Badge tone="failed">Didn&apos;t build</Badge>
         ) : (
-          <Badge tone="neutral">Saved</Badge>
+          <Badge tone="neutral">Not live</Badge>
         )}
         <span className="ml-auto text-[11px] text-ink-500" title={exactTime(r.createdAt)}>
           <Ago at={r.createdAt} fallback="" />
@@ -865,8 +873,8 @@ function ReleaseCard({
         className="mt-1.5 text-[11.5px] text-ink-500"
         title={`release_items: ${r.itemCount} rows · release_dependencies: ${r.dependencyCount} rows · id ${r.id}`}
       >
-        {r.itemCount} page{r.itemCount === 1 ? "" : "s"} captured
-        {r.dependencyCount > 0 && ` · ${r.dependencyCount} store item${r.dependencyCount === 1 ? "" : "s"} referenced`}
+        Captured {r.itemCount} item{r.itemCount === 1 ? "" : "s"} — every page, plus the design
+        {r.dependencyCount > 0 && ` · uses ${r.dependencyCount} store record${r.dependencyCount === 1 ? "" : "s"}`}
       </p>
 
       {r.buildError && (
