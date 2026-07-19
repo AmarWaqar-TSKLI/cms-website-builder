@@ -66,6 +66,10 @@ function NodeFrame({
 
   return (
     <div
+      // Same attributes the artifact renderer emits, so a selector that works
+      // against a published page also works against the canvas.
+      data-cms-node={node.id}
+      data-cms-type={node.type}
       role="button"
       tabIndex={0}
       onClick={(e) => {

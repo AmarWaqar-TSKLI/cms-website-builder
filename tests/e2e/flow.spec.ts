@@ -138,7 +138,8 @@ test.describe("edit → publish → serve → rollback", () => {
     // The seeded site HAS commerce, so the block is present…
     await expect(page.getByRole("button", { name: /Product grid/ })).toBeVisible();
     await expect(page.getByText("Commerce module")).toBeVisible();
-    // …and the engine blocks are always there.
-    await expect(page.getByRole("button", { name: /^Hero/ })).toBeVisible();
+    // …and the engine blocks are always there. (The accessible name starts with
+    // the palette icon glyph, so this matches loosely rather than anchored.)
+    await expect(page.getByRole("button", { name: /Hero/ })).toBeVisible();
   });
 });
