@@ -118,6 +118,45 @@ async function waitForHttp(url, timeoutMs = 180_000, label = url) {
   die(`${label} did not respond within ${Math.round(timeoutMs / 1000)}s`);
 }
 
+/**
+ * Publish the seeded site and wait for the worker to build it, so the URLs
+ * `make demo` prints actually resolve. Uses the same public API a person would.
+ */
+async function publishSeededSite() {
+  say("publishing the seeded site so the demo URLs are live");
+  try {
+    const debug = await (await fetch("http://localhost:3000/api/debug/db")).json();
+    const res = await fetch(`http://localhost:3000/api/sites/${debug.site.id}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: "initial publish from make demo" }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.log(`${c.yellow}  could not publish the seeded site: ${data.error}${c.reset}`);
+      return;
+    }
+    ok(`snapshot committed in ${data.elapsedMs}ms (job ${data.jobStatusAtReturn}) — waiting for the worker`);
+
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      const status = await (await fetch(`http://localhost:3000/api/releases/${data.releaseId}`)).json();
+      if (status.status === "ready") {
+        ok(`v${status.versionNo} built and live`);
+        return;
+      }
+      if (status.status === "failed") {
+        console.log(`${c.yellow}  build failed: ${status.buildError}${c.reset}`);
+        return;
+      }
+      await sleep(400);
+    }
+    console.log(`${c.yellow}  build did not finish in time — is the worker container up?${c.reset}`);
+  } catch (err) {
+    console.log(`${c.yellow}  skipped: ${err.message}${c.reset}`);
+  }
+}
+
 const targets = {
   help() {
     console.log(`
@@ -268,6 +307,12 @@ ${c.bold}CMS Website Builder — commands${c.reset}
     if (code !== 0) {
       die("verification FAILED — see checklist above");
     }
+
+    // The seed deliberately leaves the demo site unpublished — a site with
+    // content and no release has no artifact, so it has nothing to serve, and
+    // that is the point. But `make demo` promises a live system, so publish it
+    // here rather than printing a URL that 404s.
+    await publishSeededSite();
 
     console.log(`
 ${c.green}${c.bold}  Live now:${c.reset}

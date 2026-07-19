@@ -28,15 +28,15 @@ services:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
-      WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
     volumes:
-      - .:/app
-      # Anonymous volumes shadow the host's Windows-native node_modules/.next
-      # so the container keeps its own Linux binaries (prisma engines, swc).
-      - /app/node_modules
-      - /app/.next
+      # ONLY the artifact directory is shared. The source and node_modules come
+      # from the image, so there is no host/container binary mismatch to paper
+      # over with shadow volumes — that trick is fragile on Windows and was
+      # failing with I/O errors while copying node_modules into the volume.
+      # Iterate with `make dev`, which runs the app on the host instead.
+      - ./artifacts:/app/artifacts
     depends_on:
       db:
         condition: service_healthy
@@ -48,23 +48,22 @@ services:
     # A genuinely separate OS process polling build_jobs. Not an in-process job.
     # You can `docker compose kill worker` mid-build and watch the release stay
     # non-live while the previous artifact keeps serving.
-    command: sh -c "npx prisma generate && npm run worker"
+    command: npm run worker:once
     environment:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
       WORKER_POLL_MS: "250"
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
+      - ./artifacts:/app/artifacts
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
-# NOTE: ./artifacts is deliberately NOT a named volume. It rides the `.:/app`
-# bind mount so the immutable build output is visible on the host filesystem —
-# open the folder, read the frozen HTML, checksum it before and after a rollback.
-# The architecture claim is only convincing if you can see the files.
+# NOTE: artifacts are a HOST BIND MOUNT, deliberately not a named volume, so the
+# immutable build output is visible on your filesystem — open the folder, read
+# the frozen HTML, checksum it before and after a rollback. The architecture
+# claim is only convincing if you can see the files. It is also how the app
+# container and the worker container share one artifact directory.
