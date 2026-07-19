@@ -428,8 +428,6 @@ ALTER TABLE "releases" ADD CONSTRAINT "releases_site_id_fkey" FOREIGN KEY ("site
 -- AddForeignKey
 ALTER TABLE "release_items" ADD CONSTRAINT "release_items_release_id_fkey" FOREIGN KEY ("release_id") REFERENCES "releases"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "release_items" ADD CONSTRAINT "release_items_page_revision_fkey" FOREIGN KEY ("revision_id") REFERENCES "page_revisions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "release_dependencies" ADD CONSTRAINT "release_dependencies_release_id_fkey" FOREIGN KEY ("release_id") REFERENCES "releases"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -153,8 +153,7 @@ model PageRevision {
   createdBy String?  @map("created_by")
   createdAt DateTime @default(now()) @map("created_at")
 
-  page         Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  releaseItems ReleaseItem[]
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@unique([pageId, versionNo])
   @@index([pageId])
@@ -235,10 +234,13 @@ model ReleaseItem {
   releaseId  String     @map("release_id")
   entityType EntityType @map("entity_type")
   entityId   String     @map("entity_id")
+  /// Polymorphic: points at page_revisions when entity_type='page' and at
+  /// theme_revisions when entity_type='theme'. Deliberately carries no foreign
+  /// key — a single column cannot reference two tables. Integrity is instead
+  /// guaranteed by the append-only trigger: neither target can ever be deleted.
   revisionId String     @map("revision_id")
 
-  release      Release       @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  pageRevision PageRevision? @relation(fields: [revisionId], references: [id], onDelete: Cascade, map: "release_items_page_revision_fkey")
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
 
   @@id([releaseId, entityType, entityId])
   @@map("release_items")

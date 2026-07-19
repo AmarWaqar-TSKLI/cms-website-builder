@@ -5,6 +5,10 @@
  * path for a live page NEVER calls this (non-negotiable #7). A visitor gets a
  * file read off disk, rendered minutes or weeks ago.
  */
+// Explicit React import: the worker and the test runner compile this file with
+// the classic JSX transform (tsconfig keeps jsx:"preserve" for Next's own
+// pipeline), so the factory has to be in scope.
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { getComponent } from "../registry";

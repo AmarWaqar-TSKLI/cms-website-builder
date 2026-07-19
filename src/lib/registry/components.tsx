@@ -13,6 +13,7 @@
  * Interactivity is added by the injected runtime script, which binds to the
  * data-cms-* attributes emitted here. Static page, live cart. (D8)
  */
+import React from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type {
   RegistryEntry,
