@@ -26,3 +26,5 @@ Thumbs.db
 # Throwaway verification scripts (agents write these at the repo root so
 # `playwright` resolves from node_modules; they are not part of the project).
 /.*.mjs
+/.shots/
+/.cap/
