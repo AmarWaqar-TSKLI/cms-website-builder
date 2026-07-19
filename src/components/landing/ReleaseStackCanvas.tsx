@@ -135,9 +135,10 @@ export default function ReleaseStackCanvas({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      // Wide: the stack sits clear to the right of the copy column. Narrow: the
-      // canvas already occupies its own band above the copy, so it centres.
-      const wide = !centered && camera.aspect > 1.5;
+      // Keyed to the `lg:` breakpoint, not to the canvas aspect: below lg the
+      // canvas is a short full-width band (aspect > 2) that must still centre
+      // its stack, so aspect alone would misread the layout.
+      const wide = !centered && window.innerWidth >= 1024;
       pivot.position.x = centered ? -0.6 : wide ? 2.7 : 0.9;
       // Wide layouts park a written ledger in the bottom-right corner, so the
       // stack sits above it rather than through it.

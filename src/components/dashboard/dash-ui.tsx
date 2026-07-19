@@ -231,7 +231,7 @@ export function UnderTheHood({
         </svg>
         {summary}
       </summary>
-      <div className="space-y-2.5 border-t border-ink-800 px-5 py-4 text-[12.5px] leading-relaxed text-ink-400">
+      <div className="max-w-[76ch] space-y-2.5 border-t border-ink-800 px-5 py-4 text-[12.5px] leading-relaxed text-ink-400">
         {children}
       </div>
     </details>

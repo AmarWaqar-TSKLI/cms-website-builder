@@ -319,7 +319,7 @@ function ProductRow({
         </span>
         {removed && <Badge tone="warn">Removed</Badge>}
         {p.collections.map((c) => (
-          <Badge key={c.id} tone="neutral" className="hidden sm:inline-flex">
+          <Badge key={c.id} tone="neutral">
             {c.title}
           </Badge>
         ))}

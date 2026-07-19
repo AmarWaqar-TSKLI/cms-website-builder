@@ -71,6 +71,9 @@ interface ReleaseRow {
 
 type Flash = { kind: "ok" | "error" | "info"; text: string } | null;
 
+/** How much history to show before asking. */
+const VISIBLE_VERSIONS = 4;
+
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* ── shell ────────────────────────────────────────────────────────────────── */
@@ -518,7 +521,7 @@ function Hero({
           </div>
         </div>
 
-        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-[212px]">
+        <div className="flex w-full shrink-0 flex-col gap-2 self-stretch sm:w-[240px] sm:self-start lg:self-center">
           {!live ? (
             <>
               <Btn variant="primary" onClick={onPublish} disabled={publishing || building || !loaded}>
@@ -644,9 +647,9 @@ function PagesPanel({
                   </span>
 
                   {unpublished && (
-                    <Badge tone="warn" className="hidden shrink-0 sm:inline-flex">
-                      Unpublished edits
-                    </Badge>
+                    <span className="hidden shrink-0 sm:block">
+                      <Badge tone="warn">Unpublished edits</Badge>
+                    </span>
                   )}
 
                   <span className="shrink-0 text-[12px] text-ink-500 transition-colors group-hover:text-flux-300">
@@ -658,6 +661,17 @@ function PagesPanel({
           })}
         </ul>
       )}
+
+      <p className="mt-4 border-t border-ink-800 pt-3.5 text-[11.5px] leading-relaxed text-ink-500">
+        Editing never touches what is online. Your changes sit safely in a draft until you publish
+        — and every publish keeps the previous one intact.{" "}
+        <a
+          href="/walkthrough"
+          className="text-flux-300 underline decoration-flux-300/40 underline-offset-2 transition-colors hover:decoration-flux-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
+        >
+          Watch that happen →
+        </a>
+      </p>
     </Card>
   );
 }
@@ -708,7 +722,9 @@ function PublishPanel({
   firstTime: boolean;
   className?: string;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const list = releases ?? [];
+  const visible = showAll ? list : list.slice(0, VISIBLE_VERSIONS);
 
   return (
     <Card className={cx("flex flex-col p-5 sm:p-6", className)}>
@@ -747,9 +763,10 @@ function PublishPanel({
             Before you restore version {confirm.versionNo}
           </div>
           <p className="mt-2 text-[12.5px] leading-relaxed text-ink-200">
-            That version was built when {confirm.warnings.length} thing
-            {confirm.warnings.length === 1 ? "" : "s"} still existed in your store. It will still
-            load, but you&apos;ll see a placeholder where {confirm.warnings.length === 1 ? "it was" : "they were"}:
+            Version {confirm.versionNo} was built while{" "}
+            {confirm.warnings.length === 1 ? "something" : `${confirm.warnings.length} things`} in
+            your store still existed. The page still loads — you&apos;ll just see a placeholder
+            where {confirm.warnings.length === 1 ? "it was" : "they were"}:
           </p>
           <ul className="mt-2 space-y-1">
             {confirm.warnings.map((w) => (
@@ -808,18 +825,32 @@ function PublishPanel({
           </p>
         </div>
       ) : (
-        <ol className="mt-3 space-y-2">
-          {list.map((r) => (
-            <ReleaseCard
-              key={r.id}
-              release={r}
-              siteSlug={siteSlug}
-              busy={busy === r.id}
-              onRestore={onRestore}
-              onRetry={onRetry}
-            />
-          ))}
-        </ol>
+        <>
+          <ol className="mt-3 space-y-2">
+            {visible.map((r) => (
+              <ReleaseCard
+                key={r.id}
+                release={r}
+                siteSlug={siteSlug}
+                busy={busy === r.id}
+                onRestore={onRestore}
+                onRetry={onRetry}
+              />
+            ))}
+          </ol>
+          {list.length > VISIBLE_VERSIONS && (
+            <Btn
+              variant="quiet"
+              size="sm"
+              className="mt-2 self-start"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll
+                ? "Show fewer versions"
+                : `Show all ${list.length} versions (${list.length - VISIBLE_VERSIONS} older)`}
+            </Btn>
+          )}
+        </>
       )}
     </Card>
   );
@@ -871,9 +902,9 @@ function ReleaseCard({
 
       <p
         className="mt-1.5 text-[11.5px] text-ink-500"
-        title={`release_items: ${r.itemCount} rows · release_dependencies: ${r.dependencyCount} rows · id ${r.id}`}
+        title={`${r.itemCount} pinned revisions (release_items) · ${r.dependencyCount} live records referenced (release_dependencies) · release ${r.id}`}
       >
-        Captured {r.itemCount} item{r.itemCount === 1 ? "" : "s"} — every page, plus the design
+        Your whole site, exactly as it was
         {r.dependencyCount > 0 && ` · uses ${r.dependencyCount} store record${r.dependencyCount === 1 ? "" : "s"}`}
       </p>
 
