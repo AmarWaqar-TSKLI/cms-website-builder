@@ -6,78 +6,105 @@
  * ProductGrid is absent for a site without commerce — not disabled, absent.
  * Engine + blog is WordPress; engine + commerce is Shopify; the difference is
  * a row in site_modules, not a different product.
+ *
+ * Blocks can be dragged onto the canvas or clicked to append.
  */
+import { useMemo, useState } from "react";
 import { paletteFor } from "@/lib/registry";
 import type { ComponentSchema, ModuleName } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
-import { Note, SectionLabel } from "../ui";
+import { cx } from "../ui";
+import { DRAG_ADD } from "./Canvas";
+
+const CATEGORY_LABEL: Record<string, string> = {
+  content: "Content",
+  layout: "Layout",
+  commerce: "Commerce",
+};
 
 export function Palette({ modules }: { modules: ModuleName[] }) {
   const addNode = useEditor((s) => s.addNode);
-  const available = paletteFor(modules);
+  const [query, setQuery] = useState("");
 
-  const engine = available.filter((s) => !s.requiresModule);
-  const moduleBlocks = available.filter((s) => s.requiresModule);
+  const available = useMemo(() => paletteFor(modules), [modules]);
+  const matching = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return available;
+    return available.filter(
+      (s) => s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
+    );
+  }, [available, query]);
+
+  const byCategory = useMemo(() => {
+    const groups: Record<string, ComponentSchema[]> = {};
+    for (const schema of matching) (groups[schema.category] ??= []).push(schema);
+    return groups;
+  }, [matching]);
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-ink-800 p-4">
-        <SectionLabel>Palette</SectionLabel>
-        <Note>Click to append. Each block declares a prop schema.</Note>
+      <div className="border-b border-ink-800 p-3">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search blocks"
+          className="w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500"
+        />
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
+          Drag onto the page, or click to add at the end.
+        </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        <Group title="Engine" items={engine} onAdd={addNode} />
-        {moduleBlocks.length > 0 && (
-          <Group
-            title="Commerce module"
-            items={moduleBlocks}
-            onAdd={addNode}
-            hint="Only visible because site_modules has a commerce row."
-          />
+      <div className="flex-1 overflow-y-auto p-2.5">
+        {["content", "layout", "commerce"].map((category) => {
+          const items = byCategory[category];
+          if (!items?.length) return null;
+          return (
+            <div key={category} className="mb-4">
+              <div className="mb-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+                {CATEGORY_LABEL[category]}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {items.map((schema) => (
+                  <button
+                    key={schema.name}
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DRAG_ADD, schema.name);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onClick={() => addNode(schema.name)}
+                    title={schema.description}
+                    className={cx(
+                      "group flex cursor-grab flex-col items-center gap-1.5 rounded-lg border border-ink-800 bg-ink-950 px-2 py-3",
+                      "transition-colors hover:border-flux-500/50 hover:bg-ink-850 active:cursor-grabbing",
+                    )}
+                  >
+                    <span className="text-[15px] leading-none text-ink-400 transition-colors group-hover:text-flux-300">
+                      {schema.icon}
+                    </span>
+                    <span className="text-center text-[11px] font-medium leading-tight text-ink-200">
+                      {schema.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {category === "commerce" && (
+                <p className="mt-2 px-1 text-[10.5px] leading-relaxed text-ink-500">
+                  Shown because this site has the commerce module enabled.
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {matching.length === 0 && (
+          <p className="px-1 py-6 text-center text-[12px] text-ink-500">
+            No blocks match “{query}”.
+          </p>
         )}
       </div>
-    </div>
-  );
-}
-
-function Group({
-  title,
-  items,
-  onAdd,
-  hint,
-}: {
-  title: string;
-  items: ComponentSchema[];
-  onAdd: (type: string) => void;
-  hint?: string;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <div className="mb-5">
-      <div className="mb-2 px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
-        {title}
-      </div>
-      <div className="space-y-1">
-        {items.map((schema) => (
-          <button
-            key={schema.name}
-            type="button"
-            onClick={() => onAdd(schema.name)}
-            title={schema.description}
-            className="group flex w-full items-start gap-3 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-ink-700 hover:bg-ink-850"
-          >
-            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ink-700 bg-ink-850 text-[13px] text-ink-300 transition-colors group-hover:border-flux-500/50 group-hover:text-flux-300">
-              {schema.icon}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-ink-100">{schema.label}</span>
-              <span className="block truncate text-[11px] text-ink-500">{schema.description}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-      {hint && <p className="mt-2 px-1 text-[11px] leading-relaxed text-ink-500">{hint}</p>}
     </div>
   );
 }

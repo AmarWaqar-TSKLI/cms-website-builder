@@ -23,7 +23,7 @@ const LINKS = [
 
 export default function Closing() {
   return (
-    <footer className="mx-auto w-full max-w-5xl px-6 pt-8 pb-20">
+    <footer data-beat="09" className="mx-auto w-full max-w-5xl px-6 pt-16 pb-20">
       <h2 className="max-w-2xl text-3xl leading-[1.08] font-semibold tracking-tight text-ink-100 sm:text-4xl">
         None of this is a diagram.
       </h2>

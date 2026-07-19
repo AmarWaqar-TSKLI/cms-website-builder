@@ -25,12 +25,17 @@ export type PropKind =
   | "text"
   | "textarea"
   | "number"
+  | "range"
   | "boolean"
   | "color"
   | "url"
   | "select"
+  | "segment"
   | "ref"
   | "refList";
+
+/** Which panel section a prop appears under. */
+export type PropGroup = "content" | "style" | "layout";
 
 export interface PropDef {
   label: string;
@@ -42,6 +47,15 @@ export interface PropDef {
   ref?: RefKind;
   /** Only shown in the panel when this predicate passes over sibling prop values. */
   showIf?: (props: Record<string, unknown>) => boolean;
+  /** Panel grouping. Defaults to "content". */
+  group?: PropGroup;
+  /** For kind: "range" / "number". */
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  /** Text props that can be edited directly on the canvas. */
+  inlineEditable?: boolean;
 }
 
 export interface ComponentSchema {
@@ -51,10 +65,15 @@ export interface ComponentSchema {
   category: "layout" | "content" | "commerce";
   /** Palette filtering. Absent = engine component, always available. */
   requiresModule?: ModuleName;
+  /** Container components accept dropped children (e.g. Columns). */
   acceptsChildren?: boolean;
+  /** Fixed number of child slots, for grid-like containers. */
+  slots?: number;
   /** Single-glyph icon for the palette; keeps the editor dependency-free. */
   icon: string;
   props: Record<string, PropDef>;
+  /** Set false to opt out of the shared style controls (e.g. Spacer, Divider). */
+  styleable?: boolean;
 }
 
 /** A node in the stored description. This is the entire page format. */

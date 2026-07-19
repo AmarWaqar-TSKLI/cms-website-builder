@@ -337,6 +337,14 @@ async function main() {
 
   // ── 5 ────────────────────────────────────────────────────────────────────
   await check(5, "Publish returns before the build finishes", async (log) => {
+    // Warm the route first. In dev, Next compiles a route on its first request;
+    // timing that would be timing the bundler, not the transaction.
+    await fetch(`${APP}/api/sites/${siteId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: "warm-up" }),
+    });
+
     const res = await fetch(`${APP}/api/sites/${siteId}/publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

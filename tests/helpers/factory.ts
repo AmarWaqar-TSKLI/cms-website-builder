@@ -111,7 +111,7 @@ export async function createTestSite(label = "test"): Promise<TestSite> {
       pageId: home.id,
       lockVersion: 1,
       body: toJson(body([
-        node("Hero", { headline: "Version one", background: media.id }),
+        node("Hero", { headline: "Version one", bgImage: media.id }),
         node("ProductGrid", { collection: collection.id, heading: "Featured" }),
       ])),
     },

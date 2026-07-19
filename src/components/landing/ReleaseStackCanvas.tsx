@@ -138,8 +138,10 @@ export default function ReleaseStackCanvas({
       // Wide: the stack sits clear to the right of the copy column. Narrow: the
       // canvas already occupies its own band above the copy, so it centres.
       const wide = !centered && camera.aspect > 1.5;
-      pivot.position.x = centered ? -0.6 : wide ? 2.85 : 0.9;
-      pivot.position.y = wide ? 0.15 : 0;
+      pivot.position.x = centered ? -0.6 : wide ? 2.7 : 0.9;
+      // Wide layouts park a written ledger in the bottom-right corner, so the
+      // stack sits above it rather than through it.
+      pivot.position.y = wide ? 0.85 : 0;
       camera.position.z = wide ? 9 : camera.aspect > 1 ? 11 : 13.5;
       camera.updateProjectionMatrix();
     };

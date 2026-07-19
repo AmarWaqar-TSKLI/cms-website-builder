@@ -1,6 +1,5 @@
 /**
- * The six components. Deliberately small — the point is the architecture, not
- * a component library.
+ * The component library.
  *
  * Two hard rules, both enforced by tests:
  *  1. Pure. No hooks, no client state. These run under renderToStaticMarkup in
@@ -10,23 +9,17 @@
  *     correctly with zero external CSS — unzip it, open index.html from file://,
  *     and it looks right. That is what "runs on any static host" has to mean.
  *
+ * Each component below writes only its CONTENT. Background, text colour,
+ * spacing, width, alignment, radius and borders come from the shared style
+ * system (./style.tsx) and are therefore editable on every block.
+ *
  * Interactivity is added by the injected runtime script, which binds to the
  * data-cms-* attributes emitted here. Static page, live cart. (D8)
  */
 import React from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type {
-  RegistryEntry,
-  RenderProps,
-  ResolvedProduct,
-  ThemeTokens,
-} from "./types";
-
-const PAD = { none: "0", sm: "32px", md: "64px", lg: "104px", xl: "152px" } as const;
-
-function shell(t: ThemeTokens, extra: CSSProperties = {}): CSSProperties {
-  return { maxWidth: t.maxWidth, marginLeft: "auto", marginRight: "auto", padding: "0 24px", ...extra };
-}
+import { Section, alignOf, justifyFor, withStyleProps } from "./style";
+import type { RegistryEntry, RenderProps, ResolvedProduct, ThemeTokens } from "./types";
 
 function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -44,11 +37,36 @@ function MissingRef({ t, label }: { t: ThemeTokens; label: string }): ReactNode 
         color: t.colorMuted,
         fontSize: "14px",
         background: t.colorSurface,
+        textAlign: "center",
       }}
     >
       {label}
     </div>
   );
+}
+
+function buttonStyle(t: ThemeTokens, variant: string, size: string): CSSProperties {
+  const pad =
+    size === "sm" ? "9px 18px" : size === "lg" ? "16px 34px" : "13px 26px";
+  const font = size === "sm" ? "13px" : size === "lg" ? "16px" : "15px";
+  const base: CSSProperties = {
+    display: "inline-block",
+    padding: pad,
+    borderRadius: t.radius,
+    fontFamily: t.fontBody,
+    fontWeight: 600,
+    fontSize: font,
+    textDecoration: "none",
+    cursor: "pointer",
+    border: "1px solid transparent",
+  };
+  if (variant === "outline") {
+    return { ...base, background: "transparent", color: "inherit", borderColor: "currentColor" };
+  }
+  if (variant === "ghost") {
+    return { ...base, background: "transparent", color: "inherit", padding: `0 0 4px`, borderRadius: 0, borderBottom: "2px solid currentColor" };
+  }
+  return { ...base, background: t.colorAccent, color: t.colorAccentFg };
 }
 
 // ─────────────────────────────────────────────────────────────── Hero ───────
@@ -57,108 +75,147 @@ const Hero: RegistryEntry = {
   schema: {
     name: "Hero",
     label: "Hero",
-    description: "Full-width banner with a headline and a call to action.",
+    description: "Big opening statement with a call to action.",
     category: "content",
     icon: "▰",
-    props: {
-      headline: { label: "Headline", kind: "text", default: "Build once. Run anywhere." },
+    props: withStyleProps({
+      headline: {
+        label: "Headline",
+        kind: "text",
+        default: "Build once. Run anywhere.",
+        inlineEditable: true,
+      },
       subhead: {
         label: "Subheadline",
         kind: "textarea",
         default: "A page is a description, not a document.",
+        inlineEditable: true,
       },
-      align: {
-        label: "Alignment",
-        kind: "select",
-        default: "center",
-        options: [
-          { value: "left", label: "Left" },
-          { value: "center", label: "Center" },
-        ],
-      },
-      padding: {
-        label: "Vertical space",
-        kind: "select",
-        default: "lg",
-        options: Object.keys(PAD).map((k) => ({ value: k, label: k.toUpperCase() })),
-      },
-      background: {
-        label: "Background image",
-        kind: "ref",
-        ref: "media",
-        default: "",
-        help: "Referencing media records a release dependency.",
+      size: {
+        label: "Headline size",
+        kind: "range",
+        default: 60,
+        min: 28,
+        max: 110,
+        step: 2,
+        unit: "px",
       },
       ctaLabel: { label: "Button label", kind: "text", default: "Shop the collection" },
       ctaHref: { label: "Button link", kind: "url", default: "/products" },
-    },
+      ctaVariant: {
+        label: "Button style",
+        kind: "segment",
+        default: "solid",
+        options: [
+          { value: "solid", label: "Solid" },
+          { value: "outline", label: "Outline" },
+          { value: "ghost", label: "Text" },
+        ],
+      },
+    }),
   },
   render({ props, ctx }: RenderProps) {
     const t = ctx.tokens;
-    const bg = props.background ? ctx.media[props.background as string] : undefined;
-    const center = props.align !== "left";
-    const pad = PAD[(props.padding as keyof typeof PAD) ?? "lg"] ?? PAD.lg;
+    const align = alignOf(props);
+    const bg = props.bgImage ? ctx.media[props.bgImage as string] : undefined;
 
     return (
-      <section
-        style={{
-          background: bg && !bg.missing ? `linear-gradient(rgba(9,9,11,.62),rgba(9,9,11,.62)), url(${bg.url}) center/cover` : t.colorSurface,
-          color: bg && !bg.missing ? "#fff" : t.colorFg,
-          paddingTop: pad,
-          paddingBottom: pad,
-          borderBottom: `1px solid ${t.colorBorder}`,
-        }}
-      >
-        <div style={shell(t, { textAlign: center ? "center" : "left" })}>
-          <h1
+      <Section props={props} tokens={t} mediaUrl={bg && !bg.missing ? bg.url : undefined}>
+        <h1
+          data-cms-prop="headline"
+          style={{
+            fontFamily: t.fontHeading,
+            fontSize: `clamp(32px, 6vw, ${Number(props.size ?? 60)}px)`,
+            lineHeight: 1.04,
+            letterSpacing: "-0.03em",
+            margin: 0,
+            fontWeight: 680,
+          }}
+        >
+          {String(props.headline ?? "")}
+        </h1>
+        {props.subhead ? (
+          <p
+            data-cms-prop="subhead"
             style={{
-              fontFamily: t.fontHeading,
-              fontSize: "clamp(36px, 6vw, 68px)",
-              lineHeight: 1.04,
-              letterSpacing: "-0.03em",
-              margin: 0,
-              fontWeight: 680,
+              fontFamily: t.fontBody,
+              fontSize: "clamp(16px, 1.6vw, 20px)",
+              lineHeight: 1.55,
+              margin: "20px 0 0",
+              maxWidth: "62ch",
+              marginLeft: align === "center" ? "auto" : align === "right" ? "auto" : 0,
+              marginRight: align === "center" ? "auto" : 0,
+              opacity: 0.78,
             }}
           >
-            {String(props.headline ?? "")}
-          </h1>
-          {props.subhead ? (
-            <p
-              style={{
-                fontFamily: t.fontBody,
-                fontSize: "clamp(16px, 1.6vw, 20px)",
-                lineHeight: 1.55,
-                margin: "20px auto 0",
-                maxWidth: "62ch",
-                marginLeft: center ? "auto" : 0,
-                opacity: 0.78,
-              }}
-            >
-              {String(props.subhead)}
-            </p>
-          ) : null}
-          {props.ctaLabel ? (
-            <div style={{ marginTop: "34px" }}>
-              <a
-                href={String(props.ctaHref || "#")}
-                style={{
-                  display: "inline-block",
-                  background: t.colorAccent,
-                  color: t.colorAccentFg,
-                  padding: "14px 30px",
-                  borderRadius: t.radius,
-                  fontFamily: t.fontBody,
-                  fontWeight: 600,
-                  fontSize: "15px",
-                  textDecoration: "none",
-                }}
-              >
-                {String(props.ctaLabel)}
-              </a>
-            </div>
-          ) : null}
-        </div>
-      </section>
+            {String(props.subhead)}
+          </p>
+        ) : null}
+        {props.ctaLabel ? (
+          <div style={{ marginTop: "34px", display: "flex", justifyContent: justifyFor(align) }}>
+            <a href={String(props.ctaHref || "#")} style={buttonStyle(t, String(props.ctaVariant ?? "solid"), "lg")}>
+              {String(props.ctaLabel)}
+            </a>
+          </div>
+        ) : null}
+      </Section>
+    );
+  },
+};
+
+// ──────────────────────────────────────────────────────────── Heading ───────
+
+const Heading: RegistryEntry = {
+  schema: {
+    name: "Heading",
+    label: "Heading",
+    description: "A section title on its own.",
+    category: "content",
+    icon: "H",
+    props: withStyleProps({
+      text: { label: "Text", kind: "text", default: "A section heading", inlineEditable: true },
+      level: {
+        label: "Level",
+        kind: "segment",
+        default: "h2",
+        options: [
+          { value: "h2", label: "H2" },
+          { value: "h3", label: "H3" },
+          { value: "h4", label: "H4" },
+        ],
+      },
+      size: { label: "Size", kind: "range", default: 34, min: 16, max: 80, step: 2, unit: "px" },
+      weight: {
+        label: "Weight",
+        kind: "segment",
+        default: "600",
+        options: [
+          { value: "400", label: "Regular" },
+          { value: "600", label: "Semibold" },
+          { value: "700", label: "Bold" },
+        ],
+      },
+    }),
+  },
+  render({ props, ctx }: RenderProps) {
+    const t = ctx.tokens;
+    const Tag = (["h2", "h3", "h4"].includes(String(props.level)) ? props.level : "h2") as "h2";
+    return (
+      <Section props={props} tokens={t}>
+        <Tag
+          data-cms-prop="text"
+          style={{
+            fontFamily: t.fontHeading,
+            fontSize: `clamp(20px, 4vw, ${Number(props.size ?? 34)}px)`,
+            fontWeight: Number(props.weight ?? 600),
+            letterSpacing: "-0.02em",
+            lineHeight: 1.15,
+            margin: 0,
+          }}
+        >
+          {String(props.text ?? "")}
+        </Tag>
+      </Section>
     );
   },
 };
@@ -169,74 +226,59 @@ const TextBlock: RegistryEntry = {
   schema: {
     name: "TextBlock",
     label: "Text",
-    description: "A paragraph of prose with an optional heading.",
+    description: "A paragraph of prose, with an optional heading.",
     category: "content",
     icon: "¶",
-    props: {
-      heading: { label: "Heading", kind: "text", default: "" },
+    props: withStyleProps({
+      heading: { label: "Heading", kind: "text", default: "", inlineEditable: true },
       body: {
         label: "Body",
         kind: "textarea",
         default:
           "Because the database stores a description rather than markup, the same saved page can be compiled to static HTML, to a container, or to a zip you host yourself.",
+        inlineEditable: true,
       },
-      align: {
-        label: "Alignment",
-        kind: "select",
-        default: "left",
-        options: [
-          { value: "left", label: "Left" },
-          { value: "center", label: "Center" },
-        ],
-      },
-      size: {
-        label: "Text size",
-        kind: "select",
-        default: "md",
-        options: [
-          { value: "sm", label: "Small" },
-          { value: "md", label: "Medium" },
-          { value: "lg", label: "Large" },
-        ],
-      },
-    },
+      size: { label: "Text size", kind: "range", default: 17, min: 12, max: 28, step: 1, unit: "px" },
+      lineHeight: { label: "Line height", kind: "range", default: 170, min: 110, max: 220, step: 5, unit: "%" },
+      measure: { label: "Line length", kind: "range", default: 72, min: 30, max: 110, step: 2, unit: "ch" },
+    }),
   },
   render({ props, ctx }: RenderProps) {
     const t = ctx.tokens;
-    const sizes = { sm: "15px", md: "17px", lg: "21px" } as const;
-    const center = props.align === "center";
+    const align = alignOf(props);
+    const centred = align === "center";
     return (
-      <section style={{ padding: "56px 0", background: t.colorBg, color: t.colorFg }}>
-        <div style={shell(t, { textAlign: center ? "center" : "left" })}>
-          {props.heading ? (
-            <h2
-              style={{
-                fontFamily: t.fontHeading,
-                fontSize: "clamp(24px,3vw,34px)",
-                letterSpacing: "-0.02em",
-                margin: "0 0 16px",
-                fontWeight: 640,
-              }}
-            >
-              {String(props.heading)}
-            </h2>
-          ) : null}
-          <div
+      <Section props={props} tokens={t}>
+        {props.heading ? (
+          <h2
+            data-cms-prop="heading"
             style={{
-              fontFamily: t.fontBody,
-              fontSize: sizes[(props.size as keyof typeof sizes) ?? "md"] ?? sizes.md,
-              lineHeight: 1.7,
-              maxWidth: "72ch",
-              marginLeft: center ? "auto" : 0,
-              marginRight: center ? "auto" : 0,
-              opacity: 0.85,
-              whiteSpace: "pre-wrap",
+              fontFamily: t.fontHeading,
+              fontSize: "clamp(22px,3vw,32px)",
+              letterSpacing: "-0.02em",
+              margin: "0 0 16px",
+              fontWeight: 640,
             }}
           >
-            {String(props.body ?? "")}
-          </div>
+            {String(props.heading)}
+          </h2>
+        ) : null}
+        <div
+          data-cms-prop="body"
+          style={{
+            fontFamily: t.fontBody,
+            fontSize: `${Number(props.size ?? 17)}px`,
+            lineHeight: Number(props.lineHeight ?? 170) / 100,
+            maxWidth: `${Number(props.measure ?? 72)}ch`,
+            marginLeft: centred ? "auto" : align === "right" ? "auto" : 0,
+            marginRight: centred ? "auto" : 0,
+            opacity: 0.85,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {String(props.body ?? "")}
         </div>
-      </section>
+      </Section>
     );
   },
 };
@@ -250,57 +292,45 @@ const Button: RegistryEntry = {
     description: "A standalone link styled as a button.",
     category: "content",
     icon: "▭",
-    props: {
-      label: { label: "Label", kind: "text", default: "Learn more" },
+    props: withStyleProps({
+      label: { label: "Label", kind: "text", default: "Learn more", inlineEditable: true },
       href: { label: "Link", kind: "url", default: "/about" },
       variant: {
         label: "Style",
-        kind: "select",
+        kind: "segment",
         default: "solid",
         options: [
           { value: "solid", label: "Solid" },
           { value: "outline", label: "Outline" },
+          { value: "ghost", label: "Text" },
         ],
       },
-      align: {
-        label: "Alignment",
-        kind: "select",
-        default: "left",
+      size: {
+        label: "Size",
+        kind: "segment",
+        default: "md",
         options: [
-          { value: "left", label: "Left" },
-          { value: "center", label: "Center" },
-          { value: "right", label: "Right" },
+          { value: "sm", label: "S" },
+          { value: "md", label: "M" },
+          { value: "lg", label: "L" },
         ],
       },
-    },
+    }),
   },
   render({ props, ctx }: RenderProps) {
     const t = ctx.tokens;
-    const outline = props.variant === "outline";
-    const justify =
-      props.align === "center" ? "center" : props.align === "right" ? "flex-end" : "flex-start";
     return (
-      <section style={{ padding: "16px 0", background: t.colorBg }}>
-        <div style={shell(t, { display: "flex", justifyContent: justify })}>
+      <Section props={props} tokens={t}>
+        <div style={{ display: "flex", justifyContent: justifyFor(alignOf(props)) }}>
           <a
+            data-cms-prop="label"
             href={String(props.href || "#")}
-            style={{
-              display: "inline-block",
-              background: outline ? "transparent" : t.colorAccent,
-              color: outline ? t.colorFg : t.colorAccentFg,
-              border: outline ? `1px solid ${t.colorBorder}` : "1px solid transparent",
-              padding: "12px 26px",
-              borderRadius: t.radius,
-              fontFamily: t.fontBody,
-              fontWeight: 600,
-              fontSize: "15px",
-              textDecoration: "none",
-            }}
+            style={buttonStyle(t, String(props.variant ?? "solid"), String(props.size ?? "md"))}
           >
             {String(props.label ?? "")}
           </a>
         </div>
-      </section>
+      </Section>
     );
   },
 };
@@ -314,7 +344,7 @@ const ImageBlock: RegistryEntry = {
     description: "A single image from the media library.",
     category: "content",
     icon: "◫",
-    props: {
+    props: withStyleProps({
       media: {
         label: "Image",
         kind: "ref",
@@ -322,28 +352,27 @@ const ImageBlock: RegistryEntry = {
         default: "",
         help: "Recorded in release_dependencies at publish time.",
       },
-      caption: { label: "Caption", kind: "text", default: "" },
-      width: {
-        label: "Width",
-        kind: "select",
-        default: "wide",
+      caption: { label: "Caption", kind: "text", default: "", inlineEditable: true },
+      imageRadius: { label: "Image corners", kind: "range", default: 12, min: 0, max: 48, step: 2, unit: "px" },
+      ratio: {
+        label: "Shape",
+        kind: "segment",
+        default: "auto",
         options: [
-          { value: "narrow", label: "Narrow" },
-          { value: "wide", label: "Wide" },
-          { value: "full", label: "Full bleed" },
+          { value: "auto", label: "Auto" },
+          { value: "16/9", label: "Wide" },
+          { value: "4/3", label: "4:3" },
+          { value: "1/1", label: "Square" },
         ],
       },
-      rounded: { label: "Rounded corners", kind: "boolean", default: true },
-    },
+    }),
   },
   render({ props, ctx }: RenderProps) {
     const t = ctx.tokens;
     const m = props.media ? ctx.media[props.media as string] : undefined;
-    const full = props.width === "full";
-    const maxW = props.width === "narrow" ? "720px" : t.maxWidth;
 
     const inner = !m ? (
-      <MissingRef t={t} label="No image selected." />
+      <MissingRef t={t} label="Pick an image in the panel on the right." />
     ) : m.missing ? (
       <MissingRef t={t} label="This image was deleted after this version was published." />
     ) : (
@@ -354,18 +383,20 @@ const ImageBlock: RegistryEntry = {
           style={{
             display: "block",
             width: "100%",
-            height: "auto",
-            borderRadius: props.rounded && !full ? t.radius : 0,
+            height: props.ratio !== "auto" ? "100%" : "auto",
+            aspectRatio: props.ratio !== "auto" ? String(props.ratio) : undefined,
+            objectFit: "cover",
+            borderRadius: `${Number(props.imageRadius ?? 12)}px`,
           }}
         />
         {props.caption ? (
           <figcaption
+            data-cms-prop="caption"
             style={{
               fontFamily: t.fontBody,
               fontSize: "13px",
               color: t.colorMuted,
               marginTop: "10px",
-              textAlign: "center",
             }}
           >
             {String(props.caption)}
@@ -375,9 +406,154 @@ const ImageBlock: RegistryEntry = {
     );
 
     return (
-      <section style={{ padding: "32px 0", background: t.colorBg }}>
-        {full ? inner : <div style={shell(t, { maxWidth: maxW })}>{inner}</div>}
-      </section>
+      <Section props={props} tokens={t}>
+        {inner}
+      </Section>
+    );
+  },
+};
+
+// ───────────────────────────────────────────────────────────── Columns ──────
+
+const Columns: RegistryEntry = {
+  schema: {
+    name: "Columns",
+    label: "Columns",
+    description: "A row you can drop other blocks into.",
+    category: "layout",
+    icon: "▥",
+    acceptsChildren: true,
+    props: withStyleProps({
+      columns: {
+        label: "Columns",
+        kind: "segment",
+        default: "2",
+        options: [
+          { value: "2", label: "2" },
+          { value: "3", label: "3" },
+          { value: "4", label: "4" },
+        ],
+      },
+      gap: { label: "Gap", kind: "range", default: 24, min: 0, max: 80, step: 4, unit: "px" },
+      verticalAlign: {
+        label: "Vertical align",
+        kind: "segment",
+        default: "stretch",
+        options: [
+          { value: "start", label: "Top" },
+          { value: "center", label: "Middle" },
+          { value: "stretch", label: "Stretch" },
+        ],
+      },
+    }),
+  },
+  render({ props, ctx, children }: RenderProps) {
+    const t = ctx.tokens;
+    return (
+      <Section props={props} tokens={t}>
+        <div
+          data-cms-slot="children"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Number(props.columns ?? 2)}, minmax(0,1fr))`,
+            gap: `${Number(props.gap ?? 24)}px`,
+            alignItems: String(props.verticalAlign ?? "stretch"),
+          }}
+        >
+          {children}
+        </div>
+      </Section>
+    );
+  },
+};
+
+// ─────────────────────────────────────────────────────────────── Card ───────
+
+const Card: RegistryEntry = {
+  schema: {
+    name: "Card",
+    label: "Card",
+    description: "Image, title, text and a link in a bordered box.",
+    category: "content",
+    icon: "▤",
+    props: withStyleProps({
+      media: { label: "Image", kind: "ref", ref: "media", default: "" },
+      title: { label: "Title", kind: "text", default: "A card", inlineEditable: true },
+      body: {
+        label: "Text",
+        kind: "textarea",
+        default: "A short supporting sentence.",
+        inlineEditable: true,
+      },
+      linkLabel: { label: "Link label", kind: "text", default: "Read more" },
+      linkHref: { label: "Link", kind: "url", default: "#" },
+      cardBg: { label: "Card background", kind: "color", default: "", group: "style" },
+      bordered: { label: "Border", kind: "boolean", default: true, group: "style" },
+    }),
+  },
+  render({ props, ctx }: RenderProps) {
+    const t = ctx.tokens;
+    const m = props.media ? ctx.media[props.media as string] : undefined;
+    return (
+      <Section props={props} tokens={t}>
+        <div
+          style={{
+            border: props.bordered ? `1px solid ${t.colorBorder}` : "none",
+            borderRadius: t.radius,
+            background: props.cardBg || t.colorSurface,
+            overflow: "hidden",
+            textAlign: "left",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {m && !m.missing ? (
+            <div style={{ aspectRatio: "16 / 10", background: `url(${m.url}) center/cover` }} />
+          ) : null}
+          <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+            <h3
+              data-cms-prop="title"
+              style={{
+                fontFamily: t.fontHeading,
+                fontSize: "18px",
+                margin: 0,
+                fontWeight: 640,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {String(props.title ?? "")}
+            </h3>
+            <p
+              data-cms-prop="body"
+              style={{
+                fontFamily: t.fontBody,
+                fontSize: "14.5px",
+                lineHeight: 1.6,
+                margin: 0,
+                opacity: 0.75,
+              }}
+            >
+              {String(props.body ?? "")}
+            </p>
+            {props.linkLabel ? (
+              <a
+                href={String(props.linkHref || "#")}
+                style={{
+                  marginTop: "6px",
+                  fontFamily: t.fontBody,
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: t.colorAccent,
+                  textDecoration: "none",
+                }}
+              >
+                {String(props.linkLabel)} →
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </Section>
     );
   },
 };
@@ -394,8 +570,8 @@ const ProductGrid: RegistryEntry = {
     // module. Engine + blog is WordPress; engine + commerce is Shopify. (D6)
     requiresModule: "commerce",
     icon: "▦",
-    props: {
-      heading: { label: "Heading", kind: "text", default: "Featured" },
+    props: withStyleProps({
+      heading: { label: "Heading", kind: "text", default: "Featured", inlineEditable: true },
       collection: {
         label: "Collection",
         kind: "ref",
@@ -405,7 +581,7 @@ const ProductGrid: RegistryEntry = {
       },
       columns: {
         label: "Columns",
-        kind: "select",
+        kind: "segment",
         default: "3",
         options: [
           { value: "2", label: "2" },
@@ -413,9 +589,11 @@ const ProductGrid: RegistryEntry = {
           { value: "4", label: "4" },
         ],
       },
+      gap: { label: "Gap", kind: "range", default: 22, min: 8, max: 60, step: 2, unit: "px" },
       showPrice: { label: "Show price", kind: "boolean", default: true },
+      cardBg: { label: "Card background", kind: "color", default: "", group: "style" },
       ctaLabel: { label: "Button label", kind: "text", default: "Add to cart" },
-    },
+    }),
   },
   render({ props, ctx }: RenderProps) {
     const t = ctx.tokens;
@@ -423,25 +601,19 @@ const ProductGrid: RegistryEntry = {
 
     let body: ReactNode;
     if (!col) {
-      body = <MissingRef t={t} label="No collection selected." />;
+      body = <MissingRef t={t} label="Choose a collection in the panel on the right." />;
     } else if (col.missing) {
       // Graceful degradation, not a 500. The frozen page outlived the data. (D5)
-      body = (
-        <MissingRef
-          t={t}
-          label="This collection was removed after this version was published."
-        />
-      );
+      body = <MissingRef t={t} label="This collection was removed after this version was published." />;
     } else {
-      const products = col.productIds
-        .map((id) => ctx.products[id])
-        .filter(Boolean) as ResolvedProduct[];
+      const products = col.productIds.map((id) => ctx.products[id]).filter(Boolean) as ResolvedProduct[];
       body = (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${props.columns ?? 3}, minmax(0,1fr))`,
-            gap: "22px",
+            gap: `${Number(props.gap ?? 22)}px`,
+            textAlign: "left",
           }}
         >
           {products.map((p) => (
@@ -452,7 +624,7 @@ const ProductGrid: RegistryEntry = {
                 border: `1px solid ${t.colorBorder}`,
                 borderRadius: t.radius,
                 overflow: "hidden",
-                background: t.colorSurface,
+                background: props.cardBg || t.colorSurface,
                 display: "flex",
                 flexDirection: "column",
                 opacity: p.missing ? 0.5 : 1,
@@ -467,15 +639,7 @@ const ProductGrid: RegistryEntry = {
                 }}
               />
               <div style={{ padding: "16px 18px 18px", display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
-                <h3
-                  style={{
-                    fontFamily: t.fontHeading,
-                    fontSize: "16px",
-                    margin: 0,
-                    fontWeight: 620,
-                    letterSpacing: "-0.01em",
-                  }}
-                >
+                <h3 style={{ fontFamily: t.fontHeading, fontSize: "16px", margin: 0, fontWeight: 620, letterSpacing: "-0.01em" }}>
                   {p.title}
                 </h3>
                 {props.showPrice ? (
@@ -515,24 +679,57 @@ const ProductGrid: RegistryEntry = {
     }
 
     return (
-      <section style={{ padding: "56px 0", background: t.colorBg, color: t.colorFg }}>
-        <div style={shell(t)}>
-          {props.heading ? (
-            <h2
-              style={{
-                fontFamily: t.fontHeading,
-                fontSize: "clamp(22px,2.6vw,30px)",
-                letterSpacing: "-0.02em",
-                margin: "0 0 24px",
-                fontWeight: 640,
-              }}
-            >
-              {String(props.heading)}
-            </h2>
-          ) : null}
-          {body}
-        </div>
-      </section>
+      <Section props={props} tokens={t}>
+        {props.heading ? (
+          <h2
+            data-cms-prop="heading"
+            style={{
+              fontFamily: t.fontHeading,
+              fontSize: "clamp(22px,2.6vw,30px)",
+              letterSpacing: "-0.02em",
+              margin: "0 0 24px",
+              fontWeight: 640,
+            }}
+          >
+            {String(props.heading)}
+          </h2>
+        ) : null}
+        {body}
+      </Section>
+    );
+  },
+};
+
+// ───────────────────────────────────────────────────────────── Divider ──────
+
+const Divider: RegistryEntry = {
+  schema: {
+    name: "Divider",
+    label: "Divider",
+    description: "A horizontal rule.",
+    category: "layout",
+    icon: "—",
+    props: withStyleProps({
+      thickness: { label: "Thickness", kind: "range", default: 1, min: 1, max: 8, step: 1, unit: "px" },
+      lineColor: { label: "Line colour", kind: "color", default: "", group: "style" },
+      width: { label: "Width", kind: "range", default: 100, min: 10, max: 100, step: 5, unit: "%" },
+    }),
+  },
+  render({ props, ctx }: RenderProps) {
+    const t = ctx.tokens;
+    const align = alignOf(props);
+    return (
+      <Section props={props} tokens={t}>
+        <hr
+          style={{
+            border: "none",
+            height: `${Number(props.thickness ?? 1)}px`,
+            background: props.lineColor || t.colorBorder,
+            width: `${Number(props.width ?? 100)}%`,
+            margin: align === "center" ? "0 auto" : align === "right" ? "0 0 0 auto" : 0,
+          }}
+        />
+      </Section>
     );
   },
 };
@@ -546,20 +743,34 @@ const Spacer: RegistryEntry = {
     description: "Vertical breathing room.",
     category: "layout",
     icon: "↕",
+    styleable: false,
     props: {
-      height: { label: "Height (px)", kind: "number", default: 64 },
+      height: { label: "Height", kind: "range", default: 64, min: 4, max: 320, step: 4, unit: "px" },
+      showLine: { label: "Show line", kind: "boolean", default: false },
     },
   },
-  render({ props }: RenderProps) {
-    return <div style={{ height: `${Number(props.height ?? 64)}px` }} />;
+  render({ props, ctx }: RenderProps) {
+    return (
+      <div
+        style={{
+          height: `${Number(props.height ?? 64)}px`,
+          borderTop: props.showLine ? `1px solid ${ctx.tokens.colorBorder}` : undefined,
+          background: ctx.tokens.colorBg,
+        }}
+      />
+    );
   },
 };
 
 export const COMPONENTS: RegistryEntry[] = [
   Hero,
+  Heading,
   TextBlock,
-  ProductGrid,
   ImageBlock,
   Button,
+  Card,
+  Columns,
+  ProductGrid,
+  Divider,
   Spacer,
 ];

@@ -34,15 +34,31 @@ const ctx: RenderContext = {
 };
 
 describe("registry", () => {
-  it("exposes exactly the six specified components", () => {
+  it("exposes the expected component set", () => {
     expect(allSchemas().map((s) => s.name).sort()).toEqual([
       "Button",
+      "Card",
+      "Columns",
+      "Divider",
+      "Heading",
       "Hero",
       "ImageBlock",
       "ProductGrid",
       "Spacer",
       "TextBlock",
     ]);
+  });
+
+  it("gives every styleable component the shared style controls", () => {
+    // The point of the shared style system: background, spacing, width and
+    // alignment are editable on every block, not only the ones whose author
+    // remembered to add a prop for it.
+    for (const schema of allSchemas()) {
+      if (schema.styleable === false) continue;
+      for (const key of ["bgColor", "paddingTop", "paddingBottom", "contentWidth", "align"]) {
+        expect(schema.props, `${schema.name} is missing ${key}`).toHaveProperty(key);
+      }
+    }
   });
 
   it("renders every component to HTML without throwing", () => {

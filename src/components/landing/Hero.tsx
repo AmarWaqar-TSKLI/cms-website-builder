@@ -13,7 +13,7 @@ export default function Hero() {
   const sectionRef = useRef<HTMLElement | null>(null);
 
   return (
-    <section ref={sectionRef} className="relative h-[200vh] motion-reduce:h-auto">
+    <section ref={sectionRef} data-beat="00" className="relative h-[160vh] motion-reduce:h-auto">
       <div className="sticky top-0 flex h-screen flex-col justify-between overflow-hidden motion-reduce:static motion-reduce:h-auto motion-reduce:min-h-screen">
         <HeroCanvas sectionRef={sectionRef} />
 

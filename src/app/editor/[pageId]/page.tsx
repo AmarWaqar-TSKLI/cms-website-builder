@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { asTokens } from "@/lib/theme";
+import { asLayout, asTokens } from "@/lib/theme";
 import type {
   ModuleName,
   PageBody,
@@ -104,6 +104,7 @@ export default async function EditorPage({ params }: { params: Promise<{ pageId:
       lockVersion={page.draft?.lockVersion ?? 0}
       modules={site.modules.map((m) => m.module as ModuleName)}
       ctx={ctx}
+      layout={asLayout(themeRevision?.layout)}
       refOptions={{
         collection: collectionRows.map((c) => ({ value: c.id, label: c.title })),
         product: productRows.map((p) => ({ value: p.id, label: p.title })),

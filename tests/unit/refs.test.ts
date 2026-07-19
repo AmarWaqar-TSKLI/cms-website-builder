@@ -10,7 +10,7 @@ import type { PageNode } from "../../src/lib/registry/types";
 
 function hero(background: string): PageNode {
   const n = createNode("Hero", "h1");
-  n.props.background = background;
+  n.props.bgImage = background;
   return n;
 }
 function grid(collection: string, id = "g1"): PageNode {
@@ -53,7 +53,7 @@ describe("reference extraction", () => {
 
   it("walks nested children", () => {
     const parent = createNode("Hero", "p1");
-    parent.props.background = "media_parent";
+    parent.props.bgImage = "media_parent";
     parent.children = [grid("col_child")];
     const refs = extractRefs([parent]);
     expect(refs).toEqual(

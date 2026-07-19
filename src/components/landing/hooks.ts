@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 
 /**
  * Reduced motion is a hard requirement here, not a nicety: this page drives two
@@ -88,37 +88,4 @@ export function useScrollPhase(
   }, [ref, cuts, reduced]);
 
   return phase;
-}
-
-/** One-shot "has this scrolled into view yet" for entrance transitions. */
-export function useInView<T extends HTMLElement>(): {
-  ref: RefObject<T | null>;
-  inView: boolean;
-} {
-  const ref = useRef<T | null>(null);
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setInView(true);
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setInView(true);
-            io.disconnect();
-          }
-        }
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  return { ref, inView };
 }
