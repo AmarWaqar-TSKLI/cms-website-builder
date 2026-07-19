@@ -308,95 +308,99 @@ function ProductRow({
         removed ? "border-ink-800 bg-ink-950/40" : "border-ink-800 bg-ink-950/60",
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span
-          className={cx(
-            "text-[13.5px] font-medium",
-            removed ? "text-ink-400 line-through" : "text-ink-100",
-          )}
-        >
-          {p.title}
-        </span>
-        {removed && <Badge tone="warn">Removed</Badge>}
-        {p.collections.map((c) => (
-          <Badge key={c.id} tone="neutral">
-            {c.title}
-          </Badge>
-        ))}
-        <span className="ml-auto font-mono text-[13px] text-ink-200">{money(p.priceCents)}</span>
-      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cx(
+                "text-[13.5px] font-medium",
+                removed ? "text-ink-400 line-through" : "text-ink-100",
+              )}
+            >
+              {p.title}
+            </span>
+            {removed && <Badge tone="warn">Removed</Badge>}
+            {p.collections.map((c) => (
+              <Badge key={c.id} tone="neutral">
+                {c.title}
+              </Badge>
+            ))}
+          </div>
+          <div className="mt-1 text-[11px] text-ink-500">
+            <span title="product_variants.sku">{p.sku}</span>
+            {" · "}
+            {p.inventoryQty > 0 ? `${p.inventoryQty} in stock` : "out of stock"}
+          </div>
+        </div>
 
-      <div className="mt-2.5 flex flex-wrap items-end gap-3">
-        <label className="block">
-          <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-ink-500">
-            Price
-          </span>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11.5px] text-ink-500">
-              $
+        <div className="flex w-full items-end gap-3 sm:w-auto">
+          <label className="block">
+            <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-ink-500">
+              Price
+            </span>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11.5px] text-ink-500">
+                $
+              </span>
+              <input
+                defaultValue={(p.priceCents / 100).toFixed(2)}
+                inputMode="decimal"
+                aria-label={`Price of ${p.title} in dollars`}
+                onBlur={(e) => {
+                  const cents = Math.round((Number(e.target.value) || 0) * 100);
+                  if (cents !== p.priceCents) {
+                    onUpdate(
+                      p.id,
+                      { priceCents: cents },
+                      `Price updated. Pages already published still show ${money(p.priceCents)} — they keep the value they were built with.`,
+                    );
+                  }
+                }}
+                className="h-8 w-24 rounded-lg border border-ink-700 bg-ink-900 pl-5 pr-2 font-mono text-[12px] text-ink-100 outline-none transition-colors focus:border-flux-500 focus-visible:ring-2 focus-visible:ring-flux-400/40"
+              />
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-ink-500">
+              In stock
             </span>
             <input
-              defaultValue={(p.priceCents / 100).toFixed(2)}
-              inputMode="decimal"
-              aria-label={`Price of ${p.title} in dollars`}
+              defaultValue={p.inventoryQty}
+              inputMode="numeric"
+              aria-label={`Units of ${p.title} in stock`}
               onBlur={(e) => {
-                const cents = Math.round((Number(e.target.value) || 0) * 100);
-                if (cents !== p.priceCents) {
-                  onUpdate(
-                    p.id,
-                    { priceCents: cents },
-                    `Price updated. Pages already published still show ${money(p.priceCents)} — they keep the value they were built with.`,
-                  );
+                const v = Number(e.target.value);
+                if (v !== p.inventoryQty) {
+                  onUpdate(p.id, { inventoryQty: v }, "Stock updated.");
                 }
               }}
-              className="h-8 w-24 rounded-lg border border-ink-700 bg-ink-900 pl-5 pr-2 font-mono text-[12px] text-ink-100 outline-none transition-colors focus:border-flux-500 focus-visible:ring-2 focus-visible:ring-flux-400/40"
+              className="h-8 w-20 rounded-lg border border-ink-700 bg-ink-900 px-2 font-mono text-[12px] text-ink-100 outline-none transition-colors focus:border-flux-500 focus-visible:ring-2 focus-visible:ring-flux-400/40"
             />
-          </div>
-        </label>
+          </label>
 
-        <label className="block">
-          <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-ink-500">
-            In stock
-          </span>
-          <input
-            defaultValue={p.inventoryQty}
-            inputMode="numeric"
-            aria-label={`Units of ${p.title} in stock`}
-            onBlur={(e) => {
-              const v = Number(e.target.value);
-              if (v !== p.inventoryQty) {
-                onUpdate(p.id, { inventoryQty: v }, "Stock updated.");
+          {removed ? (
+            <Btn
+              variant="ghost"
+              size="xs"
+              className="ml-auto hover:border-live-500/50 hover:text-live-500 sm:ml-0"
+              onClick={() =>
+                onUpdate(p.id, { restore: true, status: "active" }, `“${p.title}” is back on sale.`)
               }
-            }}
-            className="h-8 w-20 rounded-lg border border-ink-700 bg-ink-900 px-2 font-mono text-[12px] text-ink-100 outline-none transition-colors focus:border-flux-500 focus-visible:ring-2 focus-visible:ring-flux-400/40"
-          />
-        </label>
-
-        <span className="hidden text-[11px] text-ink-500 sm:block" title="product_variants.sku">
-          {p.sku}
-        </span>
-
-        {removed ? (
-          <Btn
-            variant="ghost"
-            size="xs"
-            className="ml-auto hover:border-live-500/50 hover:text-live-500"
-            onClick={() =>
-              onUpdate(p.id, { restore: true, status: "active" }, `“${p.title}” is back on sale.`)
-            }
-          >
-            Put back on sale
-          </Btn>
-        ) : (
-          <Btn
-            variant="ghost"
-            size="xs"
-            className="ml-auto hover:border-fail-500/50 hover:text-fail-500"
-            onClick={() => onRemove(p)}
-          >
-            Remove
-          </Btn>
-        )}
+            >
+              Put back on sale
+            </Btn>
+          ) : (
+            <Btn
+              variant="ghost"
+              size="xs"
+              className="ml-auto hover:border-fail-500/50 hover:text-fail-500 sm:ml-0"
+              onClick={() => onRemove(p)}
+            >
+              Remove
+            </Btn>
+          )}
+        </div>
       </div>
     </li>
   );

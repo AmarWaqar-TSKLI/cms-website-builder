@@ -20,18 +20,27 @@ async function siteInfo(page: Page) {
   return (await res.json()).site as { id: string; slug: string };
 }
 
-/** Type a new headline into the Hero's first text field and wait for a save. */
+/** Type a new headline into the Hero's Headline field and wait for a save. */
 async function setHeadline(page: Page, headline: string) {
-  // Select the first block on the canvas so the properties panel populates.
+  // Select the first block on the canvas so the Block panel populates.
   await page.locator("[data-cms-node]").first().click();
-  await expect(page.getByText("Properties").first()).toBeVisible();
 
-  const field = page.locator('input[type="text"]').first();
-  await field.waitFor({ state: "visible" });
+  // The panel is generated from the component's schema, so the field is
+  // labelled with the schema's own label rather than a hand-written form.
+  const field = page.locator('aside input[type="text"]').first();
+  await field.waitFor({ state: "visible", timeout: 15_000 });
   await field.fill(headline);
 
   // "Unsaved changes" → autosave ticks → "Saved".
   await expect(page.getByText(/Saved|Up to date/).first()).toBeVisible({ timeout: 20_000 });
+}
+
+/** Open the Publish tab and run a publish, waiting for the artifact to land. */
+async function publish(page: Page) {
+  await page.getByRole("button", { name: "Publish", exact: true }).first().click();
+  await page.getByRole("button", { name: "Publish site" }).click();
+  await expect(page.getByText(/Snapshot committed in \d+ms/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Artifact written/)).toBeVisible({ timeout: 60_000 });
 }
 
 test.describe("edit → publish → serve → rollback", () => {
@@ -49,12 +58,8 @@ test.describe("edit → publish → serve → rollback", () => {
     expect(JSON.stringify(draftA.body)).toContain(HEADLINE_A);
 
     // ── Publish version A ─────────────────────────────────────────────────
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
-    await page.getByRole("button", { name: "Publish site" }).click();
-
-    // The interface states the async split before the build has finished.
-    await expect(page.getByText(/Snapshot committed in \d+ms/)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/Artifact written/)).toBeVisible({ timeout: 60_000 });
+    // The panel states the async split before the build has finished.
+    await publish(page);
 
     // ── The live site serves A ────────────────────────────────────────────
     const liveA = await page.request.get(`/s/${site.slug}`);
@@ -67,9 +72,7 @@ test.describe("edit → publish → serve → rollback", () => {
     // ── Edit and publish version B ────────────────────────────────────────
     await page.goto(`/editor/${pageId}`);
     await setHeadline(page, HEADLINE_B);
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
-    await page.getByRole("button", { name: "Publish site" }).click();
-    await expect(page.getByText(/Artifact written/)).toBeVisible({ timeout: 60_000 });
+    await publish(page);
 
     const liveB = await page.request.get(`/s/${site.slug}`);
     const htmlB = await liveB.text();
@@ -82,18 +85,18 @@ test.describe("edit → publish → serve → rollback", () => {
     await expect(page.getByText("Version history")).toBeVisible();
 
     const rollbackButton = page
-      .getByRole("button", { name: "Roll back to this version" })
+      .getByRole("button", { name: /Restore|Roll back to this version/ })
       .first();
     await expect(rollbackButton).toBeVisible({ timeout: 20_000 });
     await rollbackButton.click();
 
     // A dependency warning may appear; acknowledging it is part of the flow.
-    const anyway = page.getByRole("button", { name: "Roll back anyway" });
+    const anyway = page.getByRole("button", { name: /Restore anyway|Roll back anyway/ });
     if (await anyway.isVisible({ timeout: 2500 }).catch(() => false)) {
       await anyway.click();
     }
 
-    await expect(page.getByText(/Now serving v\d+/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Now serving v\d+|is live again/)).toBeVisible({ timeout: 20_000 });
 
     // ── The live site serves A again, byte for byte ───────────────────────
     const reverted = await page.request.get(`/s/${site.slug}`);
@@ -140,6 +143,6 @@ test.describe("edit → publish → serve → rollback", () => {
     await expect(page.getByText("Commerce module")).toBeVisible();
     // …and the engine blocks are always there. (The accessible name starts with
     // the palette icon glyph, so this matches loosely rather than anchored.)
-    await expect(page.getByRole("button", { name: /Hero/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Hero/ }).first()).toBeVisible();
   });
 });
