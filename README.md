@@ -178,3 +178,9 @@ The parts that would be tempting to fake, and aren't:
   renderer, and `make verify` checks that it stays that way.
 - The cart on a static page really does write to `orders`, and the HTML file's
   checksum really is unchanged afterwards.
+
+---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). Use it, fork it, learn from it.
