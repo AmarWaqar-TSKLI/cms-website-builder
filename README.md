@@ -65,9 +65,13 @@ dockerised Postgres. `make up` runs everything in containers.
 
 ---
 
-> **Showing this to someone?** `DEMO.md` is a full script: what to click in what
-> order, what to say while you do it, how to explain the architecture and the
-> schema, and the questions a senior developer will ask with answers to each.
+> **Showing this to someone?**
+> - `DEMO.md` — a six-beat demo script: what to click, what to say, how to
+>   explain the architecture and the schema, and the questions you'll be asked.
+> - `CODE-TOUR.md` — how to walk someone through the code: nine files in an
+>   order where each motivates the next.
+> - `node scripts/deep-demo.mjs` — a narrated run that demonstrates every claim
+>   against the live stack, including killing the build worker mid-publish.
 
 ## The 60-second tour
 
