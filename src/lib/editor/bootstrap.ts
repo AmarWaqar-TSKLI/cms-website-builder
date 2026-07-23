@@ -9,14 +9,17 @@
  */
 import { prisma } from "../db";
 import { asLayout, asTokens } from "../theme";
+import { directComponentRefs } from "../shared-components";
+import { displayNameOf } from "../shared-components";
 import type {
   ComponentBody,
   ModuleName,
+  PageNode,
   RenderContext,
   ResolvedCollection,
   ResolvedMedia,
   ResolvedProduct,
-  ResolvedSharedComponent,
+  ResolvedComponent,
   ThemeLayout,
 } from "../registry/types";
 import type { RefOptions } from "@/components/editor/Properties";
@@ -27,7 +30,14 @@ export interface EditorContext {
   ctx: RenderContext;
   layout: ThemeLayout;
   refOptions: RefOptions;
-  components: ResolvedSharedComponent[];
+  components: ResolvedComponent[];
+  /** Every component, named or not — the expansion map the canvas needs. */
+  allComponents: ResolvedComponent[];
+  /**
+   * Components referenced by more than one page — the ones where an edit has
+   * consequences beyond the page you are on. Everything else is just a block.
+   */
+  sharedIds: string[];
   siblings: { id: string; path: string; title: string }[];
 }
 
@@ -62,7 +72,7 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
     // DRAFT bodies, not revisions. The editor previews what will be published
     // next, so a header you changed five seconds ago shows on every page that
     // uses it immediately — the build reads pinned revisions instead.
-    prisma.sharedComponent.findMany({
+    prisma.component.findMany({
       where: { siteId: site.id, deletedAt: null },
       include: { draft: true },
       orderBy: { name: "asc" },
@@ -98,20 +108,57 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
     media[m.id] = { id: m.id, url: m.storageKey, alt: "", missing: m.deletedAt !== null };
   }
 
-  const componentList: ResolvedSharedComponent[] = componentRows.map((c) => ({
+  // Which components more than one page points at. One scan of the drafts, done
+  // when the editor opens, and it decides the single most important behaviour on
+  // the canvas: whether editing a block edits it, or overrides it.
+  const pageDrafts = await prisma.pageDraft.findMany({
+    where: { page: { siteId: site.id, deletedAt: null } },
+  });
+  const refCount = new Map<string, number>();
+  for (const draft of pageDrafts) {
+    const body = draft.body as unknown as { root?: PageNode[] } | undefined;
+    for (const id of directComponentRefs(body?.root ?? [])) {
+      refCount.set(id, (refCount.get(id) ?? 0) + 1);
+    }
+  }
+  // A component placed inside another component is shared too: editing it would
+  // change every page that uses the parent.
+  for (const c of componentRows) {
+    const body = c.draft?.body as unknown as { root?: PageNode[] } | undefined;
+    for (const id of directComponentRefs(body?.root ?? [])) {
+      refCount.set(id, (refCount.get(id) ?? 0) + 1);
+    }
+  }
+  // Named components are treated as shared even at one use: naming one is how a
+  // person says "this is meant to be reused", and it should behave that way from
+  // the first page rather than changing behaviour on the second.
+  const sharedIds = componentRows
+    .filter((c) => (refCount.get(c.id) ?? 0) > 1 || !!c.name)
+    .map((c) => c.id);
+
+  const componentList: ResolvedComponent[] = componentRows.map((c) => ({
     id: c.id,
-    name: c.name,
+    name: displayNameOf(c),
     root: ((c.draft?.body as unknown as ComponentBody) ?? { version: 1, root: [] }).root ?? [],
   }));
 
-  const components: Record<string, ResolvedSharedComponent> = {};
+  // The palette lists only NAMED components. Every block on every page is a
+  // component record now, and listing all of them would be a wall of noise — a
+  // name is exactly the signal that someone intends this one to be reused.
+  const paletteComponents = componentList.filter((c) =>
+    componentRows.find((r) => r.id === c.id && r.name),
+  );
+
+  const components: Record<string, ResolvedComponent> = {};
   for (const c of componentList) components[c.id] = c;
 
   return {
     site: { id: site.id, name: site.name, slug: site.slug },
     modules: site.modules.map((m) => m.module as ModuleName),
     layout: asLayout(themeRevision?.layout),
-    components: componentList,
+    components: paletteComponents,
+    allComponents: componentList,
+    sharedIds,
     siblings: site.pages.map((p) => ({ id: p.id, path: p.path, title: p.title })),
     refOptions: {
       collection: collectionRows.map((c) => ({ value: c.id, label: c.title })),

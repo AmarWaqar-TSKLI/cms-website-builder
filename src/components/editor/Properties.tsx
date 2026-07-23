@@ -20,7 +20,7 @@ import type {
   PropDef,
   PropGroup,
   RefKind,
-  ResolvedSharedComponent,
+  ResolvedComponent,
   ThemeTokens,
 } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
@@ -53,7 +53,7 @@ function InstancePanel({
   components,
 }: {
   node: PageNode;
-  components: Record<string, ResolvedSharedComponent>;
+  components: Record<string, ResolvedComponent>;
 }) {
   const router = useRouter();
   const setOverride = useEditor((s) => s.setOverride);
@@ -259,7 +259,7 @@ export function Properties({
 }: {
   refOptions: RefOptions;
   tokens: ThemeTokens;
-  components: Record<string, ResolvedSharedComponent>;
+  components: Record<string, ResolvedComponent>;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const body = useEditor((s) => s.body);

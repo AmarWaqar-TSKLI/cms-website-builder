@@ -366,25 +366,25 @@ async function main() {
       assert(!names.includes(forbidden), `a per-node table exists: ${forbidden}`);
     }
 
-    // shared_component_revisions DOES exist, and the distinction is the point:
+    // component_revisions DOES exist, and the distinction is the point:
     // it is keyed by component_id — a shared DEFINITION — never by a node on a
     // page. If it ever gains a node/page column, this check fails on purpose.
     const columns = await prisma.$queryRaw<{ column_name: string }[]>`
       SELECT column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'shared_component_revisions'
+      WHERE table_schema = 'public' AND table_name = 'component_revisions'
     `;
     const columnNames = columns.map((r) => r.column_name);
-    assert(columnNames.includes("component_id"), "shared_component_revisions lost component_id");
+    assert(columnNames.includes("component_id"), "component_revisions lost component_id");
     for (const forbidden of ["node_id", "page_id", "parent_id", "sort_order"]) {
       assert(
         !columnNames.includes(forbidden),
-        `shared_component_revisions has ${forbidden} — that is per-node storage, not a shared definition`,
+        `component_revisions has ${forbidden} — that is per-node storage, not a shared definition`,
       );
     }
 
     log(`one row holds the full ordered arrangement: ${order.join(" → ")}`);
     log(`4 nodes published → ${revisionsForThisPublish} revision row, not 4`);
-    log("shared_component_revisions is keyed by component_id; no node_id/parent_id/sort_order");
+    log("component_revisions is keyed by component_id; no node_id/parent_id/sort_order");
     await waitReady(r.releaseId);
   });
 
@@ -701,10 +701,10 @@ async function main() {
     async (log) => {
       // Two pages, both using the same header. This is the whole feature: edit
       // once, both change; roll back, both return.
-      const header = await prisma.sharedComponent.create({
+      const header = await prisma.component.create({
         data: { siteId, name: `Header ${Math.random().toString(36).slice(2, 6)}` },
       });
-      await prisma.sharedComponentDraft.create({
+      await prisma.componentDraft.create({
         data: {
           componentId: header.id,
           lockVersion: 1,
@@ -771,7 +771,7 @@ async function main() {
       log("one definition rendered into two pages from a single stored tree");
 
       // ── Edit the component ONCE ────────────────────────────────────────
-      await prisma.sharedComponentDraft.update({
+      await prisma.componentDraft.update({
         where: { componentId: header.id },
         data: { body: { version: 1, root: [node("Heading", { text: "MARK-TWO" })] } as never },
       });
@@ -786,7 +786,7 @@ async function main() {
       log("one edit to one row changed both pages — no page body was touched");
 
       // The revision table grew; nothing was rewritten.
-      const revisionCount = await prisma.sharedComponentRevision.count({
+      const revisionCount = await prisma.componentRevision.count({
         where: { componentId: header.id },
       });
       assert(revisionCount === 2, `expected 2 component revisions, found ${revisionCount}`);
@@ -794,16 +794,16 @@ async function main() {
       let componentUpdateBlocked = false;
       try {
         await prisma.$executeRawUnsafe(
-          `UPDATE shared_component_revisions SET version_no = 999 WHERE component_id = '${header.id}'`,
+          `UPDATE component_revisions SET version_no = 999 WHERE component_id = '${header.id}'`,
         );
       } catch (e) {
         componentUpdateBlocked = /append-only/i.test(String(e));
       }
       assert(
         componentUpdateBlocked,
-        "UPDATE on shared_component_revisions was NOT blocked by the database",
+        "UPDATE on component_revisions was NOT blocked by the database",
       );
-      log("shared_component_revisions is append-only, enforced by the same database trigger");
+      log("component_revisions is append-only, enforced by the same database trigger");
 
       // ── Roll back ──────────────────────────────────────────────────────
       // The release pinned a REVISION, so the old header must come back on both
@@ -827,13 +827,13 @@ async function main() {
       log("rollback restored the old component on both pages; 0 files touched");
 
       // ── Loops are refused ──────────────────────────────────────────────
-      const loop = await prisma.sharedComponent.create({
+      const loop = await prisma.component.create({
         data: { siteId, name: `Loop ${Math.random().toString(36).slice(2, 6)}` },
       });
       const selfRef = node("@component", {});
       selfRef.props.componentId = loop.id;
       selfRef.props.overrides = {};
-      await prisma.sharedComponentDraft.create({
+      await prisma.componentDraft.create({
         data: {
           componentId: loop.id,
           lockVersion: 1,
@@ -862,7 +862,7 @@ async function main() {
       log("a component containing itself is refused at publish, before any row is written");
 
       // Leave the site live and consistent for anything that runs after.
-      await prisma.sharedComponent.update({
+      await prisma.component.update({
         where: { id: loop.id },
         data: { deletedAt: new Date() },
       });
@@ -910,6 +910,81 @@ async function main() {
     }
 
     log("hosting reads Postgres, not a disk; artifacts exist for the export only");
+  });
+
+  // ── 13 ───────────────────────────────────────────────────────────────────
+  await check(13, "A page stores references, never content", async (log) => {
+    // The storage model, asserted directly against the seeded demo site rather
+    // than a fixture, because this is the claim the whole design rests on.
+    const demo = await prisma.site.findFirst({ where: { slug: "acme-store" } });
+    if (!demo) {
+      log("demo site absent (verify ran against a custom seed) — skipped");
+      return;
+    }
+
+    const drafts = await prisma.pageDraft.findMany({
+      where: { page: { siteId: demo.id, deletedAt: null } },
+      include: { page: true },
+    });
+    assert(drafts.length > 0, "the demo site has no pages");
+
+    let refs = 0;
+    const referenced = new Set<string>();
+    for (const draft of drafts) {
+      const root = fromJson<{ root: PageNode[] }>(draft.body).root ?? [];
+      assert(root.length > 0, `${draft.page.path} is empty`);
+      for (const node of root) {
+        assert(
+          node.type === "@component",
+          `${draft.page.path} stores a ${node.type} inline instead of a reference`,
+        );
+        assert(
+          !node.children?.length,
+          `${draft.page.path} stores content inside a reference`,
+        );
+        const componentId = (node.props as { componentId?: string })?.componentId;
+        assert(componentId, `${draft.page.path} has a reference pointing at nothing`);
+        referenced.add(componentId!);
+        refs++;
+      }
+    }
+
+    // And positively: every reference resolves to a record that holds content.
+    // Note refs > referenced.size — some component is used by more than one
+    // page, which is the entire mechanism behind "shared".
+    const resolved = await prisma.component.count({
+      where: { siteId: demo.id, deletedAt: null, id: { in: [...referenced] } },
+    });
+    assert(
+      resolved === referenced.size,
+      `${referenced.size} distinct components referenced but only ${resolved} exist`,
+    );
+
+    // A page's stored bytes contain no visible text at all — only ids.
+    const anyDraft = JSON.stringify(drafts[0].body);
+    assert(
+      !/[A-Za-z]{4,}\s+[A-Za-z]{4,}/.test(anyDraft.replace(/"[0-9a-f-]{36}"/g, "")),
+      "a page draft contains prose, so it is storing content and not only references",
+    );
+
+    // The named one is used twice — the same record, two pages. That is all
+    // "shared" means now.
+    const named = await prisma.component.findFirst({
+      where: { siteId: demo.id, deletedAt: null, name: { not: null } },
+    });
+    if (named) {
+      const users = drafts.filter((d) =>
+        fromJson<{ root: PageNode[] }>(d.body).root.some(
+          (n) => (n.props as { componentId?: string })?.componentId === named.id,
+        ),
+      );
+      assert(users.length > 1, `“${named.name}” is named but used by only ${users.length} page`);
+      log(`“${named.name}” is one record referenced by ${users.length} pages — that is "shared"`);
+    }
+
+    log(`${drafts.length} pages hold ${refs} references and zero blocks of content`);
+    log(`all ${referenced.size} referenced components exist and hold the content instead`);
+    log(`${refs} references over ${referenced.size} components — the difference IS the reuse`);
   });
 
   // ── Report ───────────────────────────────────────────────────────────────

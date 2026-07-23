@@ -8,7 +8,7 @@
  * names. Selecting here selects on the canvas, and dragging here reorders.
  */
 import { getSchema } from "@/lib/registry";
-import type { PageNode, ResolvedSharedComponent } from "@/lib/registry/types";
+import type { PageNode, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { componentIdOf, isComponentRef } from "@/lib/shared-components";
 import { cx } from "../ui";
@@ -17,7 +17,7 @@ import { DRAG_MOVE } from "./Canvas";
 export function Layers({
   components = {},
 }: {
-  components?: Record<string, ResolvedSharedComponent>;
+  components?: Record<string, ResolvedComponent>;
 }) {
   const body = useEditor((s) => s.body);
 
@@ -53,7 +53,7 @@ function Branch({
   nodes: PageNode[];
   parentId: string | null;
   depth: number;
-  components: Record<string, ResolvedSharedComponent>;
+  components: Record<string, ResolvedComponent>;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);

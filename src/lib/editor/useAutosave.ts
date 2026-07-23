@@ -13,7 +13,7 @@
  * walkthrough shows the two counters side by side while you type.
  */
 import { useEffect, useRef } from "react";
-import { useEditor, type EditTarget } from "./store";
+import { decomposeForSave, useEditor, type EditTarget } from "./store";
 
 export const AUTOSAVE_MS = 2000;
 
@@ -46,7 +46,9 @@ export function useAutosave(enabled = true) {
         const res = await fetch(draftEndpoint(state.target, state.pageId), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body: state.body, lockVersion: state.lockVersion }),
+          // Decomposed, not the working tree: the page stores references, and each
+      // component stores its own body. See decompose() for why they are inverses.
+      body: JSON.stringify({ ...decomposeForSave(), lockVersion: state.lockVersion }),
         });
 
         if (res.status === 409) {
@@ -92,7 +94,9 @@ export async function flushDraft(): Promise<boolean> {
     const res = await fetch(`/api/pages/${state.pageId}/draft`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: state.body, lockVersion: state.lockVersion }),
+      // Decomposed, not the working tree: the page stores references, and each
+      // component stores its own body. See decompose() for why they are inverses.
+      body: JSON.stringify({ ...decomposeForSave(), lockVersion: state.lockVersion }),
     });
     if (res.status === 409) {
       useEditor.getState().setStatus("conflict", "This was edited in another tab.");

@@ -29,7 +29,8 @@ import { renderPageHtml } from "./render/html";
 import { asLayout, asTokens } from "./theme";
 import { extractRefsFromBody, mergeRefs } from "./refs";
 import { freezeTierTwo } from "./runtime/snapshot";
-import type { PageBody, RenderContext, ResolvedSharedComponent } from "./registry/types";
+import { displayNameOf } from "./shared-components";
+import type { PageBody, RenderContext, ResolvedComponent } from "./registry/types";
 
 export { artifactsRoot, pathToFile, releaseDir } from "./paths";
 
@@ -71,17 +72,17 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
   // feature: rebuilding a two-year-old release renders the header that release
   // shipped with, not the one the symbol has today.
   const componentRevisions = componentItems.length
-    ? await prisma.sharedComponentRevision.findMany({
+    ? await prisma.componentRevision.findMany({
         where: { id: { in: componentItems.map((i) => i.revisionId) } },
         include: { component: true },
       })
     : [];
 
-  const components: Record<string, ResolvedSharedComponent> = {};
+  const components: Record<string, ResolvedComponent> = {};
   for (const rev of componentRevisions) {
     components[rev.componentId] = {
       id: rev.componentId,
-      name: rev.component.name,
+      name: displayNameOf(rev.component),
       root: ((rev.body as unknown) as PageBody)?.root ?? [],
       revisionId: rev.id,
       // NOT marked missing when the symbol has since been soft-deleted. This is

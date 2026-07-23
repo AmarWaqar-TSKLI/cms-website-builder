@@ -28,7 +28,7 @@ export async function GET(
 ) {
   const { componentId } = await params;
 
-  const component = await prisma.sharedComponent.findFirst({
+  const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
     include: { draft: true, revisions: { orderBy: { versionNo: "desc" }, take: 20 } },
   });
@@ -69,7 +69,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const component = await prisma.sharedComponent.findFirst({
+  const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
   });
   if (!component) return NextResponse.json({ error: "Component not found" }, { status: 404 });
@@ -78,7 +78,7 @@ export async function PATCH(
   if (!name) return NextResponse.json({ error: "name cannot be empty" }, { status: 400 });
 
   if (name !== component.name) {
-    const clash = await prisma.sharedComponent.findFirst({
+    const clash = await prisma.component.findFirst({
       where: { siteId: component.siteId, name, deletedAt: null },
       select: { id: true },
     });
@@ -90,7 +90,7 @@ export async function PATCH(
     }
   }
 
-  const updated = await prisma.sharedComponent.update({
+  const updated = await prisma.component.update({
     where: { id: componentId },
     data: {
       name,
@@ -108,7 +108,7 @@ export async function DELETE(
   const { componentId } = await params;
   const force = new URL(req.url).searchParams.get("force") === "1";
 
-  const component = await prisma.sharedComponent.findFirst({
+  const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
   });
   if (!component) return NextResponse.json({ error: "Component not found" }, { status: 404 });
@@ -129,7 +129,7 @@ export async function DELETE(
 
   // Soft delete. Revisions stay exactly where they are — they are append-only,
   // and every release that pinned one keeps rendering it.
-  await prisma.sharedComponent.update({
+  await prisma.component.update({
     where: { id: componentId },
     data: { deletedAt: new Date() },
   });

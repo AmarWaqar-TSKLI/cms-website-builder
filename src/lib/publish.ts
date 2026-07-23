@@ -15,10 +15,11 @@
  * Publish is site-wide, not per-page (D4). A "version" where page A is new and
  * page B is old is not a version of anything anyone can reason about.
  */
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { expandCollectionRefs, extractRefsFromBody, mergeRefs, type Ref } from "./refs";
-import { describeCycle, detectComponentCycles } from "./shared-components";
+import { describeCycle, detectComponentCycles, displayNameOf } from "./shared-components";
 import type { PageBody } from "./registry/types";
 
 export interface PublishResult {
@@ -57,7 +58,7 @@ export async function publishSite(
       });
       if (pages.length === 0) throw new Error("Site has no pages to publish");
 
-      const components = await tx.sharedComponent.findMany({
+      const components = await tx.component.findMany({
         where: { siteId, deletedAt: null },
         include: { draft: true },
         orderBy: { name: "asc" },
@@ -74,7 +75,7 @@ export async function publishSite(
       }
       const cycle = detectComponentCycles(componentBodies);
       if (cycle) {
-        const names = Object.fromEntries(components.map((c) => [c.id, c.name]));
+        const names = Object.fromEntries(components.map((c) => [c.id, displayNameOf(c)]));
         throw new ComponentCycleError(describeCycle(cycle, names), cycle.path);
       }
 
@@ -90,30 +91,41 @@ export async function publishSite(
       // The draft row is left exactly where it is: it keeps being the working
       // copy. Nothing is updated, nothing is deleted, version_no only ever
       // climbs. Every arrangement this site has ever published stays readable.
+      // ONE insert for every page, not one insert per page.
+      //
+      // The ids are minted here rather than read back, which is what makes the
+      // batch possible. It matters more than it used to: every block on every
+      // page is now a component with its own revision, so a publish writes
+      // hundreds of rows on a real site. A loop of awaits would make the time
+      // this transaction holds its locks grow with the size of the site, and
+      // "publish returns in under 200ms" would quietly stop being true.
       const bodies: PageBody[] = [];
       const revisionIdByPage = new Map<string, string>();
-
-      for (const page of pages) {
+      const pageRevisionRows = pages.map((page) => {
         const body = ((page.draft?.body as unknown) ?? EMPTY_BODY) as PageBody;
         bodies.push(body);
-        const revision = await tx.pageRevision.create({
-          data: {
-            pageId: page.id,
-            body: body as unknown as Prisma.InputJsonValue,
-            versionNo: (maxByPage.get(page.id) ?? 0) + 1,
-            createdBy: userId,
-          },
-          select: { id: true },
-        });
-        revisionIdByPage.set(page.id, revision.id);
-      }
+        const id = randomUUID();
+        revisionIdByPage.set(page.id, id);
+        return {
+          id,
+          pageId: page.id,
+          body: body as unknown as Prisma.InputJsonValue,
+          versionNo: (maxByPage.get(page.id) ?? 0) + 1,
+          createdBy: userId,
+        };
+      });
+      if (pageRevisionRows.length) await tx.pageRevision.createMany({ data: pageRevisionRows });
 
       // ── 2b. Promote component drafts → revisions. Same rules exactly. ──────
-      // Every non-deleted symbol gets a revision, whether or not a page uses it,
-      // for the same reason every page does: publish is site-wide (D4). A release
-      // where the header is new but the footer is old is not a version of
+      // Every non-deleted component gets a revision, whether or not a page uses
+      // it, for the same reason every page does: publish is site-wide (D4). A
+      // release where one block is new and another is old is not a version of
       // anything anyone can reason about.
-      const componentMaxima = await tx.sharedComponentRevision.groupBy({
+      //
+      // This is now the bulk of a publish — a page of seven blocks is seven
+      // component revisions plus one page revision — which is why both writes
+      // above and below are single batched inserts.
+      const componentMaxima = await tx.componentRevision.groupBy({
         by: ["componentId"],
         where: { componentId: { in: components.map((c) => c.id) } },
         _max: { versionNo: true },
@@ -123,19 +135,21 @@ export async function publishSite(
       );
 
       const revisionIdByComponent = new Map<string, string>();
-      for (const component of components) {
+      const componentRevisionRows = components.map((component) => {
         const body = componentBodies[component.id];
-        bodies.push(body); // so refs INSIDE a symbol are recorded too — see step 6
-        const revision = await tx.sharedComponentRevision.create({
-          data: {
-            componentId: component.id,
-            body: body as unknown as Prisma.InputJsonValue,
-            versionNo: (maxByComponent.get(component.id) ?? 0) + 1,
-            createdBy: userId,
-          },
-          select: { id: true },
-        });
-        revisionIdByComponent.set(component.id, revision.id);
+        bodies.push(body); // so refs INSIDE a component are recorded too — step 6
+        const id = randomUUID();
+        revisionIdByComponent.set(component.id, id);
+        return {
+          id,
+          componentId: component.id,
+          body: body as unknown as Prisma.InputJsonValue,
+          versionNo: (maxByComponent.get(component.id) ?? 0) + 1,
+          createdBy: userId,
+        };
+      });
+      if (componentRevisionRows.length) {
+        await tx.componentRevision.createMany({ data: componentRevisionRows });
       }
 
       // ── 3. Pin the theme ───────────────────────────────────────────────────

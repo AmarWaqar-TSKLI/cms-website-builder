@@ -22,11 +22,12 @@
  */
 import { prisma } from "../db";
 import { asLayout, asTokens } from "../theme";
+import { displayNameOf } from "../shared-components";
 import type {
   ComponentBody,
   PageBody,
   PageNode,
-  ResolvedSharedComponent,
+  ResolvedComponent,
   ThemeLayout,
   ThemeTokens,
 } from "../registry/types";
@@ -51,7 +52,7 @@ export interface LoadedRelease {
   layout: ThemeLayout;
   /** Keyed by normalised path: "/", "/about". */
   pages: Record<string, LoadedPage>;
-  components: Record<string, ResolvedSharedComponent>;
+  components: Record<string, ResolvedComponent>;
   data: FrozenTierTwo;
 }
 
@@ -107,7 +108,7 @@ export async function loadRelease(releaseId: string): Promise<LoadedRelease | nu
       include: { page: true },
     }),
     componentItems.length
-      ? prisma.sharedComponentRevision.findMany({
+      ? prisma.componentRevision.findMany({
           where: { id: { in: componentItems.map((i) => i.revisionId) } },
           include: { component: true },
         })
@@ -129,11 +130,11 @@ export async function loadRelease(releaseId: string): Promise<LoadedRelease | nu
     };
   }
 
-  const components: Record<string, ResolvedSharedComponent> = {};
+  const components: Record<string, ResolvedComponent> = {};
   for (const revision of componentRevisions) {
     components[revision.componentId] = {
       id: revision.componentId,
-      name: revision.component.name,
+      name: displayNameOf(revision.component),
       root: ((revision.body as unknown as ComponentBody)?.root ?? []) as PageNode[],
       revisionId: revision.id,
       // Deliberately never `missing`: the release pinned this revision, and a

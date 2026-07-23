@@ -44,7 +44,7 @@ const TABLES = [
   "collection_products", "collections", "product_variants", "products",
   "build_jobs", "release_dependencies", "release_items", "releases",
   "media", "theme_revisions", "themes",
-  "shared_component_revisions", "shared_component_drafts", "shared_components",
+  "component_revisions", "component_drafts", "components",
   "page_revisions", "page_drafts", "pages",
   "site_modules", "sites", "memberships", "users", "organizations",
 ];
@@ -188,7 +188,7 @@ async function main() {
   // back, and both pages get this version again — because the release pinned the
   // revision, not the component.
   console.log("→ shared components");
-  const banner = await prisma.sharedComponent.create({
+  const banner = await prisma.component.create({
     data: {
       siteId: site.id,
       name: "Announcement bar",
@@ -225,12 +225,49 @@ async function main() {
 
   const bannerOn = (instanceId: string) => createComponentRef(banner.id, instanceId);
 
+  /**
+   * Store a page the way the system actually stores pages.
+   *
+   * Every top-level block becomes a component record, and the page keeps only an
+   * ordered list of references to them. A block that is already a reference —
+   * the announcement bar — is carried over untouched, because it is a component
+   * that happens to be used twice.
+   *
+   * Seeding the old shape and relying on the migration to fix it would mean the
+   * demo database and a fresh install disagreed about the storage model, which
+   * is exactly the kind of drift the rest of this codebase works to avoid.
+   */
+  async function storePage(pageId: string, blocks: PageNode[]) {
+    const refs: PageNode[] = [];
+
+    for (const block of blocks) {
+      if (block.type === "@component") {
+        refs.push(block);
+        continue;
+      }
+      const component = await prisma.component.create({
+        data: {
+          siteId: site.id,
+          kind: block.type,
+          draft: {
+            create: {
+              updatedBy: user.id,
+              lockVersion: 1,
+              body: toJson(body([block])),
+            },
+          },
+        },
+      });
+      refs.push(createComponentRef(component.id, `ref-${++nodeSeq}`));
+    }
+
+    await prisma.pageDraft.create({
+      data: { pageId, updatedBy: user.id, body: toJson(body(refs)) },
+    });
+  }
+
   // Note what is stored: names and values. No markup anywhere. (Non-negotiable #1)
-  await prisma.pageDraft.create({
-    data: {
-      pageId: home.id,
-      updatedBy: user.id,
-      body: toJson(body([
+  await storePage(home.id, [
         bannerOn("n-banner-home"),
         node("Hero", {
           headline: "Everything here is a description.",
@@ -294,15 +331,9 @@ async function main() {
           paddingTop: 40,
           paddingBottom: 56,
         }),
-      ])),
-    },
-  });
+  ]);
 
-  await prisma.pageDraft.create({
-    data: {
-      pageId: about.id,
-      updatedBy: user.id,
-      body: toJson(body([
+  await storePage(about.id, [
         bannerOn("n-banner-about"),
         node("Hero", {
           headline: "Rollback is one column.",
@@ -338,9 +369,7 @@ async function main() {
           paddingTop: 0,
           paddingBottom: 72,
         }),
-      ])),
-    },
-  });
+  ]);
 
   console.log(`
 ✓ seeded

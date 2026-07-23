@@ -28,8 +28,15 @@ import {
   removeFromTree,
   walk,
 } from "../registry";
-import { componentIdOf, expandComponents, overridesOf, stripExpansion } from "../shared-components";
-import type { PageBody, PageNode, ResolvedSharedComponent } from "../registry/types";
+import {
+  componentIdOf,
+  decompose,
+  expandComponents,
+  isComponentRef,
+  overridesOf,
+  stripExpansion,
+} from "../shared-components";
+import type { PageBody, PageNode, ResolvedComponent } from "../registry/types";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "failed" | "conflict";
 
@@ -58,7 +65,25 @@ interface EditorState {
   past: PageNode[][];
   future: PageNode[][];
 
-  init: (pageId: string, body: PageBody, lockVersion: number, target?: EditTarget) => void;
+  /**
+   * Components referenced by more than one page.
+   *
+   * The single most important flag in the editor. A component used once is just
+   * this page's block — editing it edits it. A component used by several pages
+   * is shared, so an edit here would change pages you cannot see, and becomes an
+   * override on this page instead.
+   */
+  sharedIds: string[];
+  isShared: (componentId: string | null | undefined) => boolean;
+
+  init: (
+    pageId: string,
+    body: PageBody,
+    lockVersion: number,
+    target?: EditTarget,
+    components?: Record<string, ResolvedComponent>,
+    sharedIds?: string[],
+  ) => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
 
@@ -67,7 +92,7 @@ interface EditorState {
   replaceWithComponentRef: (nodeId: string, componentId: string) => void;
   setOverride: (instanceId: string, innerId: string, key: string, value: unknown) => void;
   clearOverrides: (instanceId: string) => void;
-  detachComponent: (instanceId: string, components: Record<string, ResolvedSharedComponent>) => void;
+  detachComponent: (instanceId: string, components: Record<string, ResolvedComponent>) => void;
   updateProp: (id: string, key: string, value: unknown) => void;
   updateProps: (id: string, patch: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
@@ -112,6 +137,7 @@ export const useEditor = create<EditorState>((set, get) => {
   return {
     pageId: "",
     target: "page",
+    sharedIds: [],
     body: { version: 1, root: [] },
     selectedId: null,
     hoveredId: null,
@@ -123,12 +149,25 @@ export const useEditor = create<EditorState>((set, get) => {
     past: [],
     future: [],
 
-    init: (pageId, body, lockVersion, target = "page") => {
+    isShared: (componentId) => !!componentId && get().sharedIds.includes(componentId),
+
+    /**
+     * Expand ONCE, here, and keep the expanded tree as the working document.
+     *
+     * The editor is far simpler working on the tree a person is looking at:
+     * drag, undo and inline editing all operate on one structure. Storage is the
+     * opposite shape, and `decompose()` converts back at save time. Expanding on
+     * every render instead would mean re-expanding a tree that is already
+     * expanded, which blanks any component the map has not heard of yet — such
+     * as one created seconds ago in this session.
+     */
+    init: (pageId, body, lockVersion, target = "page", components = {}, sharedIds = []) => {
       seedCounter(body);
       set({
         pageId,
         target,
-        body: { version: 1, root: body.root ?? [] },
+        sharedIds,
+        body: { version: 1, root: expandComponents(body.root ?? [], components) },
         lockVersion,
         selectedId: null,
         hoveredId: null,
@@ -142,17 +181,44 @@ export const useEditor = create<EditorState>((set, get) => {
     select: (id) => set({ selectedId: id }),
     hover: (id) => set({ hoveredId: id }),
 
+    /**
+     * Add a block.
+     *
+     * At the TOP LEVEL this creates a component record: the block becomes a
+     * component and the page gains a reference to it. That is the whole storage
+     * model in one action — a page never contains a block, only a pointer to one.
+     * The id is minted here rather than round-tripping to the server, so the
+     * block appears instantly and autosave creates the row a moment later.
+     *
+     * Inside a container the block joins that container's tree, which belongs to
+     * whichever component owns it. No new record: a Card inside a Columns is part
+     * of the Columns component, not a component of its own. THE UNIT IS THE
+     * COMPONENT, NOT THE NODE.
+     */
     addNode: (type, parentId = null, index) =>
       set((state) => {
-        const node = createNode(type, nextId());
-        const at =
-          index ??
-          (parentId === null
-            ? state.body.root.length
-            : (findNode(state.body.root, parentId)?.children ?? []).length);
-        return commit(state, insertIntoTree(state.body.root, node, parentId, at), {
-          selectedId: node.id,
-        });
+        const block = createNode(type, nextId());
+
+        if (parentId !== null) {
+          const at = index ?? (findNode(state.body.root, parentId)?.children ?? []).length;
+          return commit(state, insertIntoTree(state.body.root, block, parentId, at), {
+            selectedId: block.id,
+          });
+        }
+
+        const componentId = newComponentId();
+        const ref = createComponentRef(componentId, nextId());
+        // Built through expandComponents so the result is byte-identical to what
+        // a reload would produce. Constructing it by hand is how the two drift.
+        const expanded = expandComponents([ref], {
+          [componentId]: { id: componentId, name: type, root: [block] },
+        })[0];
+
+        return commit(
+          state,
+          insertIntoTree(state.body.root, expanded, null, index ?? state.body.root.length),
+          { selectedId: expanded.id },
+        );
       }),
 
     /**
@@ -401,6 +467,29 @@ let lastEditAt = 0;
 /** The instance a selected node belongs to, if any — used by the properties panel. */
 export function componentInstanceIdOf(node: PageNode | null): string | null {
   return node?.fromComponent?.instanceId ?? null;
+}
+
+/**
+ * A real UUID, because this id becomes a database primary key.
+ *
+ * Minted on the client so a dropped block renders instantly instead of waiting
+ * for a round trip. Autosave inserts the row afterwards; until then the block is
+ * real on screen and not yet real in Postgres, which is exactly the deal the
+ * draft/publish split already makes everywhere else.
+ */
+function newComponentId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `c-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
+/**
+ * What autosave sends: the page's references, and a body for every component
+ * this page owns. The inverse of what init() expanded.
+ */
+export function decomposeForSave(): { body: PageBody; components: Record<string, PageNode[]> } {
+  const { body, sharedIds } = useEditor.getState();
+  const { root, bodies } = decompose(body.root, new Set(sharedIds));
+  return { body: { version: 1, root }, components: bodies };
 }
 
 export { componentIdOf };

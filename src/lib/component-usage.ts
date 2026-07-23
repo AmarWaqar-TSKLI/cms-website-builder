@@ -17,7 +17,7 @@
  *                the reverse index built at publish time.
  */
 import { prisma } from "./db";
-import { directComponentRefs } from "./shared-components";
+import { directComponentRefs, displayNameOf } from "./shared-components";
 import type { PageBody } from "./registry/types";
 
 export interface ComponentUsage {
@@ -41,7 +41,7 @@ export async function usageOf(siteId: string, componentId: string): Promise<Comp
       include: { draft: true },
       orderBy: { path: "asc" },
     }),
-    prisma.sharedComponent.findMany({
+    prisma.component.findMany({
       where: { siteId, deletedAt: null },
       include: { draft: true },
       orderBy: { name: "asc" },
@@ -82,7 +82,7 @@ export async function usageOf(siteId: string, componentId: string): Promise<Comp
     pages: direct,
     components: components
       .filter((c) => c.id !== componentId && refsOf(c.draft?.body).includes(componentId))
-      .map((c) => ({ id: c.id, name: c.name })),
+      .map((c) => ({ id: c.id, name: displayNameOf(c) })),
     indirectPages: indirect,
     totalPages: direct.length + indirect.length,
   };

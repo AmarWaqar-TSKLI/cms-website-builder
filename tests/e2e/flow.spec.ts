@@ -59,9 +59,25 @@ test.describe("edit → publish → serve → rollback", () => {
     await expect(page.getByRole("link", { name: /Acme Store/ })).toBeVisible();
     await setHeadline(page, HEADLINE_A);
 
-    // The draft on the server now holds A — and there is still only one row.
+    // ── Where the text actually went ──────────────────────────────────────
+    // The page draft must NOT contain the headline. A page stores an ordered
+    // list of component references and no content at all; the text lives in the
+    // component record the reference points at. This is the storage model, and
+    // asserting it here is the most direct proof of it in the whole suite.
     const draftA = await (await page.request.get(`/api/pages/${pageId}/draft`)).json();
-    expect(JSON.stringify(draftA.body)).toContain(HEADLINE_A);
+    const refs = (draftA.body.root as { type: string; props: { componentId: string } }[]);
+
+    expect(refs.every((n) => n.type === "@component")).toBe(true);
+    expect(JSON.stringify(draftA.body)).not.toContain(HEADLINE_A);
+
+    // Exactly one of the referenced components holds it.
+    const bodies = await Promise.all(
+      refs.map(async (n) => {
+        const res = await page.request.get(`/api/components/${n.props.componentId}`);
+        return res.ok() ? JSON.stringify((await res.json()).body) : "";
+      }),
+    );
+    expect(bodies.filter((b) => b.includes(HEADLINE_A))).toHaveLength(1);
 
     // ── Publish version A ─────────────────────────────────────────────────
     // The panel states the async split before the build has finished.

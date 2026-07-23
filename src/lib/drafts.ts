@@ -34,13 +34,13 @@ async function targetExists(kind: DraftKind, id: string): Promise<boolean> {
   if (kind === "page") {
     return (await prisma.page.count({ where: { id, deletedAt: null } })) > 0;
   }
-  return (await prisma.sharedComponent.count({ where: { id, deletedAt: null } })) > 0;
+  return (await prisma.component.count({ where: { id, deletedAt: null } })) > 0;
 }
 
 export async function readDraft(kind: DraftKind, id: string) {
   return kind === "page"
     ? prisma.pageDraft.findUnique({ where: { pageId: id } })
-    : prisma.sharedComponentDraft.findUnique({ where: { componentId: id } });
+    : prisma.componentDraft.findUnique({ where: { componentId: id } });
 }
 
 export async function saveDraft(
@@ -66,7 +66,7 @@ export async function saveDraft(
         ? await prisma.pageDraft.create({
             data: { pageId: id, body: body as never, updatedBy: userId, lockVersion: 1 },
           })
-        : await prisma.sharedComponentDraft.create({
+        : await prisma.componentDraft.create({
             data: { componentId: id, body: body as never, updatedBy: userId, lockVersion: 1 },
           });
     return { ok: true, lockVersion: created.lockVersion, updatedAt: created.updatedAt };
@@ -82,7 +82,7 @@ export async function saveDraft(
           where: { pageId: id, lockVersion },
           data: { body: body as never, updatedBy: userId, lockVersion: { increment: 1 } },
         })
-      : await prisma.sharedComponentDraft.updateMany({
+      : await prisma.componentDraft.updateMany({
           where: { componentId: id, lockVersion },
           data: { body: body as never, updatedBy: userId, lockVersion: { increment: 1 } },
         });

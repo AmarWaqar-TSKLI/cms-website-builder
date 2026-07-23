@@ -16,12 +16,12 @@
  *     already emit
  *   - a floating toolbar on the selected block
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getComponent, getSchema } from "@/lib/registry";
 import type { PageNode, RenderContext } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
-import { componentIdOf, expandComponents, isComponentRef } from "@/lib/shared-components";
+import { componentIdOf, isComponentRef } from "@/lib/shared-components";
 import { cx } from "../ui";
 
 export const DRAG_ADD = "application/x-cms-add";
@@ -35,21 +35,16 @@ export function Canvas({ ctx }: { ctx: RenderContext }) {
   const body = useEditor((s) => s.body);
   const select = useEditor((s) => s.select);
 
-  // The SAME expansion the build worker runs, against the symbols' current
-  // drafts. Edit a header in its own tab and every page previewing it here shows
-  // the change — because both sides call this one function.
-  const expanded = useMemo(
-    () => expandComponents(body.root, ctx.components ?? {}),
-    [body.root, ctx.components],
-  );
-
+  // Already expanded. The store expands once, at init, and keeps the expanded
+  // tree as the working document — see init() for why re-expanding on every
+  // render would be wrong rather than merely wasteful.
   return (
     <div
       className="min-h-full bg-white"
       style={{ colorScheme: "light" }}
       onClick={() => select(null)}
     >
-      <NodeList nodes={expanded} parentId={null} ctx={ctx} />
+      <NodeList nodes={body.root} parentId={null} ctx={ctx} />
     </div>
   );
 }
@@ -158,6 +153,7 @@ function NodeFrame({
   const addComponentRef = useEditor((s) => s.addComponentRef);
   const moveNode = useEditor((s) => s.moveNode);
   const detachComponent = useEditor((s) => s.detachComponent);
+  const isShared = useEditor((s) => s.isShared);
   const router = useRouter();
 
   const [editing, setEditing] = useState(false);
@@ -176,16 +172,23 @@ function NodeFrame({
   // through the same double-click that edits an ordinary block.
   const owned = node.fromComponent;
   const isInstance = isComponentRef(node);
+
+  // THE distinction, now that every block is a component. A component used by
+  // ONE page is simply this page's block: edit it in place and the edit is
+  // saved back into it. A component used by SEVERAL pages is shared, so the
+  // same gesture would change pages you are not looking at — those become an
+  // override instead, and the block is not structurally editable from here.
+  const ownerShared = isShared(owned?.componentId);
+  const instanceShared = isInstance && isShared(componentIdOf(node));
+  const locked = !!owned && ownerShared;
   const definition = isInstance
     ? ctx.components?.[componentIdOf(node) ?? ""]
     : undefined;
-  /** Clicks and hovers inside a symbol resolve up to the instance that owns it. */
-  const addressableId = owned?.instanceId ?? node.id;
+  /** Clicks inside a SHARED component resolve up to the instance that owns it. */
+  const addressableId = locked ? (owned?.instanceId ?? node.id) : node.id;
 
-  // Only nodes the page really owns draw their own chrome; everything inside a
-  // symbol defers to the instance frame wrapping it.
-  const selected = !owned && node.id === selectedId;
-  const hovered = !owned && node.id === hoveredId && !selected;
+  const selected = !locked && node.id === selectedId;
+  const hovered = !locked && node.id === hoveredId && !selected;
 
   /**
    * The whole block is a drop target. Which half the pointer is in decides
@@ -194,7 +197,7 @@ function NodeFrame({
    */
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
-      if (owned) return; // inside a symbol: let the instance frame handle it
+      if (locked) return; // inside a SHARED component: the instance frame handles it
       e.preventDefault();
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
@@ -204,12 +207,12 @@ function NodeFrame({
       setEdge(past ? "after" : "before");
       e.dataTransfer.dropEffect = e.dataTransfer.types.includes(DRAG_ADD) ? "copy" : "move";
     },
-    [inline, owned],
+    [inline, locked],
   );
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
-      if (owned) return;
+      if (locked) return;
       e.preventDefault();
       e.stopPropagation();
       const at = edge === "after" ? index + 1 : index;
@@ -224,7 +227,7 @@ function NodeFrame({
       const id = e.dataTransfer.getData(DRAG_MOVE);
       if (id && id !== node.id) moveNode(id, parentId, at);
     },
-    [edge, index, parentId, node.id, addNode, addComponentRef, moveNode, owned],
+    [edge, index, parentId, node.id, addNode, addComponentRef, moveNode, locked],
   );
 
   /**
@@ -268,7 +271,11 @@ function NodeFrame({
         // Changing the symbol for everyone is a separate, deliberate act: open it.
         // `overrideKey`, not `innerId` — with nesting they differ, and only the
         // former names a node the page can actually find. See rebase().
-        if (owned) setOverride(owned.instanceId, owned.overrideKey, propName, value);
+        // The whole rule. Text inside a SHARED component becomes an override on
+        // this page, because editing the component would change pages nobody
+        // here can see. Text inside a component only this page uses is just this
+        // page's text — edit it directly, and decompose() saves it back into it.
+        if (locked) setOverride(owned!.instanceId, owned!.overrideKey, propName, value);
         else updateProp(node.id, propName, value);
       };
       const onKey = (ev: KeyboardEvent) => {
@@ -286,7 +293,7 @@ function NodeFrame({
       target.addEventListener("blur", finish);
       target.addEventListener("keydown", onKey);
     },
-    [node.id, node.props, schema, updateProp, setOverride, owned],
+    [node.id, node.props, schema, updateProp, setOverride, owned, locked],
   );
 
   if (!entry) {
@@ -308,7 +315,9 @@ function NodeFrame({
         parentId={node.id}
         ctx={ctx}
         inline={schema?.acceptsChildren ? true : undefined}
-        readOnly={isInstance || !!owned}
+        // Only a SHARED component is read-only. A component this page owns is
+        // just this page's block, so you can drop into its containers freely.
+        readOnly={instanceShared || locked}
       />
     ) : undefined;
 
@@ -323,9 +332,9 @@ function NodeFrame({
       data-cms-type={node.type}
       data-cms-instance={isInstance ? componentIdOf(node) ?? "unset" : undefined}
       data-cms-from-component={owned?.componentId}
-      draggable={!editing && !owned}
+      draggable={!editing && !locked}
       onDragStart={(e) => {
-        if (owned) return;
+        if (locked) return;
         e.stopPropagation();
         e.dataTransfer.setData(DRAG_MOVE, node.id);
         e.dataTransfer.effectAllowed = "move";
@@ -351,11 +360,11 @@ function NodeFrame({
       className={cx(
         "relative outline-none transition-shadow",
         selected
-          ? isInstance
+          ? instanceShared
             ? "shadow-[inset_0_0_0_2px_#22c7a9]"
             : "shadow-[inset_0_0_0_2px_#6d5cff]"
           : hovered
-            ? isInstance
+            ? instanceShared
               ? "shadow-[inset_0_0_0_1px_rgba(34,199,169,.6)]"
               : "shadow-[inset_0_0_0_1px_rgba(109,92,255,.5)]"
             : "",
@@ -380,7 +389,7 @@ function NodeFrame({
         <span
           className={cx(
             "pointer-events-none absolute left-0 top-0 z-20 rounded-br-md px-2 py-0.5 font-mono text-[10px] font-medium text-white",
-            isInstance
+            instanceShared
               ? selected
                 ? "bg-[#22c7a9]"
                 : "bg-[#22c7a9]/60"
@@ -389,7 +398,9 @@ function NodeFrame({
                 : "bg-flux-500/60",
           )}
         >
-          {isInstance ? `◈ ${definition?.name ?? "Missing component"}` : (schema?.label ?? node.type)}
+          {instanceShared
+            ? `◈ ${definition?.name ?? "Missing component"}`
+            : (schema?.label ?? node.type)}
         </span>
       )}
 
@@ -397,11 +408,11 @@ function NodeFrame({
         <div
           className={cx(
             "absolute right-0 top-0 z-20 flex items-center gap-0.5 rounded-bl-md px-1 py-0.5",
-            isInstance ? "bg-[#22c7a9]" : "bg-flux-500",
+            instanceShared ? "bg-[#22c7a9]" : "bg-flux-500",
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {isInstance && definition && (
+          {instanceShared && definition && (
             <ToolbarButton
               title={`Edit “${definition.name}” — changes every page using it`}
               onClick={() => router.push(`/editor/component/${definition.id}`)}
@@ -409,7 +420,7 @@ function NodeFrame({
               ✎
             </ToolbarButton>
           )}
-          {isInstance && definition && (
+          {instanceShared && definition && (
             <ToolbarButton
               title="Detach — turn this into ordinary blocks this page owns"
               onClick={() => detachComponent(node.id, ctx.components ?? {})}

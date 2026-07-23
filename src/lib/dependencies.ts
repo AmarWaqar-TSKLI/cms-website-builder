@@ -13,6 +13,7 @@
  * component prop schemas.
  */
 import { prisma } from "./db";
+import { displayNameOf } from "./shared-components";
 import type { RefKind } from "./registry/types";
 
 export interface DependencyStatus {
@@ -34,7 +35,7 @@ export async function checkReleaseDependencies(releaseId: string): Promise<Depen
     prisma.collection.findMany({ where: { id: { in: ids("collection") } } }),
     prisma.media.findMany({ where: { id: { in: ids("media") } } }),
     prisma.post.findMany({ where: { id: { in: ids("post") } } }),
-    prisma.sharedComponent.findMany({ where: { id: { in: ids("component") } } }),
+    prisma.component.findMany({ where: { id: { in: ids("component") } } }),
   ]);
 
   return deps.map((dep) => {
@@ -49,7 +50,7 @@ export async function checkReleaseDependencies(releaseId: string): Promise<Depen
       return {
         refType: dep.refType,
         refId: dep.refId,
-        label: row ? row.name : "(component, pinned by revision)",
+        label: row ? displayNameOf(row) : "(component, pinned by revision)",
         status: "ok" as const,
       };
     }

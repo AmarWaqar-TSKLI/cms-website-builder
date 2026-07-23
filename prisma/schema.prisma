@@ -73,7 +73,7 @@ model Site {
 
   modules   SiteModule[]
   pages     Page[]
-  components SharedComponent[]
+  components Component[]
   themes    Theme[]
   releases  Release[]    @relation("SiteReleases")
   media     Media[]
@@ -129,8 +129,11 @@ model Page {
 }
 
 /// OVERWRITE-ONLY. page_id is the primary key, so one draft per page is a
-/// database guarantee, not a convention. Autosave hammers this row every ~2s.
-/// This is crash protection. It is NOT history.
+/// database guarantee, not a convention.
+///
+/// What this row holds is now ONLY THE ARRANGEMENT: an ordered list of
+/// references to components, plus each reference's per-page overrides. None of
+/// the content. Reordering blocks writes here; editing a block's text does not.
 model PageDraft {
   pageId      String   @id @map("page_id")
   body        Json
@@ -162,60 +165,77 @@ model PageRevision {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED COMPONENTS ("symbols") — defined once, referenced by many pages.
+// COMPONENTS — the unit of storage.
 //
-// This is the ONE thing stored below page granularity, and the distinction
-// matters: the unit is a shared *definition*, not a node on a page. A page
-// revision still holds its whole tree; what a tree can now contain is a
-// reference to a component, which publish pins to one exact revision.
+// A page does not contain its blocks. It contains an ORDERED LIST OF REFERENCES
+// to component records, and each component holds its own tree. Drop a Hero onto
+// a page and a component row is created; the page gains one reference to it.
 //
-// Storing every block as its own row instead would make "what did this page
-// look like on Tuesday?" a recursive query over N independently-versioned rows,
-// and would turn reordering into a multi-row transaction. That is the design
-// this file refuses. Symbols get the reuse without paying for it.
+// This is what collapses two ideas into one. There is no separate notion of a
+// "shared" component: a component referenced by one page is an ordinary block,
+// and the same component referenced by five pages is a shared header. Nothing
+// about the record differs — only how many pages point at it. Editing one
+// therefore changes exactly the pages that reference it, which by default is one.
+//
+// THE UNIT IS A COMPONENT, NOT A NODE. A component's body is still a whole tree:
+// a Columns component holds its Cards and their Buttons inline. Going one level
+// finer — a row per node, with parent_id and sort_order — would make reordering a
+// multi-row transaction and "what did this page look like on Tuesday?" a
+// recursive query over independently-versioned rows. `make verify` check 4
+// enforces that line.
 //
 // The trio below is a deliberate copy of Page / PageDraft / PageRevision — same
 // identity-only parent, same overwrite-only draft keyed by its parent id, same
-// append-only revision table guarded by the same trigger. One versioning story,
-// applied twice.
+// append-only revision table under the same trigger. One versioning story,
+// applied to both things that have versions.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Identity only, exactly like Page. No content column.
-model SharedComponent {
+model Component {
   id        String    @id @default(uuid())
   siteId    String    @map("site_id")
-  name      String
+  /// Set only when someone names it, which is what puts it in the palette for
+  /// reuse. An ordinary block dropped on a page has no name and never needs one.
+  name      String?
+  /// The root block type ("Hero", "Columns"), so lists can be labelled without
+  /// parsing the body. Denormalised on purpose; it is display, not truth.
+  kind      String    @default("Section")
   icon      String    @default("◈")
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  site      Site                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  draft     SharedComponentDraft?
-  revisions SharedComponentRevision[]
+  site      Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  draft     ComponentDraft?
+  revisions ComponentRevision[]
 
-  // Partial unique index UNIQUE(site_id, name) WHERE deleted_at IS NULL lives in
-  // raw SQL, same reason as pages: a deleted symbol must not reserve its name.
+  // Partial unique index UNIQUE(site_id, name) WHERE deleted_at IS NULL AND name
+  // IS NOT NULL lives in raw SQL — unnamed components must not collide with each
+  // other, and a deleted one must not keep reserving its name.
   @@index([siteId])
-  @@map("shared_components")
+  @@map("components")
 }
 
 /// OVERWRITE-ONLY, one row per component — component_id IS the primary key.
-model SharedComponentDraft {
+///
+/// Note what this buys now that every block is a component: the lock is per
+/// component, so two people editing different sections of the same page do not
+/// collide. Only reordering touches the page's own row.
+model ComponentDraft {
   componentId String   @id @map("component_id")
   body        Json
   updatedAt   DateTime @updatedAt @map("updated_at")
   updatedBy   String?  @map("updated_by")
   lockVersion Int      @default(0) @map("lock_version")
 
-  component SharedComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
 
-  @@map("shared_component_drafts")
+  @@map("component_drafts")
 }
 
 /// APPEND-ONLY. Guarded by the same cms_forbid_mutation() trigger as
-/// page_revisions. This is what makes "roll back and the old header returns"
+/// page_revisions. This is what makes "roll back and the old version returns"
 /// true: the release pinned a revision id, and that row can never change.
-model SharedComponentRevision {
+model ComponentRevision {
   id          String   @id @default(uuid())
   componentId String   @map("component_id")
   body        Json
@@ -223,11 +243,11 @@ model SharedComponentRevision {
   createdBy   String?  @map("created_by")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  component SharedComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
 
   @@unique([componentId, versionNo])
   @@index([componentId])
-  @@map("shared_component_revisions")
+  @@map("component_revisions")
 }
 
 model Theme {

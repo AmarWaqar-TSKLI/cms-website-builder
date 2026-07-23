@@ -27,7 +27,7 @@
  *      before that check existed.
  */
 import { walk } from "./registry";
-import type { PageBody, PageNode, ResolvedSharedComponent } from "./registry/types";
+import type { PageBody, PageNode, ResolvedComponent } from "./registry/types";
 
 /**
  * The reserved node type. The `@` prefix cannot collide with a registry
@@ -42,6 +42,18 @@ export const MAX_COMPONENT_DEPTH = 8;
 export const INSTANCE_SEPARATOR = "~";
 
 export type OverrideMap = Record<string, Record<string, unknown>>;
+
+/**
+ * What to call a component on screen.
+ *
+ * A name is optional and means something specific: someone named it, which is
+ * what puts it in the palette to be reused. The great majority of components are
+ * a block somebody dropped on a page and never named, so they fall back to their
+ * block type — "Hero", "Columns" — which is what a person would call it anyway.
+ */
+export function displayNameOf(c: { name?: string | null; kind?: string | null }): string {
+  return c.name?.trim() || c.kind || "Section";
+}
 
 export function isComponentRef(node: PageNode): boolean {
   return node.type === SHARED_COMPONENT_TYPE;
@@ -186,7 +198,7 @@ export function describeCycle(
  */
 export function expandComponents(
   nodes: PageNode[],
-  components: Record<string, ResolvedSharedComponent>,
+  components: Record<string, ResolvedComponent>,
   depth = 0,
 ): PageNode[] {
   return nodes.map((node) => {
@@ -267,6 +279,74 @@ function rebase(
 }
 
 /**
+ * DECOMPOSE — the exact inverse of expandComponents().
+ *
+ * The editor works on one expanded tree, because that is what a person is
+ * looking at and what makes undo, drag and inline editing simple. Storage is the
+ * opposite shape: a page holds an ordered list of references, and each component
+ * holds its own tree. This function turns the first into the second.
+ *
+ * Being a true inverse is what keeps the two shapes honest. Expand then
+ * decompose and you are back where you started; there is a test for it. If they
+ * ever disagreed, the editor would be silently editing something other than what
+ * gets stored — the single worst bug this system could have.
+ *
+ * A SHARED component (referenced by more than one page) is deliberately not
+ * extracted. Writing its subtree back would bake this page's overrides into the
+ * definition and change every other page that uses it. Those keep their
+ * overrides on the reference and their body untouched.
+ */
+export interface Decomposed {
+  /** What the page stores: references, with their per-page overrides. */
+  root: PageNode[];
+  /** What each component stores: its own tree. Only components this page owns. */
+  bodies: Record<string, PageNode[]>;
+}
+
+export function decompose(nodes: PageNode[], shared: ReadonlySet<string> = new Set()): Decomposed {
+  const bodies: Record<string, PageNode[]> = {};
+
+  const walkNodes = (list: PageNode[]): PageNode[] =>
+    list.map((node) => {
+      if (!isComponentRef(node)) {
+        return { ...stripOne(node), children: walkNodes(node.children ?? []) };
+      }
+
+      const componentId = componentIdOf(node);
+      const ref: PageNode = { ...stripOne(node), children: [] };
+      if (!componentId) return ref;
+
+      // Recurse FIRST, so a component nested inside this one is extracted into
+      // its own body rather than swallowed into the parent's.
+      const inner = walkNodes(node.children ?? []);
+      if (!shared.has(componentId)) {
+        // Re-key back to the ids the component itself uses. Expansion prefixed
+        // them for this instance; storage must not carry that prefix.
+        bodies[componentId] = inner.map((child) => unprefix(child, node.id));
+      }
+      return ref;
+    });
+
+  return { root: walkNodes(nodes), bodies };
+}
+
+/** Drop the instance prefix expansion added, restoring the component's own ids. */
+function unprefix(node: PageNode, instanceId: string): PageNode {
+  const prefix = `${instanceId}${INSTANCE_SEPARATOR}`;
+  return {
+    ...node,
+    id: node.id.startsWith(prefix) ? node.id.slice(prefix.length) : node.id,
+    children: (node.children ?? []).map((c) => unprefix(c, instanceId)),
+  };
+}
+
+/** One node, without render-time provenance. */
+function stripOne(node: PageNode): PageNode {
+  const { fromComponent: _ignored, ...rest } = node;
+  return rest;
+}
+
+/**
  * Strip anything expansion added, so a tree that has been through the canvas can
  * be stored. Autosave runs the stored tree, not the expanded one, but this makes
  * the invariant enforceable instead of merely intended.
@@ -281,7 +361,7 @@ export function stripExpansion(nodes: PageNode[]): PageNode[] {
 /** Nodes an instance exposes for overriding, in document order. */
 export function overridableNodes(
   componentId: string,
-  components: Record<string, ResolvedSharedComponent>,
+  components: Record<string, ResolvedComponent>,
 ): PageNode[] {
   const definition = components[componentId];
   if (!definition || definition.missing) return [];

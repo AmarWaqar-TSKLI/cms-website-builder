@@ -13,6 +13,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { loadEditorContext } from "@/lib/editor/bootstrap";
 import { usageOf } from "@/lib/component-usage";
+import { displayNameOf } from "@/lib/shared-components";
 import type { ComponentBody } from "@/lib/registry/types";
 import { EditorShell } from "@/components/editor/EditorShell";
 
@@ -27,7 +28,7 @@ export default async function ComponentEditorPage({
 }) {
   const { componentId } = await params;
 
-  const component = await prisma.sharedComponent.findFirst({
+  const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
     include: { draft: true },
   });
@@ -44,11 +45,11 @@ export default async function ComponentEditorPage({
 
   return (
     <EditorShell
-      component={{ id: component.id, name: component.name, usage }}
+      component={{ id: component.id, name: displayNameOf(component), usage }}
       page={
         home
           ? { id: home.id, path: home.path, title: home.title }
-          : { id: "", path: "/", title: component.name }
+          : { id: "", path: "/", title: displayNameOf(component) }
       }
       body={(component.draft?.body as unknown as ComponentBody) ?? EMPTY}
       lockVersion={component.draft?.lockVersion ?? 0}

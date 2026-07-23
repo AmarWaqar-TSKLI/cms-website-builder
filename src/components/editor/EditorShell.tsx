@@ -12,7 +12,7 @@ import type {
   ModuleName,
   PageBody,
   RenderContext,
-  ResolvedSharedComponent,
+  ResolvedComponent,
   ThemeLayout,
   ThemeTokens,
 } from "@/lib/registry/types";
@@ -35,8 +35,12 @@ export interface EditorBootstrap {
   layout: ThemeLayout;
   refOptions: RefOptions;
   siblings: { id: string; path: string; title: string }[];
-  /** The site's shared components, for the palette and for canvas expansion. */
-  components: ResolvedSharedComponent[];
+  /** NAMED components — what the palette offers for reuse. */
+  components: ResolvedComponent[];
+  /** Every component on the site, named or not. The canvas expands against this. */
+  allComponents: ResolvedComponent[];
+  /** Components referenced by more than one page, or named. Edits here override. */
+  sharedIds: string[];
   /**
    * Set when this session is editing a shared component instead of a page.
    *
@@ -90,8 +94,8 @@ export function EditorShell(boot: EditorBootstrap) {
    * stale snapshot.
    */
   const components = useMemo(() => {
-    const map: Record<string, ResolvedSharedComponent> = {};
-    for (const c of boot.components) map[c.id] = c;
+    const map: Record<string, ResolvedComponent> = {};
+    for (const c of boot.allComponents) map[c.id] = c;
     if (editingComponent) {
       map[editingComponent.id] = {
         id: editingComponent.id,
@@ -100,15 +104,24 @@ export function EditorShell(boot: EditorBootstrap) {
       };
     }
     return map;
-  }, [boot.components, editingComponent, body.root]);
+  }, [boot.allComponents, editingComponent, body.root]);
 
   const ctx: RenderContext = { ...boot.ctx, tokens, components };
 
   const targetId = editingComponent?.id ?? boot.page.id;
 
   useEffect(() => {
-    init(targetId, boot.body, boot.lockVersion, editingComponent ? "component" : "page");
-  }, [init, targetId, boot.body, boot.lockVersion, editingComponent]);
+    const map: Record<string, ResolvedComponent> = {};
+    for (const c of boot.allComponents) map[c.id] = c;
+    init(
+      targetId,
+      boot.body,
+      boot.lockVersion,
+      editingComponent ? "component" : "page",
+      map,
+      boot.sharedIds,
+    );
+  }, [init, targetId, boot.body, boot.lockVersion, editingComponent, boot.allComponents, boot.sharedIds]);
 
   useAutosave(true);
 

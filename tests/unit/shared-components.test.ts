@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { createComponentRef, createNode } from "../../src/lib/registry";
 import {
   MAX_COMPONENT_DEPTH,
+  decompose,
   describeCycle,
   detectComponentCycles,
   directComponentRefs,
@@ -17,7 +18,7 @@ import {
   stripExpansion,
 } from "../../src/lib/shared-components";
 import { extractRefs } from "../../src/lib/refs";
-import type { PageBody, PageNode, ResolvedSharedComponent } from "../../src/lib/registry/types";
+import type { PageBody, PageNode, ResolvedComponent } from "../../src/lib/registry/types";
 
 const heading = (id: string, text: string): PageNode => {
   const n = createNode("Heading", id);
@@ -29,7 +30,7 @@ const body = (root: PageNode[]): PageBody => ({ version: 1, root });
 
 const definitions = (
   entries: Record<string, PageNode[]>,
-): Record<string, ResolvedSharedComponent> =>
+): Record<string, ResolvedComponent> =>
   Object.fromEntries(
     Object.entries(entries).map(([id, root]) => [id, { id, name: id, root }]),
   );
@@ -330,5 +331,85 @@ describe("shared components — deep nesting", () => {
     expect(outA[0].children[0].props.text).toBe("Click me");
     expect(outB[2].type).toBe("@component");
     expect(outB[2].children[0].props.text).toBe("Click me");
+  });
+});
+
+describe("components as the unit of storage", () => {
+  // The editor works on one expanded tree; storage is a page of references plus
+  // a body per component. These must be exact inverses, or the editor is editing
+  // something other than what gets stored.
+  const defs = () =>
+    definitions({
+      hero: [heading("h1", "Welcome")],
+      cta: [heading("c1", "Buy")],
+    });
+
+  const pageOfRefs = () => [createComponentRef("hero", "r1"), createComponentRef("cta", "r2")];
+
+  it("round-trips: expand then decompose returns the original page", () => {
+    const original = pageOfRefs();
+    const { root } = decompose(expandComponents(original, defs()));
+
+    expect(root).toHaveLength(2);
+    expect(root.map((n) => n.props.componentId)).toEqual(["hero", "cta"]);
+    // The page stores references and no content whatsoever.
+    expect(root.every((n) => n.children.length === 0)).toBe(true);
+    expect(JSON.stringify(root)).not.toContain("Welcome");
+  });
+
+  it("hands each component back its own tree, with its own ids", () => {
+    const { bodies } = decompose(expandComponents(pageOfRefs(), defs()));
+
+    expect(Object.keys(bodies).sort()).toEqual(["cta", "hero"]);
+    // Not "r1~h1" — the instance prefix belongs to rendering, never to storage.
+    expect(bodies.hero[0].id).toBe("h1");
+    expect(bodies.hero[0].props.text).toBe("Welcome");
+  });
+
+  it("carries an edit made on the canvas back into the component's body", () => {
+    const expanded = expandComponents(pageOfRefs(), defs());
+    // Exactly what typing on the canvas does: mutate the expanded tree.
+    expanded[0].children[0].props.text = "Edited on the page";
+
+    const { bodies } = decompose(expanded);
+    expect(bodies.hero[0].props.text).toBe("Edited on the page");
+  });
+
+  it("refuses to write back a SHARED component, so other pages are untouched", () => {
+    const expanded = expandComponents(pageOfRefs(), defs());
+    expanded[0].children[0].props.text = "Only this page wanted this";
+
+    // "hero" is used by more than one page, so its body must not be rewritten —
+    // that edit belongs in an override on the reference instead.
+    const { bodies, root } = decompose(expanded, new Set(["hero"]));
+
+    expect(bodies).not.toHaveProperty("hero");
+    expect(bodies).toHaveProperty("cta");
+    expect(root[0].props.componentId).toBe("hero");
+  });
+
+  it("extracts a component nested inside another into its own body", () => {
+    const nested = definitions({
+      card: [createComponentRef("button", "b1")],
+      button: [heading("t1", "Go")],
+    });
+
+    const { root, bodies } = decompose(
+      expandComponents([createComponentRef("card", "i1")], nested),
+    );
+
+    expect(root).toHaveLength(1);
+    // Card stores a reference to Button — not Button's contents.
+    expect(bodies.card[0].type).toBe("@component");
+    expect(bodies.card[0].props.componentId).toBe("button");
+    expect(bodies.card[0].children).toHaveLength(0);
+    // Button stores its own text, once.
+    expect(bodies.button[0].props.text).toBe("Go");
+  });
+
+  it("never lets render-time provenance reach storage", () => {
+    const { root, bodies } = decompose(expandComponents(pageOfRefs(), defs()));
+    const stored = JSON.stringify({ root, bodies });
+    expect(stored).not.toContain("fromComponent");
   });
 });

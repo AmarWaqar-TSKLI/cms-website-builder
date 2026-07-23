@@ -179,13 +179,13 @@ export interface RenderContext {
    * header it was published with, not today's header. That is the difference
    * between Tier-1 and Tier-2 arriving in the same context object.
    */
-  components: Record<string, ResolvedSharedComponent>;
+  components: Record<string, ResolvedComponent>;
   /** True when rendering the editor canvas — lets components show placeholders. */
   editing?: boolean;
 }
 
 /** A shared component's tree, resolved from the revision this release pinned. */
-export interface ResolvedSharedComponent {
+export interface ResolvedComponent {
   id: string;
   name: string;
   root: PageNode[];

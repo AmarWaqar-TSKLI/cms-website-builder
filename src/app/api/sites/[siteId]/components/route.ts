@@ -22,7 +22,7 @@ const EMPTY: ComponentBody = { version: 1, root: [] };
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
 
-  const components = await prisma.sharedComponent.findMany({
+  const components = await prisma.component.findMany({
     where: { siteId, deletedAt: null },
     include: { draft: true },
     orderBy: { name: "asc" },
@@ -59,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
 
   // The partial unique index enforces this too; checking first buys a readable
   // message instead of a constraint violation.
-  const clash = await prisma.sharedComponent.findFirst({
+  const clash = await prisma.component.findFirst({
     where: { siteId, name, deletedAt: null },
     select: { id: true },
   });
@@ -77,7 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
     ? { version: 1, root: stripExpansion((raw as PageBody).root) }
     : EMPTY;
 
-  const created = await prisma.sharedComponent.create({
+  const created = await prisma.component.create({
     data: {
       siteId,
       name,

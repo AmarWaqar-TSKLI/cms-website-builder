@@ -24,7 +24,7 @@ import { startWorker, stopWorker, waitForRelease } from "../helpers/worker";
 
 /** Create a shared component with a body, the way the API route does. */
 async function makeComponent(siteId: string, name: string, root: ReturnType<typeof node>[]) {
-  return prisma.sharedComponent.create({
+  return prisma.component.create({
     data: {
       siteId,
       name,
@@ -34,7 +34,7 @@ async function makeComponent(siteId: string, name: string, root: ReturnType<type
 }
 
 async function setComponentBody(componentId: string, root: ReturnType<typeof node>[]) {
-  await prisma.sharedComponentDraft.update({
+  await prisma.componentDraft.update({
     where: { componentId },
     data: { body: toJson({ version: 1, root }), lockVersion: { increment: 1 } },
   });
@@ -150,12 +150,12 @@ describe("shared components", () => {
 
       // Release one still points at the revision it pinned, and that revision
       // still says ORIGINAL. Nothing rewrote it, because nothing can.
-      const pinned = await prisma.sharedComponentRevision.findUniqueOrThrow({
+      const pinned = await prisma.componentRevision.findUniqueOrThrow({
         where: { id: item.revisionId },
       });
       expect(JSON.stringify(pinned.body)).toContain("ORIGINAL");
 
-      const revisions = await prisma.sharedComponentRevision.count({
+      const revisions = await prisma.componentRevision.count({
         where: { componentId: banner.id },
       });
       expect(revisions).toBe(3);
@@ -176,18 +176,18 @@ describe("shared components", () => {
     await setDraft(site.homePageId, [createComponentRef(header.id, "i1")]);
     await publishSite(site.siteId, null, "one");
 
-    const revision = await prisma.sharedComponentRevision.findFirstOrThrow({
+    const revision = await prisma.componentRevision.findFirstOrThrow({
       where: { componentId: header.id },
     });
 
     await expect(
       prisma.$executeRawUnsafe(
-        `UPDATE shared_component_revisions SET version_no = 99 WHERE id = '${revision.id}'`,
+        `UPDATE component_revisions SET version_no = 99 WHERE id = '${revision.id}'`,
       ),
     ).rejects.toThrow(/append-only/i);
 
     await expect(
-      prisma.$executeRawUnsafe(`DELETE FROM shared_component_revisions WHERE id = '${revision.id}'`),
+      prisma.$executeRawUnsafe(`DELETE FROM component_revisions WHERE id = '${revision.id}'`),
     ).rejects.toThrow(/append-only/i);
   }, 60_000);
 
@@ -247,7 +247,7 @@ describe("shared components", () => {
     await setDraft(site.homePageId, [createComponentRef(loop.id, "i1")]);
 
     const releasesBefore = await prisma.release.count({ where: { siteId: site.siteId } });
-    const revisionsBefore = await prisma.sharedComponentRevision.count({
+    const revisionsBefore = await prisma.componentRevision.count({
       where: { componentId: loop.id },
     });
 
@@ -256,7 +256,7 @@ describe("shared components", () => {
     // The check runs before the first insert, so the transaction leaves no trace.
     expect(await prisma.release.count({ where: { siteId: site.siteId } })).toBe(releasesBefore);
     expect(
-      await prisma.sharedComponentRevision.count({ where: { componentId: loop.id } }),
+      await prisma.componentRevision.count({ where: { componentId: loop.id } }),
     ).toBe(revisionsBefore);
   }, 60_000);
 
@@ -290,7 +290,7 @@ describe("shared components", () => {
       const release = await publishSite(site.siteId, null, "before delete");
       await waitForRelease(release.releaseId);
 
-      await prisma.sharedComponent.update({
+      await prisma.component.update({
         where: { id: header.id },
         data: { deletedAt: new Date() },
       });

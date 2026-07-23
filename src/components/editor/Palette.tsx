@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from "react";
 import { paletteFor } from "@/lib/registry";
-import type { ComponentSchema, ModuleName, ResolvedSharedComponent } from "@/lib/registry/types";
+import type { ComponentSchema, ModuleName, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { cx } from "../ui";
 import { DRAG_ADD, DRAG_ADD_COMPONENT } from "./Canvas";
@@ -30,7 +30,7 @@ export function Palette({
 }: {
   modules: ModuleName[];
   /** The site's shared components. Listed separately — they are this site's, not the engine's. */
-  components?: ResolvedSharedComponent[];
+  components?: ResolvedComponent[];
   onNewComponent?: () => void;
   onEditComponent?: (id: string) => void;
 }) {
