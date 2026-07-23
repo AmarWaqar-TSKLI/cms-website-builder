@@ -105,9 +105,11 @@ describe("publish is a snapshot, and only a snapshot", () => {
     // Warm the route. In dev, Next compiles a route on its first request, and
     // measuring that would be measuring the bundler rather than the transaction.
     const warmup = await createTestSite("warmup");
+    // The warm-up site belongs to its OWN org, so it needs its own session.
+    // Reusing the other site's cookie would 403 — which is the boundary working.
     await fetch(`${APP_URL}/api/sites/${warmup.siteId}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie: warmup.cookie },
       body: JSON.stringify({ notes: "warmup" }),
     });
 
@@ -116,7 +118,7 @@ describe("publish is a snapshot, and only a snapshot", () => {
     const started = Date.now();
     const res = await fetch(`${APP_URL}/api/sites/${site.siteId}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie: site.cookie },
       body: JSON.stringify({ notes: "speed test" }),
     });
     const elapsed = Date.now() - started;

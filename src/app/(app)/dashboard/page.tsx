@@ -1,12 +1,37 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { currentUser, sitesForUser } from "@/lib/auth";
+import { recentActivity } from "@/lib/activity";
+import { siteLocks } from "@/lib/locks";
 import { LinkBtn } from "@/components/dashboard/dash-ui";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 
 export const dynamic = "force-dynamic";
 
-export default async function Dashboard() {
-  const site = await prisma.site.findFirst({
-    orderBy: { createdAt: "asc" },
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ site?: string }>;
+}) {
+  // The real check. Middleware only saw that a cookie existed; this resolves it
+  // against the session table, and everything below is scoped to what came back.
+  const user = await currentUser();
+  if (!user) redirect("/login?next=/dashboard");
+
+  const { site: requestedSiteId } = await searchParams;
+
+  // Only sites in orgs this user belongs to. A site id in the query string that
+  // is not in this list is ignored rather than refused — the user simply lands
+  // on their own first site, which is the right behaviour for a stale bookmark.
+  const reachable = await sitesForUser(user.id);
+  const targetId =
+    requestedSiteId && reachable.some((s) => s.id === requestedSiteId)
+      ? requestedSiteId
+      : reachable[0]?.id;
+
+  const site = targetId
+    ? await prisma.site.findUnique({
+        where: { id: targetId },
     include: {
       org: true,
       modules: true,
@@ -18,7 +43,8 @@ export default async function Dashboard() {
       liveRelease: true,
       _count: { select: { releases: true, products: true, orders: true } },
     },
-  });
+      })
+    : null;
 
   if (!site) {
     return (
@@ -48,7 +74,9 @@ export default async function Dashboard() {
     );
   }
 
-  const [productCount, orderTotals] = await Promise.all([
+  const [activity, locks, productCount, orderTotals] = await Promise.all([
+    recentActivity(site.id, 25),
+    siteLocks(site.id),
     prisma.product.count({ where: { siteId: site.id, deletedAt: null } }),
     prisma.order.aggregate({
       where: { siteId: site.id },
@@ -59,6 +87,23 @@ export default async function Dashboard() {
 
   return (
     <DashboardShell
+      user={{ id: user.id, name: user.name, email: user.email }}
+      // Every site this user can reach. One org today; the switcher is what makes
+      // "different users have different websites" visible rather than asserted.
+      sites={reachable.map((s) => ({ id: s.id, name: s.name, slug: s.slug }))}
+      activity={activity.map((a) => ({
+        id: a.id,
+        actorName: a.actorName,
+        summary: a.summary,
+        action: a.action,
+        createdAt: a.createdAt.toISOString(),
+      }))}
+      locks={locks.map((l) => ({
+        pageId: l.pageId,
+        path: l.path,
+        name: l.name,
+        isMine: l.userId === user.id,
+      }))}
       site={{
         id: site.id,
         name: site.name,

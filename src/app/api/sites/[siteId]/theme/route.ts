@@ -11,6 +11,7 @@
  * theme revision in its manifest.
  */
 import { NextResponse } from "next/server";
+import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { toJson } from "@/lib/json";
 import { asLayout, asTokens } from "@/lib/theme";
@@ -19,6 +20,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
   const theme = await prisma.theme.findFirst({
     where: { siteId },
     include: { revisions: { orderBy: { versionNo: "desc" } } },
@@ -46,6 +49,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
 
 export async function PUT(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
   const payload = await req.json().catch(() => null);
   if (!payload) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 

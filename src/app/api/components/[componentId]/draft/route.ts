@@ -8,7 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { readDraft, saveDraft } from "@/lib/drafts";
-import { currentUserId } from "@/lib/session";
+import { guardComponent } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,9 @@ export async function GET(
   { params }: { params: Promise<{ componentId: string }> },
 ) {
   const { componentId } = await params;
+  const auth = await guardComponent(componentId);
+  if (!auth.ok) return auth.response;
+
   const draft = await readDraft("component", componentId);
   if (!draft) return NextResponse.json({ error: "No draft" }, { status: 404 });
   return NextResponse.json({
@@ -31,7 +34,9 @@ export async function PUT(
   { params }: { params: Promise<{ componentId: string }> },
 ) {
   const { componentId } = await params;
-  const userId = await currentUserId();
+  const auth = await guardComponent(componentId);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let payload: { body?: unknown; lockVersion?: unknown };
   try {

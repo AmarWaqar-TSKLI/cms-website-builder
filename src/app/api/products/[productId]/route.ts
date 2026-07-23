@@ -14,6 +14,7 @@
  * Impossible was never on the table. Visible was.
  */
 import { NextResponse } from "next/server";
+import { guardProduct } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { releasesReferencing } from "@/lib/dependencies";
 
@@ -21,6 +22,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
+  const auth = await guardProduct(productId);
+  if (!auth.ok) return auth.response;
   const product = await prisma.product.findUnique({
     where: { id: productId },
     include: { variants: true },
@@ -33,6 +36,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ product
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
+  const auth = await guardProduct(productId);
+  if (!auth.ok) return auth.response;
   const payload = await req.json().catch(() => null);
   if (!payload) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
@@ -74,6 +79,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ produc
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
+  const auth = await guardProduct(productId);
+  if (!auth.ok) return auth.response;
   const acknowledge = new URL(req.url).searchParams.get("acknowledge") === "true";
 
   const product = await prisma.product.findUnique({ where: { id: productId } });

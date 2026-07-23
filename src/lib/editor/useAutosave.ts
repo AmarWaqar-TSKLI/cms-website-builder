@@ -33,6 +33,7 @@ export function useAutosave(enabled = true) {
 
     const save = async () => {
       const state = useEditor.getState();
+      if (state.readOnly) return; // a viewer has nothing to save
       if (state.status !== "dirty" || inFlight.current || !state.pageId) return;
 
       // A conflict is terminal until the user reloads — retrying would just

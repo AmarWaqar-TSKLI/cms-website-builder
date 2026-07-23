@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardRelease } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { checkReleaseDependencies } from "@/lib/dependencies";
 
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 /** Polled by the editor after publish, until status leaves `building`. */
 export async function GET(_req: Request, { params }: { params: Promise<{ releaseId: string }> }) {
   const { releaseId } = await params;
+  const auth = await guardRelease(releaseId);
+  if (!auth.ok) return auth.response;
 
   const release = await prisma.release.findUnique({
     where: { id: releaseId },

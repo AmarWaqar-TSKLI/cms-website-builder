@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardRelease } from "@/lib/api-auth";
 import { buildExport, type ExportKind } from "@/lib/export";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ releaseId: string; kind: string }> },
 ) {
   const { releaseId, kind } = await params;
+  const auth = await guardRelease(releaseId);
+  if (!auth.ok) return auth.response;
   if (kind !== "static" && kind !== "container") {
     return NextResponse.json({ error: "kind must be static or container" }, { status: 400 });
   }

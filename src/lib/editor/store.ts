@@ -76,6 +76,18 @@ interface EditorState {
   sharedIds: string[];
   isShared: (componentId: string | null | undefined) => boolean;
 
+  /**
+   * Somebody else holds the editing lock, so this session may look but not
+   * touch. Enforced in ONE place — `commit()` below — rather than by hiding
+   * buttons, because a keyboard shortcut, a drag, or a stale React callback
+   * would all walk straight past hidden buttons.
+   *
+   * The server refuses the write too (423). This is the courtesy layer; that one
+   * is the guarantee.
+   */
+  readOnly: boolean;
+  setReadOnly: (readOnly: boolean) => void;
+
   init: (
     pageId: string,
     body: PageBody,
@@ -125,19 +137,30 @@ function seedCounter(body: PageBody) {
 }
 
 export const useEditor = create<EditorState>((set, get) => {
-  /** Every structural change goes through here, so undo is never forgotten. */
-  const commit = (state: EditorState, root: PageNode[], extra: Partial<EditorState> = {}) => ({
-    body: { ...state.body, root },
-    past: [...state.past, state.body.root].slice(-HISTORY_LIMIT),
-    future: [],
-    status: "dirty" as SaveStatus,
-    ...extra,
-  });
+  /**
+   * Every structural change goes through here, so undo is never forgotten — and
+   * so read-only needs to be enforced in exactly one place.
+   *
+   * Returning the state unchanged is deliberate: a viewer's drag or keystroke
+   * becomes a no-op rather than an error dialogue, which is the right feel for
+   * "you are watching someone else work".
+   */
+  const commit = (state: EditorState, root: PageNode[], extra: Partial<EditorState> = {}) => {
+    if (state.readOnly) return state;
+    return {
+      body: { ...state.body, root },
+      past: [...state.past, state.body.root].slice(-HISTORY_LIMIT),
+      future: [],
+      status: "dirty" as SaveStatus,
+      ...extra,
+    };
+  };
 
   return {
     pageId: "",
     target: "page",
     sharedIds: [],
+    readOnly: false,
     body: { version: 1, root: [] },
     selectedId: null,
     hoveredId: null,
@@ -150,6 +173,8 @@ export const useEditor = create<EditorState>((set, get) => {
     future: [],
 
     isShared: (componentId) => !!componentId && get().sharedIds.includes(componentId),
+
+    setReadOnly: (readOnly) => set({ readOnly }),
 
     /**
      * Expand ONCE, here, and keep the expanded tree as the working document.
@@ -267,6 +292,7 @@ export const useEditor = create<EditorState>((set, get) => {
      */
     setOverride: (instanceId, innerId, key, value) =>
       set((state) => {
+        if (state.readOnly) return state;
         const root = structuredClone(state.body.root) as PageNode[];
         const instance = findNode(root, instanceId);
         if (!instance) return state;
@@ -290,6 +316,7 @@ export const useEditor = create<EditorState>((set, get) => {
     /** Drop every override, so this instance shows the symbol exactly as defined. */
     clearOverrides: (instanceId) =>
       set((state) => {
+        if (state.readOnly) return state;
         const root = structuredClone(state.body.root) as PageNode[];
         const instance = findNode(root, instanceId);
         if (!instance) return state;
@@ -332,6 +359,7 @@ export const useEditor = create<EditorState>((set, get) => {
 
     updateProp: (id, key, value) =>
       set((state) => {
+        if (state.readOnly) return state;
         const root = structuredClone(state.body.root) as PageNode[];
         const node = findNode(root, id);
         if (!node) return state;
@@ -350,6 +378,7 @@ export const useEditor = create<EditorState>((set, get) => {
 
     updateProps: (id, patch) =>
       set((state) => {
+        if (state.readOnly) return state;
         const root = structuredClone(state.body.root) as PageNode[];
         const node = findNode(root, id);
         if (!node) return state;
@@ -419,7 +448,7 @@ export const useEditor = create<EditorState>((set, get) => {
 
     undo: () =>
       set((state) => {
-        if (state.past.length === 0) return state;
+        if (state.readOnly || state.past.length === 0) return state;
         const previous = state.past[state.past.length - 1];
         lastEditKey = null;
         return {
@@ -432,7 +461,7 @@ export const useEditor = create<EditorState>((set, get) => {
 
     redo: () =>
       set((state) => {
-        if (state.future.length === 0) return state;
+        if (state.readOnly || state.future.length === 0) return state;
         const next = state.future[0];
         lastEditKey = null;
         return {

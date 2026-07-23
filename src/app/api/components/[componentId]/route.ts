@@ -19,6 +19,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { releasesReferencing } from "@/lib/dependencies";
 import { usageOf } from "@/lib/component-usage";
+import { guardComponent } from "@/lib/api-auth";
+import { logActivity } from "@/lib/activity";
+import { displayNameOf } from "@/lib/shared-components";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,8 @@ export async function GET(
   { params }: { params: Promise<{ componentId: string }> },
 ) {
   const { componentId } = await params;
+  const auth = await guardComponent(componentId);
+  if (!auth.ok) return auth.response;
 
   const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
@@ -61,6 +66,8 @@ export async function PATCH(
   { params }: { params: Promise<{ componentId: string }> },
 ) {
   const { componentId } = await params;
+  const auth = await guardComponent(componentId);
+  if (!auth.ok) return auth.response;
 
   let payload: { name?: unknown; icon?: unknown };
   try {
@@ -98,6 +105,16 @@ export async function PATCH(
     },
   });
 
+  await logActivity({
+    siteId: component.siteId,
+    userId: auth.user.id,
+    actorName: auth.user.name,
+    action: "component.renamed",
+    entityType: "component",
+    entityId: componentId,
+    summary: `${auth.user.name} renamed a component to “${name}”`,
+  });
+
   return NextResponse.json({ id: updated.id, name: updated.name, icon: updated.icon });
 }
 
@@ -106,6 +123,8 @@ export async function DELETE(
   { params }: { params: Promise<{ componentId: string }> },
 ) {
   const { componentId } = await params;
+  const auth = await guardComponent(componentId);
+  if (!auth.ok) return auth.response;
   const force = new URL(req.url).searchParams.get("force") === "1";
 
   const component = await prisma.component.findFirst({
@@ -132,6 +151,16 @@ export async function DELETE(
   await prisma.component.update({
     where: { id: componentId },
     data: { deletedAt: new Date() },
+  });
+
+  await logActivity({
+    siteId: component.siteId,
+    userId: auth.user.id,
+    actorName: auth.user.name,
+    action: "component.deleted",
+    entityType: "component",
+    entityId: componentId,
+    summary: `${auth.user.name} deleted the component “${displayNameOf(component)}”`,
   });
 
   return NextResponse.json({ ok: true, deletedPages: pages.length });

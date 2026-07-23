@@ -20,6 +20,7 @@ import { createNode } from "../src/lib/registry";
 import type { PageNode } from "../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../src/lib/theme";
 import { fromJson, toJson } from "../src/lib/json";
+import { createSession } from "../src/lib/auth";
 
 /** Provenance now lives in the document, because an RSC page cannot set headers. */
 const releaseIdOf = (html: string) =>
@@ -93,6 +94,12 @@ let slug = "";
 let homePageId = "";
 let variantId = "";
 let productId = "";
+/** A real session for verify's own user — the endpoints require one now. */
+let cookie = "";
+const authed = (init: RequestInit = {}): RequestInit => ({
+  ...init,
+  headers: { ...(init.headers ?? {}), cookie },
+});
 
 let node = (type: string, props: Record<string, unknown> = {}): PageNode => {
   const n = createNode(type, `v${Math.random().toString(36).slice(2, 8)}`);
@@ -103,6 +110,13 @@ let node = (type: string, props: Record<string, unknown> = {}): PageNode => {
 async function setup() {
   const suffix = Math.random().toString(36).slice(2, 8);
   const org = await prisma.organization.create({ data: { name: `verify-${suffix}` } });
+  const user = await prisma.user.create({
+    data: {
+      email: `verify-${suffix}@test.local`,
+      name: `Verify ${suffix}`,
+      passwordHash: "scrypt$unused",
+    },
+  });
   const site = await prisma.site.create({
     data: {
       orgId: org.id,
@@ -111,6 +125,9 @@ async function setup() {
       customDomain: `verify-${suffix}.test`,
     },
   });
+  await prisma.membership.create({ data: { orgId: org.id, userId: user.id, role: "owner" } });
+  cookie = `cms_session=${await createSession(user.id, "verify")}`;
+
   await prisma.siteModule.create({ data: { siteId: site.id, module: "commerce" } });
 
   const theme = await prisma.theme.create({ data: { siteId: site.id, name: "t" } });
@@ -292,7 +309,7 @@ async function main() {
     for (let i = 1; i <= 10; i++) {
       const res = await fetch(`${APP}/api/pages/${homePageId}/draft`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie },
         body: JSON.stringify({
           body: { version: 1, root: [node("Hero", { headline: `autosave ${i}` })] },
           lockVersion: lock,
@@ -394,13 +411,13 @@ async function main() {
     // timing that would be timing the bundler, not the transaction.
     await fetch(`${APP}/api/sites/${siteId}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ notes: "warm-up" }),
     });
 
     const res = await fetch(`${APP}/api/sites/${siteId}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ notes: "async proof" }),
     });
     const data = await res.json();
@@ -435,7 +452,7 @@ async function main() {
 
     const res = await fetch(`${APP}/api/sites/${siteId}/rollback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ releaseId: target.id, acknowledgeWarnings: true }),
     });
     assert(res.ok, `rollback returned ${res.status}`);
@@ -557,7 +574,7 @@ async function main() {
     // An order placed now must survive a rollback of the site's appearance.
     const orderRes = await fetch(`${APP}/api/runtime/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ siteId, items: [{ variantId, qty: 1 }] }),
     });
     const orderData = await orderRes.json();
@@ -569,7 +586,7 @@ async function main() {
     });
     await fetch(`${APP}/api/sites/${siteId}/rollback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ releaseId: releases[releases.length - 1].id, acknowledgeWarnings: true }),
     });
 
@@ -577,7 +594,7 @@ async function main() {
     assert(stillThere, "the order vanished when the site rolled back");
 
     // Deleting live data is soft and is reported through the reverse index.
-    const del = await fetch(`${APP}/api/products/${productId}`, { method: "DELETE" });
+    const del = await fetch(`${APP}/api/products/${productId}`, authed({ method: "DELETE" }));
     assert(del.status === 409, `expected a dependency warning, got ${del.status}`);
     const warning = await del.json();
     assert(warning.references?.length > 0, "no releases reported as referencing the product");
@@ -608,7 +625,7 @@ async function main() {
     for (const target of [oldest.id, fresh.releaseId, oldest.id]) {
       await fetch(`${APP}/api/sites/${siteId}/rollback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie },
         body: JSON.stringify({ releaseId: target, acknowledgeWarnings: true }),
       });
       await fetch(`${APP}/s/${slug}`);
@@ -639,7 +656,7 @@ async function main() {
     assert(dataLocked, "release_data can be rewritten — a release's inputs are not immutable");
 
     // Rebuilding a succeeded release is refused outright.
-    const retry = await fetch(`${APP}/api/releases/${oldest.id}/retry`, { method: "POST" });
+    const retry = await fetch(`${APP}/api/releases/${oldest.id}/retry`, authed({ method: "POST" }));
     assert(retry.status === 409, `retrying a ready release returned ${retry.status}, expected 409`);
 
     log(`v${oldest.versionNo}'s ${Object.keys(before).length} prerendered files unchanged across 1 publish + 3 rollbacks`);
@@ -678,7 +695,7 @@ async function main() {
 
     // Both exports come from the same release and contain the same page.
     for (const kind of ["static", "container"] as const) {
-      const res = await fetch(`${APP}/api/releases/${live}/export/${kind}`);
+      const res = await fetch(`${APP}/api/releases/${live}/export/${kind}`, authed());
       assert(res.ok, `${kind} export returned ${res.status}`);
       assert(
         res.headers.get("x-cms-release-id") === live,
@@ -985,6 +1002,178 @@ async function main() {
     log(`${drafts.length} pages hold ${refs} references and zero blocks of content`);
     log(`all ${referenced.size} referenced components exist and hold the content instead`);
     log(`${refs} references over ${referenced.size} components — the difference IS the reuse`);
+  });
+
+  // ── 14 ───────────────────────────────────────────────────────────────────
+  await check(14, "Access is org-scoped, and enforced on the server", async (log) => {
+    // A user in ANOTHER organisation, with a real session. The question is not
+    // whether the dashboard links to this site — it is whether the API answers.
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const otherOrg = await prisma.organization.create({ data: { name: `outsider-${suffix}` } });
+    const outsider = await prisma.user.create({
+      data: {
+        email: `outsider-${suffix}@test.local`,
+        name: "Outsider",
+        passwordHash: "scrypt$unused",
+      },
+    });
+    await prisma.membership.create({
+      data: { orgId: otherOrg.id, userId: outsider.id, role: "owner" },
+    });
+    const theirCookie = `cms_session=${await createSession(outsider.id, "verify")}`;
+
+    const endpoints = [
+      { url: `${APP}/api/sites/${siteId}/releases`, method: "GET" },
+      { url: `${APP}/api/sites/${siteId}/publish`, method: "POST" },
+      { url: `${APP}/api/sites/${siteId}/rollback`, method: "POST" },
+      { url: `${APP}/api/pages/${homePageId}/draft`, method: "GET" },
+    ];
+
+    for (const { url, method } of endpoints) {
+      // No session at all.
+      const anon = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
+      assert(anon.status === 401, `${method} ${url} allowed an anonymous caller (${anon.status})`);
+
+      // A real session, wrong organisation.
+      const theirs = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", cookie: theirCookie },
+        body: method === "POST" ? "{}" : undefined,
+      });
+      assert(theirs.status === 403, `${method} ${url} leaked to another org (${theirs.status})`);
+    }
+
+    // And the member still gets in — a guard that refuses everybody is not a guard.
+    const mine = await fetch(`${APP}/api/sites/${siteId}/releases`, authed());
+    assert(mine.ok, `the site's own member was refused (${mine.status})`);
+
+    // Published sites stay public. They are web pages.
+    const visitor = await fetch(`${APP}/s/${slug}`);
+    assert(visitor.ok, "a published site requires a login");
+
+    log(`${endpoints.length} endpoints: 401 with no session, 403 from another org, 200 for a member`);
+    log("the published site itself is still public — auth guards the product, not the output");
+  });
+
+  // ── 15 ───────────────────────────────────────────────────────────────────
+  await check(15, "One editor per page, enforced by the database", async (log) => {
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const second = await prisma.user.create({
+      data: {
+        email: `second-${suffix}@test.local`,
+        name: "Second Editor",
+        passwordHash: "scrypt$unused",
+      },
+    });
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    await prisma.membership.create({
+      data: { orgId: site.orgId, userId: second.id, role: "editor" },
+    });
+    const secondCookie = `cms_session=${await createSession(second.id, "verify")}`;
+
+    const lockUrl = `${APP}/api/pages/${homePageId}/lock`;
+
+    // First in wins.
+    const first = await (await fetch(`${lockUrl}?action=acquire`, authed({ method: "POST" }))).json();
+    assert(first.canEdit === true, "the first editor was not given the lock");
+
+    // Second gets a viewer's answer, naming who has it.
+    const viewer = await (
+      await fetch(`${lockUrl}?action=acquire`, {
+        method: "POST",
+        headers: { cookie: secondCookie },
+      })
+    ).json();
+    assert(viewer.canEdit === false, "two people were given the lock at once");
+    assert(viewer.lockedBy?.name, "the viewer was not told who is editing");
+
+    // THE PART THAT MATTERS: the UI hides the controls, but the server refuses
+    // the write. A viewer who calls the endpoint directly is stopped here.
+    const draft = await (await fetch(`${APP}/api/pages/${homePageId}/draft`, authed())).json();
+    const stolen = await fetch(`${APP}/api/pages/${homePageId}/draft`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", cookie: secondCookie },
+      body: JSON.stringify({ body: draft.body, lockVersion: draft.lockVersion }),
+    });
+    assert(stolen.status === 423, `a viewer's write was not refused (${stolen.status})`);
+
+    // The holder can still write.
+    const mine = await fetch(`${APP}/api/pages/${homePageId}/draft`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ body: draft.body, lockVersion: draft.lockVersion }),
+    });
+    assert(mine.ok, `the lock holder was refused their own write (${mine.status})`);
+
+    // A lock nobody renews is dead, so a closed laptop cannot hold a page for
+    // ever. Ageing the heartbeat past the TTL is exactly what time would do.
+    await prisma.$executeRawUnsafe(
+      `UPDATE page_locks SET heartbeat_at = now() - interval '10 minutes' WHERE page_id = '${homePageId}'`,
+    );
+    const takenOver = await (
+      await fetch(`${lockUrl}?action=acquire`, {
+        method: "POST",
+        headers: { cookie: secondCookie },
+      })
+    ).json();
+    assert(takenOver.canEdit === true, "an abandoned lock could not be taken over");
+
+    // And one row per page is a PRIMARY KEY, not a convention.
+    const rows = await prisma.pageLock.count({ where: { pageId: homePageId } });
+    assert(rows === 1, `expected exactly 1 lock row, found ${rows}`);
+
+    await prisma.pageLock.deleteMany({ where: { pageId: homePageId } });
+
+    log("first editor holds it; the second is told who has it and is refused with 423");
+    log("a lock unheard from for longer than its TTL is taken over, not stuck for ever");
+    log(`page_locks holds ${rows} row for this page — one editor is a PRIMARY KEY`);
+  });
+
+  // ── 16 ───────────────────────────────────────────────────────────────────
+  await check(16, "The audit trail records who, and cannot be rewritten", async (log) => {
+    const before = await prisma.activityLog.count({ where: { siteId } });
+
+    await fetch(`${APP}/api/sites/${siteId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ notes: "audit probe" }),
+    });
+
+    const after = await prisma.activityLog.count({ where: { siteId } });
+    assert(after > before, `publishing recorded nothing (${before} → ${after})`);
+
+    const entries = await prisma.activityLog.findMany({
+      where: { siteId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    const published = entries.find((e) => e.action === "site.published");
+    assert(published, "no site.published entry was written");
+    assert(published!.actorName.length > 0, "the entry does not say who did it");
+    assert(published!.userId, "the entry is not attributed to a user");
+
+    // Append-only, at the database, like every other history table here.
+    let updateBlocked = false;
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE activity_log SET summary = 'it was someone else' WHERE id = '${published!.id}'`,
+      );
+    } catch (e) {
+      updateBlocked = /append-only/i.test(String(e));
+    }
+    assert(updateBlocked, "an audit entry could be rewritten");
+
+    let deleteBlocked = false;
+    try {
+      await prisma.$executeRawUnsafe(`DELETE FROM activity_log WHERE id = '${published!.id}'`);
+    } catch (e) {
+      deleteBlocked = /append-only/i.test(String(e));
+    }
+    assert(deleteBlocked, "an audit entry could be deleted");
+
+    log(`"${published!.summary}" — recorded with a name and a user id`);
+    log("UPDATE and DELETE on activity_log are both refused by a database trigger");
   });
 
   // ── Report ───────────────────────────────────────────────────────────────

@@ -10,13 +10,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { publishSite } from "@/lib/publish";
-import { currentUserId } from "@/lib/session";
+import { guardSite } from "@/lib/api-auth";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const userId = await currentUserId();
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let notes: string | undefined;
   try {
@@ -36,6 +39,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
     const job = await prisma.buildJob.findUnique({
       where: { id: result.jobId },
       select: { status: true },
+    });
+
+    await logActivity({
+      siteId,
+      userId,
+      actorName: auth.user.name,
+      action: "site.published",
+      entityType: "release",
+      entityId: result.releaseId,
+      summary: `${auth.user.name} published v${result.versionNo}`,
+      meta: {
+        versionNo: result.versionNo,
+        pages: result.pageCount,
+        components: result.componentCount,
+        notes: notes ?? null,
+      },
     });
 
     return NextResponse.json({

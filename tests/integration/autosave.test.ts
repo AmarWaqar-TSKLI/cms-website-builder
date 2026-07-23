@@ -23,7 +23,7 @@ describe("autosave overwrites, never accumulates", () => {
     for (let i = 1; i <= 10; i++) {
       const res = await fetch(`${APP_URL}/api/pages/${site.homePageId}/draft`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie: site.cookie },
         body: JSON.stringify({
           body: { version: 1, root: [node("Hero", { headline: `Autosave ${i}` })] },
           lockVersion,
@@ -65,7 +65,7 @@ describe("autosave overwrites, never accumulates", () => {
     // Simulating a second tab: it holds a lock_version from before the burst.
     const res = await fetch(`${APP_URL}/api/pages/${site.homePageId}/draft`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie: site.cookie },
       body: JSON.stringify({
         body: { version: 1, root: [node("Hero", { headline: "From a stale tab" })] },
         lockVersion: current.lockVersion - 5,

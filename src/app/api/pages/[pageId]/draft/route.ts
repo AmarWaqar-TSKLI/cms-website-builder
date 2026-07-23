@@ -18,7 +18,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isValidBody, readDraft } from "@/lib/drafts";
-import { currentUserId } from "@/lib/session";
+import { guardPage } from "@/lib/api-auth";
+import { recordEdit } from "@/lib/activity";
+import { lockState } from "@/lib/locks";
 import { directComponentRefs } from "@/lib/shared-components";
 import type { PageBody, PageNode } from "@/lib/registry/types";
 
@@ -26,6 +28,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ pageId: string }> }) {
   const { pageId } = await params;
+  const auth = await guardPage(pageId);
+  if (!auth.ok) return auth.response;
+
   const draft = await readDraft("page", pageId);
   if (!draft) return NextResponse.json({ error: "No draft" }, { status: 404 });
   return NextResponse.json({
@@ -44,7 +49,26 @@ interface Payload {
 
 export async function PUT(req: Request, { params }: { params: Promise<{ pageId: string }> }) {
   const { pageId } = await params;
-  const userId = await currentUserId();
+  const auth = await guardPage(pageId);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
+
+  // THE LOCK IS ENFORCED HERE, not in the editor.
+  //
+  // The read-only viewer's UI hides the controls, but a UI is a suggestion —
+  // anyone can POST to this endpoint directly. Whoever does not hold the lock
+  // cannot write, and finds out with a 423 rather than silently losing work.
+  const lock = await lockState(pageId, userId);
+  if (lock.held && !lock.isMine) {
+    return NextResponse.json(
+      {
+        error: "locked",
+        message: `${lock.by.name} is editing this page.`,
+        lockedBy: { name: lock.by.name, since: lock.by.acquiredAt },
+      },
+      { status: 423 },
+    );
+  }
 
   let payload: Payload;
   try {
@@ -139,6 +163,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ pageId: 
       { status: 409 },
     );
   }
+
+  // Recorded once per editing SESSION, not once per autosave. A row every two
+  // seconds would bury the log in noise and answer nothing useful; "Amar edited
+  // /about" with a moving timestamp is the fact somebody actually wants.
+  await recordEdit(auth.extra.siteId, userId, auth.user.name, pageId, page.path);
 
   return NextResponse.json({
     ok: true,

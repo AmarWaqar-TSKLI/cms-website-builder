@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +7,8 @@ export const dynamic = "force-dynamic";
 /** Version history. Every row here is a site state that can be returned to. */
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
 
   const site = await prisma.site.findUnique({ where: { id: siteId } });
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });

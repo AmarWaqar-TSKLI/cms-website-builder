@@ -5,6 +5,7 @@
  * dependency list.
  */
 import { NextResponse } from "next/server";
+import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { asLayout, asTokens } from "@/lib/theme";
 import type { ResolvedCollection, ResolvedMedia, ResolvedProduct } from "@/lib/registry/types";
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
 
   const site = await prisma.site.findUnique({
     where: { id: siteId },

@@ -7,12 +7,15 @@
  * that lets a build fail without costing anything.
  */
 import { NextResponse } from "next/server";
+import { guardRelease } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ releaseId: string }> }) {
   const { releaseId } = await params;
+  const auth = await guardRelease(releaseId);
+  if (!auth.ok) return auth.response;
 
   const release = await prisma.release.findUnique({ where: { id: releaseId } });
   if (!release) return NextResponse.json({ error: "Not found" }, { status: 404 });

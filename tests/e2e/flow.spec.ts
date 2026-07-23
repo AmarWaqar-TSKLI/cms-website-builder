@@ -6,6 +6,22 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
+/**
+ * Sign in before anything else.
+ *
+ * The product is behind a login now, so every one of these journeys starts the
+ * way a real one does. That makes the suite a slightly better test than it was:
+ * it exercises the session cookie, the middleware redirect and the server-side
+ * guard on every single request it goes on to make.
+ */
+async function signIn(page: Page, email = "amar@acme.test") {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("demo1234");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+}
+
 /** Provenance now lives in the markup rather than a response header. */
 const releaseIdOf = (html: string) =>
   /<meta name="cms:release-id" content="([^"]+)"/.exec(html)?.[1] ?? null;
@@ -50,6 +66,10 @@ async function publish(page: Page) {
 }
 
 test.describe("edit → publish → serve → rollback", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
   test("a rollback returns the live site to the previous version", async ({ page }) => {
     const pageId = await firstPageId(page);
     const site = await siteInfo(page);
@@ -216,5 +236,64 @@ test.describe("edit → publish → serve → rollback", () => {
     // …and the engine blocks are always there. (The accessible name starts with
     // the palette icon glyph, so this matches loosely rather than anchored.)
     await expect(page.getByRole("button", { name: /Hero/ }).first()).toBeVisible();
+  });
+});
+
+/**
+ * The editing lock, with two real browsers.
+ *
+ * This is the one behaviour that cannot be checked with a single session, so it
+ * gets its own describe block with two isolated browser contexts — separate
+ * cookie jars, exactly like two people at two desks.
+ */
+test.describe("two people, one page", () => {
+  test("the second person gets a read-only view that updates itself", async ({ browser }) => {
+    const amar = await browser.newContext();
+    const sara = await browser.newContext();
+
+    try {
+      const amarPage = await amar.newPage();
+      const saraPage = await sara.newPage();
+
+      await signIn(amarPage, "amar@acme.test");
+      await signIn(saraPage, "sara@acme.test");
+
+      const pageId = await firstPageId(amarPage);
+
+      // Amar arrives first and gets the lock.
+      await amarPage.goto(`/editor/${pageId}`);
+      await expect(amarPage.locator('[data-cms-type="Hero"]').first()).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(amarPage.getByText(/Read only/)).toHaveCount(0);
+
+      // Sara opens the same page and is told, by name, who has it.
+      await saraPage.goto(`/editor/${pageId}`);
+      await expect(saraPage.getByText(/Read only/)).toBeVisible({ timeout: 20_000 });
+      await expect(saraPage.getByText(/Amar Waqar is editing this page/)).toBeVisible();
+
+      // The controls that would write are gone for her.
+      await expect(saraPage.getByRole("button", { name: /Make component/ })).toHaveCount(0);
+      // The top-bar Publish, not the right-panel tab of the same name.
+      await expect(
+        saraPage.getByRole("button", { name: "Publish", exact: true }).first(),
+      ).toBeDisabled();
+
+      // And the server refuses the write even if the UI is bypassed entirely.
+      const draft = await (await saraPage.request.get(`/api/pages/${pageId}/draft`)).json();
+      const forced = await saraPage.request.put(`/api/pages/${pageId}/draft`, {
+        data: { body: draft.body, lockVersion: draft.lockVersion },
+      });
+      expect(forced.status()).toBe(423);
+
+      // Amar types; Sara's view catches up on its own, with no reload.
+      const marker = `LOCKED ${Date.now().toString(36).toUpperCase()}`;
+      await setHeadline(amarPage, marker);
+
+      await expect(saraPage.getByText(new RegExp(marker))).toBeVisible({ timeout: 30_000 });
+    } finally {
+      await amar.close();
+      await sara.close();
+    }
   });
 });

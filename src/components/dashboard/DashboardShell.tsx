@@ -19,6 +19,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
+import { AccountBar } from "./AccountBar";
+import { ActivityFeed } from "./ActivityFeed";
 import { Btn, Card, CardHead, LinkBtn, Tile, UnderTheHood, exactTime, money } from "./dash-ui";
 
 /* ── shapes ───────────────────────────────────────────────────────────────── */
@@ -78,15 +80,45 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* ── shell ────────────────────────────────────────────────────────────────── */
 
+export interface DashUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface DashActivity {
+  id: string;
+  actorName: string;
+  summary: string;
+  action: string;
+  createdAt: string;
+}
+
+export interface DashLock {
+  pageId: string;
+  path: string;
+  name: string;
+  isMine: boolean;
+}
+
 export function DashboardShell({
   site,
   pages,
   commerce,
+  user,
+  sites,
+  activity,
+  locks,
 }: {
   site: DashSite;
   pages: DashPage[];
   commerce: DashCommerce;
+  user: DashUser;
+  sites: { id: string; name: string; slug: string }[];
+  activity: DashActivity[];
+  locks: DashLock[];
 }) {
+  const lockFor = (pageId: string) => locks.find((l) => l.pageId === pageId);
   const [releases, setReleases] = useState<ReleaseRow[] | null>(null);
   const [liveId, setLiveId] = useState<string | null>(site.liveReleaseId);
   const [busy, setBusy] = useState<string | null>(null);
@@ -257,8 +289,26 @@ export function DashboardShell({
   ).length;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
+    <>
+      <AccountBar user={user} sites={sites} currentSiteId={site.id} />
+      <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
       <TopBar />
+
+      {/* Who is in the building. Only shown when it is somebody else — telling
+          you that you are editing your own page is noise. */}
+      {locks.some((l) => !l.isMine) && (
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-warn-500/25 bg-warn-500/[0.07] px-4 py-2.5">
+          <span className="text-[12px]">✎</span>
+          {locks
+            .filter((l) => !l.isMine)
+            .map((l) => (
+              <span key={l.pageId} className="text-[12.5px] text-warn-500">
+                <strong className="font-semibold">{l.name}</strong> is editing{" "}
+                <code className="font-mono">{l.path}</code>
+              </span>
+            ))}
+        </div>
+      )}
 
       {/* ── 1. your site ─────────────────────────────────────────────────── */}
       <Hero
@@ -393,7 +443,16 @@ export function DashboardShell({
           </p>
         </UnderTheHood>
       </div>
+      {/* ── Who did what ─────────────────────────────────────────────────── */}
+      <Card className="mt-6">
+        <CardHead
+          title="Activity"
+          hint="Every change, with a name against it. Written as it happens, into a table nothing can edit afterwards."
+        />
+        <ActivityFeed activity={activity} />
+      </Card>
     </main>
+    </>
   );
 }
 

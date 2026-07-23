@@ -7,6 +7,7 @@ import { findNode, getSchema } from "@/lib/registry";
 import { describeUsage, type ComponentUsage } from "@/lib/component-usage";
 import { useEditor } from "@/lib/editor/store";
 import { useAutosave, flushDraft } from "@/lib/editor/useAutosave";
+import { useLock } from "@/lib/editor/useLock";
 import { stripExpansion } from "@/lib/shared-components";
 import type {
   ModuleName,
@@ -122,6 +123,18 @@ export function EditorShell(boot: EditorBootstrap) {
       boot.sharedIds,
     );
   }, [init, targetId, boot.body, boot.lockVersion, editingComponent, boot.allComponents, boot.sharedIds]);
+
+  // ── The editing lock ──────────────────────────────────────────────────────
+  // Only pages are locked. A component is edited on its own screen, and its
+  // draft row already has its own optimistic lock, so two people working on two
+  // different components of the same page never collide.
+  const lock = useLock(boot.page.id, !editingComponent);
+  const setReadOnly = useEditor((s) => s.setReadOnly);
+  const readOnly = !editingComponent && !lock.canEdit;
+
+  useEffect(() => {
+    setReadOnly(readOnly);
+  }, [setReadOnly, readOnly]);
 
   useAutosave(true);
 
@@ -246,6 +259,35 @@ export function EditorShell(boot: EditorBootstrap) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-950">
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      {/*
+        The read-only banner. Deliberately the first thing on the screen and
+        impossible to miss — a viewer who does not realise they are a viewer will
+        type for ten minutes and lose all of it.
+      */}
+      {readOnly && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-warn-500/30 bg-warn-500/10 px-4 py-2.5">
+          <span className="text-[13px]">👁</span>
+          <span className="text-[12.5px] text-warn-500">
+            <strong className="font-semibold">Read only.</strong>{" "}
+            {lock.lockedBy
+              ? `${lock.lockedBy.name} is editing this page.`
+              : "Someone else is editing this page."}{" "}
+            {lock.changedAt
+              ? "It updated a moment ago and this view refreshed itself."
+              : "This view updates itself as they work."}
+          </span>
+          {lock.canTakeOver && (
+            <button
+              type="button"
+              onClick={lock.takeOver}
+              className="ml-auto rounded-lg border border-warn-500/50 px-2.5 py-1 text-[11.5px] font-medium text-warn-500 transition-colors hover:bg-warn-500/15"
+            >
+              They&rsquo;ve left — take over editing
+            </button>
+          )}
+        </div>
+      )}
+
       <header className="flex h-13 shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-900 px-3 py-2.5">
         <Link
           href="/dashboard"
@@ -314,7 +356,7 @@ export function EditorShell(boot: EditorBootstrap) {
         )}
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {!editingComponent && (
+          {!editingComponent && !readOnly && (
             <button
               type="button"
               onClick={makeComponent}
@@ -327,10 +369,14 @@ export function EditorShell(boot: EditorBootstrap) {
           )}
 
           <div className="flex items-center gap-0.5 rounded-lg border border-ink-800 p-0.5">
-            <IconButton title="Undo (Ctrl+Z)" onClick={undo} disabled={pastLength === 0}>
+            <IconButton title="Undo (Ctrl+Z)" onClick={undo} disabled={readOnly || pastLength === 0}>
               ↶
             </IconButton>
-            <IconButton title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={futureLength === 0}>
+            <IconButton
+              title="Redo (Ctrl+Shift+Z)"
+              onClick={redo}
+              disabled={readOnly || futureLength === 0}
+            >
               ↷
             </IconButton>
           </div>
@@ -365,7 +411,9 @@ export function EditorShell(boot: EditorBootstrap) {
           <button
             type="button"
             onClick={() => setRightTab("publish")}
-            className="rounded-lg bg-flux-500 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400"
+            disabled={readOnly}
+            title={readOnly ? "Someone else is editing this page" : undefined}
+            className="rounded-lg bg-flux-500 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Publish
           </button>
@@ -384,7 +432,12 @@ export function EditorShell(boot: EditorBootstrap) {
             onChange={(id) => setLeftTab(id as LeftTab)}
           />
           <div className="min-h-0 flex-1">
-            {leftTab === "blocks" ? (
+            {leftTab === "blocks" && readOnly ? (
+              <p className="p-4 text-[12px] leading-relaxed text-ink-500">
+                Blocks are hidden while someone else is editing. You can still browse the outline
+                and watch their changes arrive.
+              </p>
+            ) : leftTab === "blocks" ? (
               <Palette
                 modules={boot.modules}
                 // A symbol cannot list itself: the most obvious loop, refused at

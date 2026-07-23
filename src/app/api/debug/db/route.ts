@@ -6,6 +6,8 @@
  * exists so you can watch it happen in real time instead of being told it does.
  */
 import { NextResponse } from "next/server";
+import { guard } from "@/lib/api-auth";
+import { sitesForUser } from "@/lib/auth";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/db";
@@ -46,7 +48,15 @@ async function listArtifacts(siteId: string) {
 }
 
 export async function GET(req: Request) {
-  const siteId = new URL(req.url).searchParams.get("siteId");
+  // The inspector reads real data, so it is signed-in only and scoped to the
+  // sites the caller can actually reach.
+  const auth = await guard();
+  if (!auth.ok) return auth.response;
+  const reachable = await sitesForUser(auth.user.id);
+  const allowed = new Set(reachable.map((s) => s.id));
+
+  const requested = new URL(req.url).searchParams.get("siteId");
+  const siteId = requested && allowed.has(requested) ? requested : (reachable[0]?.id ?? null);
 
   const site = siteId
     ? await prisma.site.findUnique({ where: { id: siteId } })

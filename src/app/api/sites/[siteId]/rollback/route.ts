@@ -11,11 +11,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { checkReleaseDependencies } from "@/lib/dependencies";
+import { guardSite } from "@/lib/api-auth";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
 
   let payload: { releaseId?: string; acknowledgeWarnings?: boolean };
   try {
@@ -73,6 +77,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   // request simply reads a different pointer. That is why this is instant no
   // matter how large the site is or how many servers are running.
   // ─────────────────────────────────────────────────────────────────────────
+
+  await logActivity({
+    siteId,
+    userId: auth.user.id,
+    actorName: auth.user.name,
+    action: "site.rolled_back",
+    entityType: "release",
+    entityId: release.id,
+    summary: `${auth.user.name} rolled the site back to v${release.versionNo}`,
+    meta: { from: previousReleaseId, to: release.id, versionNo: release.versionNo },
+  });
 
   return NextResponse.json({
     ok: true,

@@ -9,8 +9,11 @@ import { createNode } from "../../src/lib/registry";
 import type { PageBody, PageNode } from "../../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../../src/lib/theme";
 import { toJson } from "../../src/lib/json";
+import { createSession } from "../../src/lib/auth";
 
 export interface TestSite {
+  /** A ready-made session cookie for this site's owner. */
+  cookie: string;
   siteId: string;
   slug: string;
   orgId: string;
@@ -39,7 +42,13 @@ export async function createTestSite(label = "test"): Promise<TestSite> {
 
   const org = await prisma.organization.create({ data: { name: `${label}-org-${suffix}` } });
   const user = await prisma.user.create({
-    data: { email: `${label}-${suffix}@test.local`, passwordHash: "x" },
+    data: {
+      email: `${label}-${suffix}@test.local`,
+      name: `${label} tester`,
+      // Not a usable password. Integration tests call the library directly and
+      // never sign in; the auth test suite makes its own users with real hashes.
+      passwordHash: "scrypt$invalid",
+    },
   });
   await prisma.membership.create({ data: { orgId: org.id, userId: user.id, role: "owner" } });
 
@@ -125,6 +134,7 @@ export async function createTestSite(label = "test"): Promise<TestSite> {
   });
 
   return {
+    cookie: await sessionCookie(user.id),
     siteId: site.id,
     slug: site.slug,
     orgId: org.id,
@@ -193,4 +203,24 @@ export function releaseIdOf(html: string): string | null {
  */
 export function stableHtml(html: string): string {
   return html.replace(/<script>self\.__next_f\.push\([\s\S]*?\)<\/script>/g, "");
+}
+
+/**
+ * A real session cookie for a test's user.
+ *
+ * Integration tests exercise HTTP endpoints, and those endpoints now require a
+ * signed-in member of the site's organisation — which is the point. Rather than
+ * weakening the guard for tests (a "skip auth in test mode" flag is how auth
+ * bypasses ship), the tests get a genuine session row and a genuine cookie, and
+ * go through exactly the same checks a browser would.
+ */
+export async function sessionCookie(userId: string): Promise<string> {
+  const token = await createSession(userId, "integration-test");
+  return `cms_session=${token}`;
+}
+
+/** Fetch with a session attached. Same signature as fetch, one extra header. */
+export function asUser(cookie: string) {
+  return (url: string, init: RequestInit = {}) =>
+    fetch(url, { ...init, headers: { ...(init.headers ?? {}), cookie } });
 }

@@ -14,6 +14,7 @@ import { createComponentRef, createNode } from "../src/lib/registry";
 import type { PageBody, PageNode } from "../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../src/lib/theme";
 import { toJson } from "../src/lib/json";
+import { hashPassword } from "../src/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -43,6 +44,7 @@ const TABLES = [
   "order_line_items", "orders", "customers",
   "collection_products", "collections", "product_variants", "products",
   "build_jobs", "release_dependencies", "release_items", "releases",
+  "activity_log", "page_locks", "sessions",
   "media", "theme_revisions", "themes",
   "component_revisions", "component_drafts", "components",
   "page_revisions", "page_drafts", "pages",
@@ -65,16 +67,37 @@ async function main() {
     `TRUNCATE TABLE ${TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`,
   );
 
-  console.log("→ org, user, membership");
+  console.log("→ orgs, users, memberships");
   const org = await prisma.organization.create({ data: { name: "Acme Inc", plan: "pro" } });
+
+  // Real scrypt hashes. There is a login screen, and it verifies these.
+  const password = await hashPassword("demo1234");
+
   const user = await prisma.user.create({
-    data: {
-      email: "demo@acme.test",
-      // FAKED: not a real hash and never verified. There is no login.
-      passwordHash: "seeded-no-login-ui",
-    },
+    data: { email: "amar@acme.test", name: "Amar Waqar", passwordHash: password },
   });
+  const colleague = await prisma.user.create({
+    data: { email: "sara@acme.test", name: "Sara Ahmed", passwordHash: password },
+  });
+
+  // Both in the same org, so both see every Acme site — that is the access model:
+  // membership of an organisation, not a per-site grant.
   await prisma.membership.create({ data: { orgId: org.id, userId: user.id, role: "owner" } });
+  await prisma.membership.create({
+    data: { orgId: org.id, userId: colleague.id, role: "editor" },
+  });
+
+  // A SECOND organisation with its own user and its own site. Nothing about it
+  // is decorative: it is what makes "org-scoped access" testable rather than
+  // asserted. Sign in as this user and Acme's sites are not merely hidden from
+  // the list — every site-scoped endpoint answers 403.
+  const otherOrg = await prisma.organization.create({ data: { name: "Globex Ltd" } });
+  const outsider = await prisma.user.create({
+    data: { email: "kim@globex.test", name: "Kim Novak", passwordHash: password },
+  });
+  await prisma.membership.create({
+    data: { orgId: otherOrg.id, userId: outsider.id, role: "owner" },
+  });
 
   console.log("→ site + commerce module");
   const site = await prisma.site.create({
@@ -237,7 +260,7 @@ async function main() {
    * demo database and a fresh install disagreed about the storage model, which
    * is exactly the kind of drift the rest of this codebase works to avoid.
    */
-  async function storePage(pageId: string, blocks: PageNode[]) {
+  async function storePage(siteId: string, userId: string, pageId: string, blocks: PageNode[]) {
     const refs: PageNode[] = [];
 
     for (const block of blocks) {
@@ -247,11 +270,11 @@ async function main() {
       }
       const component = await prisma.component.create({
         data: {
-          siteId: site.id,
+          siteId,
           kind: block.type,
           draft: {
             create: {
-              updatedBy: user.id,
+              updatedBy: userId,
               lockVersion: 1,
               body: toJson(body([block])),
             },
@@ -262,12 +285,12 @@ async function main() {
     }
 
     await prisma.pageDraft.create({
-      data: { pageId, updatedBy: user.id, body: toJson(body(refs)) },
+      data: { pageId, updatedBy: userId, body: toJson(body(refs)) },
     });
   }
 
   // Note what is stored: names and values. No markup anywhere. (Non-negotiable #1)
-  await storePage(home.id, [
+  await storePage(site.id, user.id, home.id, [
         bannerOn("n-banner-home"),
         node("Hero", {
           headline: "Everything here is a description.",
@@ -333,7 +356,7 @@ async function main() {
         }),
   ]);
 
-  await storePage(about.id, [
+  await storePage(site.id, user.id, about.id, [
         bannerOn("n-banner-about"),
         node("Hero", {
           headline: "Rollback is one column.",
@@ -373,14 +396,26 @@ async function main() {
 
   console.log(`
 ✓ seeded
-  org        ${org.name}
-  user       ${user.email}   (no password — auth is faked)
-  site       ${site.name}  /s/${site.slug}   domain: ${site.customDomain}
-  pages      /  and  /about   (drafts only — nothing is published yet)
-  commerce   ${products.length} products in collection "${collection.handle}"
+  sign in    http://localhost:3000/login      password for all: demo1234
 
-  Nothing is live until you publish. That is the point: a site with content
-  in the database and no release has no artifact, so it has nothing to serve.
+  ${org.name}
+    ${user.email}      ${user.name} (owner)
+    ${colleague.email}      ${colleague.name} (editor)
+    site ${site.name} — /s/${site.slug}, domain ${site.customDomain}
+    pages / and /about, ${products.length} products in "${collection.handle}"
+
+  ${otherOrg.name}
+    ${outsider.email}     ${outsider.name} (owner)
+    site Globex Ltd — /s/globex
+
+  Sign in as two Acme users in two browsers and open the same page to see the
+  editing lock: the second one gets a read-only view that updates itself.
+
+  Sign in as ${outsider.email} to see the access boundary — Acme's sites are
+  not listed, and requesting one directly answers 403.
+
+  Nothing is live until you publish. A site with content in the database and no
+  release has nothing to serve, which is the point.
 `);
 }
 

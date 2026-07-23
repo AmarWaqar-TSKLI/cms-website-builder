@@ -11,7 +11,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isValidBody } from "@/lib/drafts";
-import { currentUserId } from "@/lib/session";
+import { guardSite } from "@/lib/api-auth";
+import { logActivity } from "@/lib/activity";
 import { stripExpansion } from "@/lib/shared-components";
 import type { ComponentBody, PageBody } from "@/lib/registry/types";
 
@@ -21,6 +22,8 @@ const EMPTY: ComponentBody = { version: 1, root: [] };
 
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
 
   const components = await prisma.component.findMany({
     where: { siteId, deletedAt: null },
@@ -42,7 +45,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
 
 export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const userId = await currentUserId();
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let payload: { name?: unknown; icon?: unknown; body?: unknown };
   try {
@@ -85,6 +90,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
       draft: { create: { body: body as never, updatedBy: userId, lockVersion: 1 } },
     },
     include: { draft: true },
+  });
+
+  await logActivity({
+    siteId,
+    userId,
+    actorName: auth.user.name,
+    action: "component.created",
+    entityType: "component",
+    entityId: created.id,
+    summary: `${auth.user.name} created the shared component “${name}”`,
   });
 
   return NextResponse.json(

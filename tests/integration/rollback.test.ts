@@ -103,7 +103,7 @@ describe("rollback is a pointer swap", () => {
 
       const res = await fetch(`${APP_URL}/api/sites/${site.siteId}/rollback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie: site.cookie },
         body: JSON.stringify({ releaseId: v1.releaseId, acknowledgeWarnings: true }),
       });
       expect(res.status).toBe(200);
@@ -144,7 +144,7 @@ describe("rollback is a pointer swap", () => {
       // ── And forward again, just as cheaply ────────────────────────────────
       await fetch(`${APP_URL}/api/sites/${site.siteId}/rollback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie: site.cookie },
         body: JSON.stringify({ releaseId: v2.releaseId, acknowledgeWarnings: true }),
       });
       expect(stableHtml(await (await fetch(`${APP_URL}/s/${site.slug}`)).text())).toBe(servedV2);
@@ -172,7 +172,7 @@ describe("rollback is a pointer swap", () => {
 
     const res = await fetch(`${APP_URL}/api/sites/${site.siteId}/rollback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie: site.cookie },
       body: JSON.stringify({ releaseId: orphan.id }),
     });
     expect(res.status).toBe(409);
@@ -201,7 +201,7 @@ describe("rollback is a pointer swap", () => {
       // Rolling back to v1 should say so, rather than silently degrading.
       const res = await fetch(`${APP_URL}/api/sites/${site.siteId}/rollback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie: site.cookie },
         body: JSON.stringify({ releaseId: v1.releaseId }),
       });
       expect(res.status).toBe(409);
@@ -212,7 +212,7 @@ describe("rollback is a pointer swap", () => {
       // Acknowledged, it proceeds — the cost is accepted, not prevented.
       const forced = await fetch(`${APP_URL}/api/sites/${site.siteId}/rollback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", cookie: site.cookie },
         body: JSON.stringify({ releaseId: v1.releaseId, acknowledgeWarnings: true }),
       });
       expect(forced.status).toBe(200);

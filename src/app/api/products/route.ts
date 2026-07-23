@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const siteId = new URL(req.url).searchParams.get("siteId");
   if (!siteId) return NextResponse.json({ error: "siteId required" }, { status: 400 });
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
 
   const products = await prisma.product.findMany({
     where: { siteId },
@@ -36,6 +39,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const payload = await req.json().catch(() => null);
+  const created = payload?.siteId ? await guardSite(String(payload.siteId)) : null;
+  if (created && !created.ok) return created.response;
+
   if (!payload?.siteId || !payload?.title) {
     return NextResponse.json({ error: "siteId and title required" }, { status: 400 });
   }

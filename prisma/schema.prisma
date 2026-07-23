@@ -35,12 +35,90 @@ model Organization {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
+  name         String
+  /// scrypt, as "scrypt$N$r$p$salt$hash". The parameters travel with the hash so
+  /// they can be raised later without invalidating everyone's password.
   passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")
 
   memberships Membership[]
+  sessions    Session[]
+  activity    ActivityLog[]
+  locks       PageLock[]
 
   @@map("users")
+}
+
+/// A logged-in browser.
+///
+/// The row stores a SHA-256 of the token, never the token itself. Someone who
+/// reads this table therefore cannot sign in as anybody — the same reason the
+/// password column holds a hash. The plaintext exists only in the user's cookie.
+model Session {
+  /// SHA-256 of the token in the cookie. The primary key IS the lookup.
+  tokenHash String   @id @map("token_hash")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  userAgent String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// WHO DID WHAT, WHEN.
+///
+/// Append-only, guarded by the same trigger as the revision tables — an audit
+/// log that can be edited is not an audit log. Nothing here is ever used to
+/// render a site; it exists to answer "who changed this, and when".
+///
+/// Deliberately denormalised: `actorName` and `summary` are written at the time
+/// of the event and never re-derived. Renaming a user later must not rewrite
+/// history, and a deleted page must still be explicable.
+model ActivityLog {
+  id         String   @id @default(uuid())
+  siteId     String?  @map("site_id")
+  userId     String?  @map("user_id")
+  actorName  String   @map("actor_name")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  summary    String
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  site Site? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, createdAt])
+  @@index([entityType, entityId])
+  @@map("activity_log")
+}
+
+/// PESSIMISTIC LOCK on editing a page.
+///
+/// One row per page while somebody has it open. Whoever arrives first edits;
+/// everyone else gets a read-only view that keeps itself up to date.
+///
+/// The heartbeat is what makes this safe. A lock with no heartbeat for a couple
+/// of minutes is dead — a closed laptop must not lock a page forever — so the
+/// row is a claim that has to be continuously renewed rather than a flag someone
+/// remembered to clear.
+model PageLock {
+  pageId      String   @id @map("page_id")
+  userId      String   @map("user_id")
+  acquiredAt  DateTime @default(now()) @map("acquired_at")
+  heartbeatAt DateTime @default(now()) @map("heartbeat_at")
+
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([heartbeatAt])
+  @@map("page_locks")
 }
 
 model Membership {
@@ -83,6 +161,7 @@ model Site {
   orders    Order[]
   posts     Post[]
   tags      Tag[]
+  activity  ActivityLog[]
 
   @@map("sites")
 }
@@ -120,6 +199,7 @@ model Page {
   site      Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
   draft     PageDraft?
   revisions PageRevision[]
+  lock      PageLock?
 
   // The real constraint is a PARTIAL unique index — UNIQUE(site_id, path)
   // WHERE deleted_at IS NULL — added by raw SQL in the migration, because a
