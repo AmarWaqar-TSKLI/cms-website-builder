@@ -31,11 +31,16 @@ const ctx: RenderContext = {
     c1: { id: "c1", title: "Featured", handle: "featured", productIds: ["p1"] },
   },
   media: { m1: { id: "m1", url: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", alt: "" } },
+  components: {},
 };
 
 describe("registry", () => {
   it("exposes the expected component set", () => {
     expect(allSchemas().map((s) => s.name).sort()).toEqual([
+      // The shared-component reference is a real registry entry — that is what
+      // gives it dependency extraction and rendering for free — but it is
+      // `hidden`, so it never reaches the palette. Both facts are asserted here.
+      "@component",
       "Button",
       "Card",
       "Columns",
@@ -47,6 +52,8 @@ describe("registry", () => {
       "Spacer",
       "TextBlock",
     ]);
+
+    expect(paletteFor(["commerce"]).map((s) => s.name)).not.toContain("@component");
   });
 
   it("gives every styleable component the shared style controls", () => {

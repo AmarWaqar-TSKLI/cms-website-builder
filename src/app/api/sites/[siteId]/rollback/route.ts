@@ -66,6 +66,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
     where: { id: siteId },
     data: { liveReleaseId: release.id },
   });
+  // Note what is NOT here: no cache purge, no warming, no rebuild, not even an
+  // invalidation message to the app servers. The release being rolled back TO
+  // was never evicted — its cache entries are keyed by its own immutable id, so
+  // they are still exactly as warm as they were when it was last live. The next
+  // request simply reads a different pointer. That is why this is instant no
+  // matter how large the site is or how many servers are running.
   // ─────────────────────────────────────────────────────────────────────────
 
   return NextResponse.json({

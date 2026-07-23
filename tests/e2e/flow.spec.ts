@@ -6,6 +6,10 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
+/** Provenance now lives in the markup rather than a response header. */
+const releaseIdOf = (html: string) =>
+  /<meta name="cms:release-id" content="([^"]+)"/.exec(html)?.[1] ?? null;
+
 const HEADLINE_A = "E2E HEADLINE ALPHA";
 const HEADLINE_B = "E2E HEADLINE BRAVO";
 
@@ -22,8 +26,10 @@ async function siteInfo(page: Page) {
 
 /** Type a new headline into the Hero's Headline field and wait for a save. */
 async function setHeadline(page: Page, headline: string) {
-  // Select the first block on the canvas so the Block panel populates.
-  await page.locator("[data-cms-node]").first().click();
+  // Target the Hero by type rather than by position. The seeded page opens with
+  // a shared component, and "the first block" is not a stable way to name the
+  // block you actually mean.
+  await page.locator('[data-cms-type="Hero"]').first().click();
 
   // The panel is generated from the component's schema, so the field is
   // labelled with the schema's own label rather than a hand-written form.
@@ -64,10 +70,12 @@ test.describe("edit → publish → serve → rollback", () => {
     // ── The live site serves A ────────────────────────────────────────────
     const liveA = await page.request.get(`/s/${site.slug}`);
     expect(liveA.status()).toBe(200);
-    expect(liveA.headers()["x-cms-served-from"]).toBe("artifact-on-disk");
     const htmlA = await liveA.text();
     expect(htmlA).toContain(HEADLINE_A);
-    const releaseA = liveA.headers()["x-cms-release-id"];
+    // Provenance rides in the document now — an RSC page cannot set headers, and
+    // a meta tag survives being cached, saved or exported.
+    const releaseA = releaseIdOf(htmlA);
+    expect(releaseA).toBeTruthy();
 
     // ── Edit and publish version B ────────────────────────────────────────
     await page.goto(`/editor/${pageId}`);
@@ -78,7 +86,7 @@ test.describe("edit → publish → serve → rollback", () => {
     const htmlB = await liveB.text();
     expect(htmlB).toContain(HEADLINE_B);
     expect(htmlB).not.toContain(HEADLINE_A);
-    expect(liveB.headers()["x-cms-release-id"]).not.toBe(releaseA);
+    expect(releaseIdOf(htmlB)).not.toBe(releaseA);
 
     // ── Roll back through the dashboard ───────────────────────────────────
     await page.goto("/dashboard");
@@ -105,7 +113,46 @@ test.describe("edit → publish → serve → rollback", () => {
     expect(htmlReverted).not.toContain(HEADLINE_B);
     // Not merely equivalent — the same bytes served before.
     expect(htmlReverted).toBe(htmlA);
-    expect(reverted.headers()["x-cms-release-id"]).toBe(releaseA);
+    expect(releaseIdOf(htmlReverted)).toBe(releaseA);
+  });
+
+  test("editing a shared component changes every page that uses it", async ({ page }) => {
+    // The whole promise, through the interface: open the component from the
+    // palette, change one word, publish once, and check BOTH pages.
+    const site = await siteInfo(page);
+    const pageId = await firstPageId(page);
+    const marker = `SHARED ${Date.now().toString(36).toUpperCase()}`;
+
+    await page.goto(`/editor/${pageId}`);
+
+    // The instance renders on the canvas and is labelled as shared, not copied.
+    const instance = page.locator("[data-cms-instance]").first();
+    await expect(instance).toBeVisible({ timeout: 20_000 });
+
+    // Open the component itself from the palette's pencil button.
+    await page.getByRole("button", { name: "✎" }).first().click();
+    await expect(page.getByText(/shared component — editing this changes every page/)).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // Edit the component's own heading, through the same generated panel.
+    await page.locator('[data-cms-type="TextBlock"]').first().click();
+    const field = page.locator('aside input[type="text"]').first();
+    await field.waitFor({ state: "visible", timeout: 15_000 });
+    await field.fill(marker);
+    await expect(page.getByText(/Saved|Up to date/).first()).toBeVisible({ timeout: 20_000 });
+
+    await publish(page);
+
+    // ── Both pages changed, from one edit to one row ──────────────────────
+    const home = await (await page.request.get(`/s/${site.slug}/`)).text();
+    const about = await (await page.request.get(`/s/${site.slug}/about`)).text();
+    expect(home).toContain(marker);
+    expect(about).toContain(marker);
+
+    // And neither page's own draft holds the text — only a reference.
+    const draft = await (await page.request.get(`/api/pages/${pageId}/draft`)).json();
+    expect(JSON.stringify(draft.body)).not.toContain(marker);
   });
 
   test("the cart writes an order without changing the page (D8)", async ({ page }) => {
@@ -123,7 +170,13 @@ test.describe("edit → publish → serve → rollback", () => {
     // The floating cart is driven entirely by the artifact's own inline script.
     await expect(page.locator("#cms-cart-count")).toContainText("1 item");
     await page.locator("#cms-cart-checkout").click();
-    await expect(page.locator("#cms-cart-note")).toContainText("placed", { timeout: 20_000 });
+    // Wait for the message the script writes AFTER the order round-trip, not for
+    // the hidden placeholder that already reads "order placed" in the markup.
+    // Matching that would pass before the row exists, and the next assertion
+    // would race the write.
+    await expect(page.locator("#cms-cart-note")).toContainText("written to the orders table", {
+      timeout: 20_000,
+    });
 
     // The order landed in live data.
     const debug = await (await page.request.get("/api/debug/db")).json();

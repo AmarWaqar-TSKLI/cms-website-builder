@@ -19,6 +19,7 @@
 import { create } from "zustand";
 import {
   cloneWithNewIds,
+  createComponentRef,
   createNode,
   findNode,
   insertIntoTree,
@@ -27,14 +28,24 @@ import {
   removeFromTree,
   walk,
 } from "../registry";
-import type { PageBody, PageNode } from "../registry/types";
+import { componentIdOf, overridesOf, stripExpansion } from "../shared-components";
+import type { PageBody, PageNode, ResolvedSharedComponent } from "../registry/types";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "failed" | "conflict";
 
 const HISTORY_LIMIT = 100;
 
+/**
+ * What this editor session is editing. A page and a shared component are edited
+ * with the same canvas, the same palette and the same undo stack — the only
+ * difference is which draft endpoint autosave writes to.
+ */
+export type EditTarget = "page" | "component";
+
 interface EditorState {
+  /** The draft being edited. Named pageId for continuity; see `target`. */
   pageId: string;
+  target: EditTarget;
   body: PageBody;
   selectedId: string | null;
   hoveredId: string | null;
@@ -47,11 +58,16 @@ interface EditorState {
   past: PageNode[][];
   future: PageNode[][];
 
-  init: (pageId: string, body: PageBody, lockVersion: number) => void;
+  init: (pageId: string, body: PageBody, lockVersion: number, target?: EditTarget) => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
 
   addNode: (type: string, parentId?: string | null, index?: number) => void;
+  addComponentRef: (componentId: string, parentId?: string | null, index?: number) => void;
+  replaceWithComponentRef: (nodeId: string, componentId: string) => void;
+  setOverride: (instanceId: string, innerId: string, key: string, value: unknown) => void;
+  clearOverrides: (instanceId: string) => void;
+  detachComponent: (instanceId: string, definition: ResolvedSharedComponent) => void;
   updateProp: (id: string, key: string, value: unknown) => void;
   updateProps: (id: string, patch: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
@@ -95,6 +111,7 @@ export const useEditor = create<EditorState>((set, get) => {
 
   return {
     pageId: "",
+    target: "page",
     body: { version: 1, root: [] },
     selectedId: null,
     hoveredId: null,
@@ -106,10 +123,11 @@ export const useEditor = create<EditorState>((set, get) => {
     past: [],
     future: [],
 
-    init: (pageId, body, lockVersion) => {
+    init: (pageId, body, lockVersion, target = "page") => {
       seedCounter(body);
       set({
         pageId,
+        target,
         body: { version: 1, root: body.root ?? [] },
         lockVersion,
         selectedId: null,
@@ -135,6 +153,112 @@ export const useEditor = create<EditorState>((set, get) => {
         return commit(state, insertIntoTree(state.body.root, node, parentId, at), {
           selectedId: node.id,
         });
+      }),
+
+    /**
+     * Insert an instance of a shared component.
+     *
+     * Note what is not copied: nothing. The node is a pointer, which is the
+     * entire reason editing the symbol later changes this page too.
+     */
+    addComponentRef: (componentId, parentId = null, index) =>
+      set((state) => {
+        const node = createComponentRef(componentId, nextId());
+        const at =
+          index ??
+          (parentId === null
+            ? state.body.root.length
+            : (findNode(state.body.root, parentId)?.children ?? []).length);
+        return commit(state, insertIntoTree(state.body.root, node, parentId, at), {
+          selectedId: node.id,
+        });
+      }),
+
+    /**
+     * The second half of "Make component": swap a block for a reference to the
+     * definition just created from it. Same position, same parent — visually
+     * nothing moves, which is exactly what should happen when the content is
+     * identical and only its ownership changed.
+     */
+    replaceWithComponentRef: (nodeId, componentId) =>
+      set((state) => {
+        const where = locate(state.body.root, nodeId);
+        if (!where) return state;
+        const { tree } = removeFromTree(state.body.root, nodeId);
+        const ref = createComponentRef(componentId, nextId());
+        return commit(state, insertIntoTree(tree, ref, where.parentId, where.index), {
+          selectedId: ref.id,
+        });
+      }),
+
+    /**
+     * Override one prop of one node inside one instance.
+     *
+     * Keyed by the node's id INSIDE the symbol, so the override survives the
+     * symbol being restyled or reordered. It does not survive that node being
+     * deleted from the symbol — which is correct, and the only rule that doesn't
+     * silently accumulate overrides pointing at nothing.
+     */
+    setOverride: (instanceId, innerId, key, value) =>
+      set((state) => {
+        const root = structuredClone(state.body.root) as PageNode[];
+        const instance = findNode(root, instanceId);
+        if (!instance) return state;
+
+        const overrides = { ...overridesOf(instance) };
+        overrides[innerId] = { ...(overrides[innerId] ?? {}), [key]: value };
+        instance.props.overrides = overrides;
+
+        // Same keystroke coalescing as updateProp — typing over an instance's
+        // heading shouldn't leave one undo entry per character.
+        const key2 = `${instanceId}:${innerId}:${key}`;
+        const coalesce = lastEditKey === key2 && Date.now() - lastEditAt < 900;
+        lastEditKey = key2;
+        lastEditAt = Date.now();
+        if (coalesce) {
+          return { body: { ...state.body, root }, status: "dirty" as SaveStatus };
+        }
+        return commit(state, root);
+      }),
+
+    /** Drop every override, so this instance shows the symbol exactly as defined. */
+    clearOverrides: (instanceId) =>
+      set((state) => {
+        const root = structuredClone(state.body.root) as PageNode[];
+        const instance = findNode(root, instanceId);
+        if (!instance) return state;
+        instance.props.overrides = {};
+        lastEditKey = null;
+        return commit(state, root);
+      }),
+
+    /**
+     * Detach — replace an instance with a normal, editable copy of its content.
+     *
+     * The escape hatch that makes symbols safe to adopt. One page needs the
+     * header slightly different; detaching gives it plain blocks it fully owns,
+     * with overrides baked in, and it stops tracking the symbol from then on.
+     * `stripExpansion` matters here: what gets inserted must be storable page
+     * nodes, not render-time provenance.
+     */
+    detachComponent: (instanceId, definition) =>
+      set((state) => {
+        const instance = findNode(state.body.root, instanceId);
+        const where = locate(state.body.root, instanceId);
+        if (!instance || !where) return state;
+
+        const overrides = overridesOf(instance);
+        const copies = stripExpansion(definition.root ?? []).map((node) =>
+          cloneWithNewIds(applyOverrides(node, overrides), nextId),
+        );
+
+        const { tree } = removeFromTree(state.body.root, instanceId);
+        let next = tree;
+        copies.forEach((node, i) => {
+          next = insertIntoTree(next, node, where.parentId, where.index + i);
+        });
+
+        return commit(state, next, { selectedId: copies[0]?.id ?? null });
       }),
 
     updateProp: (id, key, value) =>
@@ -270,6 +394,26 @@ export const useEditor = create<EditorState>((set, get) => {
 // history is recorded, not part of the document.
 let lastEditKey: string | null = null;
 let lastEditAt = 0;
+
+/** Bake an instance's overrides into a copy of the symbol's tree, for detach. */
+function applyOverrides(
+  node: PageNode,
+  overrides: Record<string, Record<string, unknown>>,
+): PageNode {
+  const patch = overrides[node.id];
+  return {
+    ...node,
+    props: patch ? { ...node.props, ...patch } : { ...node.props },
+    children: (node.children ?? []).map((c) => applyOverrides(c, overrides)),
+  };
+}
+
+/** The instance a selected node belongs to, if any — used by the properties panel. */
+export function componentInstanceIdOf(node: PageNode | null): string | null {
+  return node?.fromComponent?.instanceId ?? null;
+}
+
+export { componentIdOf };
 
 export function selectedNode(): PageNode | null {
   const { body, selectedId } = useEditor.getState();

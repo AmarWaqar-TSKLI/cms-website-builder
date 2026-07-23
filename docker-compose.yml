@@ -23,7 +23,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: sh -c "npx prisma migrate deploy && npm run dev"
+    # Production build, production server. `make dev` runs the dev server on the
+    # host for iteration; the containers serve what a deploy would actually run.
+    command: sh -c "npx prisma migrate deploy && npm start"
     environment:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
@@ -53,6 +55,9 @@ services:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
+      # Where the worker reaches the app to warm the new release after a build.
+      # Not localhost: inside compose the app is another container.
+      APP_INTERNAL_URL: http://app:3000
       WORKER_POLL_MS: "250"
     volumes:
       - ./artifacts:/app/artifacts

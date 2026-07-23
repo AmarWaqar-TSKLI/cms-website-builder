@@ -11,10 +11,10 @@
  */
 import { useMemo, useState } from "react";
 import { paletteFor } from "@/lib/registry";
-import type { ComponentSchema, ModuleName } from "@/lib/registry/types";
+import type { ComponentSchema, ModuleName, ResolvedSharedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { cx } from "../ui";
-import { DRAG_ADD } from "./Canvas";
+import { DRAG_ADD, DRAG_ADD_COMPONENT } from "./Canvas";
 
 const CATEGORY_LABEL: Record<string, string> = {
   content: "Content",
@@ -22,11 +22,29 @@ const CATEGORY_LABEL: Record<string, string> = {
   commerce: "Commerce",
 };
 
-export function Palette({ modules }: { modules: ModuleName[] }) {
+export function Palette({
+  modules,
+  components = [],
+  onNewComponent,
+  onEditComponent,
+}: {
+  modules: ModuleName[];
+  /** The site's shared components. Listed separately — they are this site's, not the engine's. */
+  components?: ResolvedSharedComponent[];
+  onNewComponent?: () => void;
+  onEditComponent?: (id: string) => void;
+}) {
   const addNode = useEditor((s) => s.addNode);
+  const addComponentRef = useEditor((s) => s.addComponentRef);
   const [query, setQuery] = useState("");
 
   const available = useMemo(() => paletteFor(modules), [modules]);
+
+  const matchingComponents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return components;
+    return components.filter((c) => c.name.toLowerCase().includes(q));
+  }, [components, query]);
   const matching = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return available;
@@ -56,6 +74,74 @@ export function Palette({ modules }: { modules: ModuleName[] }) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-2.5">
+        {/*
+          Shared components come first, deliberately. Once a site has a header
+          and a footer, they are the blocks you reach for most, and putting them
+          above the generic palette is what makes reuse the default rather than
+          something you have to remember to do.
+        */}
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between px-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#22c7a9]">
+              Components
+            </span>
+            {onNewComponent && (
+              <button
+                type="button"
+                onClick={onNewComponent}
+                title="Create an empty shared component"
+                className="rounded px-1 text-[13px] leading-none text-ink-500 transition-colors hover:text-[#22c7a9]"
+              >
+                +
+              </button>
+            )}
+          </div>
+
+          {matchingComponents.length === 0 ? (
+            <p className="px-1 text-[10.5px] leading-relaxed text-ink-500">
+              {components.length === 0
+                ? "None yet. Select a block on the page and choose “Make component” to reuse it across pages."
+                : `No components match “${query}”.`}
+            </p>
+          ) : (
+            <div className="grid gap-1.5">
+              {matchingComponents.map((component) => (
+                <div
+                  key={component.id}
+                  className="group flex items-stretch overflow-hidden rounded-lg border border-ink-800 bg-ink-950 transition-colors hover:border-[#22c7a9]/50"
+                >
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DRAG_ADD_COMPONENT, component.id);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onClick={() => addComponentRef(component.id)}
+                    title={`Add “${component.name}” — stays linked, so editing it updates every page`}
+                    className="flex flex-1 cursor-grab items-center gap-2 px-2.5 py-2 text-left active:cursor-grabbing"
+                  >
+                    <span className="text-[13px] leading-none text-[#22c7a9]">◈</span>
+                    <span className="truncate text-[11.5px] font-medium text-ink-200">
+                      {component.name}
+                    </span>
+                  </button>
+                  {onEditComponent && (
+                    <button
+                      type="button"
+                      onClick={() => onEditComponent(component.id)}
+                      title="Edit this component — changes every page using it"
+                      className="grid w-7 place-items-center border-l border-ink-800 text-[11px] text-ink-500 transition-colors hover:bg-ink-850 hover:text-[#22c7a9]"
+                    >
+                      ✎
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {["content", "layout", "commerce"].map((category) => {
           const items = byCategory[category];
           if (!items?.length) return null;
@@ -99,7 +185,7 @@ export function Palette({ modules }: { modules: ModuleName[] }) {
           );
         })}
 
-        {matching.length === 0 && (
+        {matching.length === 0 && matchingComponents.length === 0 && (
           <p className="px-1 py-6 text-center text-[12px] text-ink-500">
             No blocks match “{query}”.
           </p>

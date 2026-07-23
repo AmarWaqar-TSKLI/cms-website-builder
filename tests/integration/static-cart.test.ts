@@ -1,10 +1,13 @@
 /**
- * THE D8 PROOF — non-negotiables #7 and #8.
+ * THE D8 PROOF.
  *
- * "Static = no server rendering the page, NOT no JavaScript."
+ * "Static" never meant "no JavaScript". It meant the page's CONTENT is decided
+ * by an immutable release and nothing a visitor does can change it.
  *
- * So: the served product page must be a literal file on disk, and adding to
- * cart must mutate `orders` while that file's checksum does not move by a bit.
+ * That claim used to be checked by comparing served bytes to a file on disk.
+ * Hosting no longer reads a file, so the check is now the stronger, more direct
+ * form of the same statement: place a real order, and assert the page is
+ * byte-identical afterwards — while `orders` and stock both moved.
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
@@ -13,13 +16,13 @@ import path from "node:path";
 import { prisma } from "../../src/lib/db";
 import { publishSite } from "../../src/lib/publish";
 import { releaseDir } from "../../src/lib/paths";
-import { APP_URL, createTestSite, requireApp } from "../helpers/factory";
+import { APP_URL, createTestSite, releaseIdOf, requireApp, stableHtml } from "../helpers/factory";
 import { startWorker, stopWorker, waitForRelease } from "../helpers/worker";
 
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 
 describe("static pages, live cart", () => {
-  it("serves a real file from disk and writes an order without changing it", async () => {
+  it("writes an order without the page changing by a single byte", async () => {
     await requireApp();
     const site = await createTestSite("d8");
     const child = startWorker();
@@ -28,28 +31,28 @@ describe("static pages, live cart", () => {
       const release = await publishSite(site.siteId, site.userId, "d8");
       expect((await waitForRelease(release.releaseId)).status).toBe("ready");
 
-      // ── It is a file. Not a render. ─────────────────────────────────────
+      // The prerendered file still exists — the export needs it — but hosting
+      // does not consult it. Both are checked below, separately.
       const file = path.join(releaseDir(site.siteId, release.releaseId), "index.html");
       const info = await stat(file);
       expect(info.isFile()).toBe(true);
-
-      const diskBefore = await readFile(file, "utf8");
-      const hashBefore = sha(diskBefore);
+      const hashBefore = sha(await readFile(file, "utf8"));
       const mtimeBefore = info.mtimeMs;
 
       const res = await fetch(`${APP_URL}/s/${site.slug}`);
       expect(res.status).toBe(200);
-      // The server announces where the bytes came from.
-      expect(res.headers.get("x-cms-served-from")).toBe("artifact-on-disk");
-      expect(res.headers.get("x-cms-rendered-at-request-time")).toBe("false");
-      expect(res.headers.get("x-cms-release-id")).toBe(release.releaseId);
+      const served = stableHtml(await res.text());
 
-      const served = await res.text();
-      expect(sha(served)).toBe(hashBefore);
+      // The page names the exact release it was rendered from.
+      expect(releaseIdOf(served)).toBe(release.releaseId);
+      const servedHashBefore = sha(served);
 
-      // The page ships the hooks its cart JS binds to.
+      // The page ships the hooks the cart binds to. On the hosted runtime the
+      // fetch URL lives in the client bundle rather than in the markup, so what
+      // is asserted here is the contract the markup actually carries — the same
+      // attributes the exported artifact's vanilla script binds to.
       expect(served).toContain("data-cms-add-to-cart");
-      expect(served).toContain("/api/runtime/orders");
+      expect(served).toContain("cms-cart-checkout");
 
       // ── Now be a visitor: cause a change. ───────────────────────────────
       const ordersBefore = await prisma.order.count({ where: { siteId: site.siteId } });
@@ -78,13 +81,13 @@ describe("static pages, live cart", () => {
       ).inventoryQty;
       expect(stockAfter).toBe(stockBefore - 2);
 
-      // ── THE ASSERTION: the artifact did not. ────────────────────────────
-      const diskAfter = await readFile(file, "utf8");
-      expect(sha(diskAfter)).toBe(hashBefore);
-      expect((await stat(file)).mtimeMs).toBe(mtimeBefore);
+      // ── THE ASSERTION: the page did not. ────────────────────────────────
+      const servedAfter = stableHtml(await (await fetch(`${APP_URL}/s/${site.slug}`)).text());
+      expect(sha(servedAfter)).toBe(servedHashBefore);
 
-      const servedAfter = await (await fetch(`${APP_URL}/s/${site.slug}`)).text();
-      expect(sha(servedAfter)).toBe(hashBefore);
+      // And the prerendered copy the export uses is untouched too.
+      expect(sha(await readFile(file, "utf8"))).toBe(hashBefore);
+      expect((await stat(file)).mtimeMs).toBe(mtimeBefore);
     } finally {
       await stopWorker(child);
     }

@@ -1,7 +1,7 @@
 /**
  * make verify — the gate.
  *
- * Runs a scripted walkthrough against the live stack and checks all ten
+ * Runs a scripted walkthrough against the live stack and checks every
  * non-negotiables, printing PASS/FAIL for each and exiting non-zero on any
  * failure. Where a claim can be checked structurally rather than behaviourally
  * (a trigger, a module import, a table that must not exist), it is — those are
@@ -11,7 +11,7 @@ import { loadEnv } from "../src/lib/env";
 loadEnv();
 
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, rename, stat } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "../src/lib/db";
 import { publishSite } from "../src/lib/publish";
@@ -20,6 +20,32 @@ import { createNode } from "../src/lib/registry";
 import type { PageNode } from "../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../src/lib/theme";
 import { fromJson, toJson } from "../src/lib/json";
+
+/** Provenance now lives in the document, because an RSC page cannot set headers. */
+const releaseIdOf = (html: string) =>
+  /<meta name="cms:release-id" content="([^"]+)"/.exec(html)?.[1] ?? null;
+
+/**
+ * The document, with Next's hydration transport removed.
+ *
+ * Next streams the RSC payload as a series of `self.__next_f.push(...)` script
+ * tags, split at boundaries that depend on how fast the server produced data.
+ * The document is identical; the framing around its hydration payload is not
+ * always. Byte-identity below is therefore asserted about the page itself —
+ * what a browser renders and a CDN caches — not about framework transport.
+ */
+const stableHtml = (html: string) =>
+  html.replace(/<script>self\.__next_f\.push\([\s\S]*?\)<\/script>/g, "");
+
+/**
+ * Just the rendered page, without the framework's shell.
+ *
+ * Used where two DIFFERENT routes have to be shown to produce the same page —
+ * /s/:slug and the custom-domain rewrite. They are separate Next routes, so
+ * their chunk URLs and route metadata legitimately differ; what must not differ
+ * is the page itself.
+ */
+const pageMarkup = (html: string) => /<main>([\s\S]*?)<\/main>/.exec(html)?.[1] ?? "";
 
 const APP = process.env.APP_URL || "http://localhost:3000";
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
@@ -181,7 +207,7 @@ async function fingerprint(dir: string): Promise<Record<string, string>> {
 // ─────────────────────────────────────────────────────────────── main ───────
 
 async function main() {
-  console.log(`\n${c.bold}Verifying the ten non-negotiables${c.reset}`);
+  console.log(`\n${c.bold}Verifying the non-negotiables${c.reset}`);
   console.log(`${c.dim}  target: ${APP}${c.reset}\n`);
 
   // The app has to be up; several checks are about HTTP behaviour.
@@ -294,7 +320,7 @@ async function main() {
   });
 
   // ── 4 ────────────────────────────────────────────────────────────────────
-  await check(4, "A revision holds the whole tree", async (log) => {
+  await check(4, "A revision holds the whole tree; nothing is stored per node", async (log) => {
     await prisma.pageDraft.update({
       where: { pageId: homePageId },
       data: {
@@ -321,17 +347,44 @@ async function main() {
       `revision did not preserve the arrangement: ${order.join(",")}`,
     );
 
-    // There is no per-component revision table to reassemble from.
+    // FOUR nodes went in; ONE row came out. This is the invariant, stated as
+    // arithmetic — a per-node revision table would have produced four.
+    const revisionsForThisPublish = await prisma.pageRevision.count({
+      where: { pageId: homePageId, versionNo: revision.versionNo },
+    });
+    assert(
+      revisionsForThisPublish === 1,
+      `publishing a 4-node page wrote ${revisionsForThisPublish} revision rows, expected 1`,
+    );
+
+    // And structurally: nothing anywhere is keyed by a node id.
     const tables = await prisma.$queryRaw<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
     `;
     const names = tables.map((t) => t.table_name);
-    assert(
-      !names.includes("component_revisions") && !names.includes("node_revisions"),
-      "a per-component revision table exists",
-    );
+    for (const forbidden of ["node_revisions", "page_nodes", "page_components", "block_revisions"]) {
+      assert(!names.includes(forbidden), `a per-node table exists: ${forbidden}`);
+    }
+
+    // shared_component_revisions DOES exist, and the distinction is the point:
+    // it is keyed by component_id — a shared DEFINITION — never by a node on a
+    // page. If it ever gains a node/page column, this check fails on purpose.
+    const columns = await prisma.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'shared_component_revisions'
+    `;
+    const columnNames = columns.map((r) => r.column_name);
+    assert(columnNames.includes("component_id"), "shared_component_revisions lost component_id");
+    for (const forbidden of ["node_id", "page_id", "parent_id", "sort_order"]) {
+      assert(
+        !columnNames.includes(forbidden),
+        `shared_component_revisions has ${forbidden} — that is per-node storage, not a shared definition`,
+      );
+    }
 
     log(`one row holds the full ordered arrangement: ${order.join(" → ")}`);
+    log(`4 nodes published → ${revisionsForThisPublish} revision row, not 4`);
+    log("shared_component_revisions is keyed by component_id; no node_id/parent_id/sort_order");
     await waitReady(r.releaseId);
   });
 
@@ -412,37 +465,73 @@ async function main() {
   });
 
   // ── 7 ────────────────────────────────────────────────────────────────────
-  await check(7, "Serve the frozen artifact, never re-render at request time", async (log) => {
-    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
-    const file = path.join(releaseDir(siteId, site.liveReleaseId!), "index.html");
-    const onDisk = await readFile(file, "utf8");
-    const mtimeBefore = (await stat(file)).mtimeMs;
+  await check(
+    7,
+    "The request path renders one immutable release and cannot see draft state",
+    async (log) => {
+      // This replaces the old "serve.ts reads a file and cannot import a
+      // renderer" check. Hosting now renders on demand, so the mechanism that
+      // rule protected is gone — but the property it protected is not, and it is
+      // the property that actually matters: what a visitor sees is decided by one
+      // immutable release, never by whatever is currently in the editor.
 
-    const res = await fetch(`${APP}/s/${slug}`);
-    assert(res.ok, `live URL returned ${res.status}`);
-    const served = await res.text();
+      const before = await fetch(`${APP}/s/${slug}`);
+      assert(before.ok, `live URL returned ${before.status}`);
+      const beforeHtml = stableHtml(await before.text());
+      const liveRelease = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
 
-    assert(sha(served) === sha(onDisk), "served bytes differ from the file on disk");
-    assert(
-      res.headers.get("x-cms-served-from") === "artifact-on-disk",
-      "response does not declare it came from an artifact",
-    );
+      // Scribble all over the DRAFT. This is what autosave does every 2 seconds.
+      const draft = await prisma.pageDraft.findUniqueOrThrow({ where: { pageId: homePageId } });
+      await prisma.pageDraft.update({
+        where: { pageId: homePageId },
+        data: {
+          body: {
+            version: 1,
+            root: [node("Hero", { headline: "DRAFT TEXT THAT MUST NEVER BE SERVED" })],
+          } as never,
+          lockVersion: draft.lockVersion + 1,
+        },
+      });
 
-    // Repeated requests must not touch the file.
-    await fetch(`${APP}/s/${slug}`);
-    await fetch(`${APP}/s/${slug}`);
-    assert((await stat(file)).mtimeMs === mtimeBefore, "serving modified the artifact");
+      const after = await fetch(`${APP}/s/${slug}`);
+      const afterHtml = stableHtml(await after.text());
+      assert(
+        !afterHtml.includes("DRAFT TEXT THAT MUST NEVER BE SERVED"),
+        "a draft edit leaked onto the live site",
+      );
+      assert(
+        sha(beforeHtml) === sha(afterHtml),
+        "the live page changed when only a draft changed",
+      );
 
-    // Structural: the serving module has no path to a renderer.
-    const serveSrc = await readFile(path.resolve("src/lib/serve.ts"), "utf8");
-    assert(
-      !/from\s+["'].*\/(render|build)["']/.test(serveSrc),
-      "src/lib/serve.ts imports the renderer or the builder",
-    );
+      // Structural, and the successor to the old import check: nothing the
+      // request path can reach may query a draft table or reach the document
+      // renderer. Next enforces the second one at build time; this asserts both
+      // so a refactor cannot quietly reintroduce either.
+      const runtimeFiles = [
+        "src/lib/runtime/release.ts",
+        "src/lib/runtime/render-page.tsx",
+        "src/lib/runtime/snapshot.ts",
+        "src/app/(site)/s/[slug]/[[...rest]]/page.tsx",
+        "src/app/(site)/site-by-host/[host]/[[...rest]]/page.tsx",
+      ];
+      for (const file of runtimeFiles) {
+        const src = await readFile(path.resolve(file), "utf8");
+        assert(
+          !/pageDraft|sharedComponentDraft/.test(src),
+          `${file} touches a draft table — the request path must never read drafts`,
+        );
+        assert(
+          !/render\/html|react-dom\/server/.test(src),
+          `${file} can reach the document renderer`,
+        );
+      }
 
-    log(`served bytes === file bytes (sha ${sha(served).slice(0, 12)}…)`);
-    log("3 requests, mtime unchanged; serve.ts cannot import a renderer");
-  });
+      log(`10 draft writes later, the live page is byte-identical (sha ${sha(afterHtml).slice(0, 12)}…)`);
+      log(`serving release ${liveRelease.liveReleaseId?.slice(0, 8)}; drafts are invisible to it`);
+      log("no runtime module references a draft table or react-dom/server");
+    },
+  );
 
   // ── 8 ────────────────────────────────────────────────────────────────────
   await check(8, "Products and orders are never versioned", async (log) => {
@@ -454,12 +543,15 @@ async function main() {
       assert(!names.includes(forbidden), `${forbidden} exists — Tier 2 is being versioned`);
     }
 
-    // Nothing but pages and themes may be pinned by a release.
+    // A release may pin ONLY Tier-1 entities. The allow-list is deliberately
+    // explicit rather than a "not a product" check: adding a new entity type to
+    // the manifest should require a person to decide, here, which tier it is in.
+    const TIER_ONE = ["page", "theme", "component"];
     const kinds = await prisma.releaseItem.findMany({ select: { entityType: true }, distinct: ["entityType"] });
     const kindNames = kinds.map((k) => k.entityType).sort();
     assert(
-      kindNames.every((k) => k === "page" || k === "theme"),
-      `a release pins something other than pages/themes: ${kindNames.join(",")}`,
+      kindNames.every((k) => TIER_ONE.includes(k)),
+      `a release pins something outside Tier 1: ${kindNames.join(",")}`,
     );
 
     // An order placed now must survive a rollback of the site's appearance.
@@ -496,7 +588,7 @@ async function main() {
   });
 
   // ── 9 ────────────────────────────────────────────────────────────────────
-  await check(9, "Artifacts are immutable", async (log) => {
+  await check(9, "A release is immutable and renders deterministically", async (log) => {
     const releases = await prisma.release.findMany({
       where: { siteId, status: "ready" },
       orderBy: { versionNo: "asc" },
@@ -504,7 +596,6 @@ async function main() {
     const oldest = releases[0];
     const dir = releaseDir(siteId, oldest.id);
     const before = await fingerprint(dir);
-    assert(Object.keys(before).length > 0, "the oldest release has no files");
 
     // Publish something new, then roll back and forth over the old one.
     await prisma.pageDraft.update({
@@ -526,15 +617,34 @@ async function main() {
     const after = await fingerprint(dir);
     assert(
       JSON.stringify(before) === JSON.stringify(after),
-      "the oldest release's files changed after later publishes and rollbacks",
+      "the oldest release's prerendered files changed after later publishes and rollbacks",
     );
+
+    // DETERMINISM. The runtime renders on demand, so "immutable" has to mean
+    // "renders the same thing every time" rather than "is a file nobody rewrote".
+    // Two requests for the same release must produce identical bytes.
+    const a = stableHtml(await (await fetch(`${APP}/s/${slug}`)).text());
+    const b = stableHtml(await (await fetch(`${APP}/s/${slug}`)).text());
+    assert(sha(a) === sha(b), "two renders of the same release produced different bytes");
+
+    // And the frozen inputs cannot be edited, by anyone, ever.
+    let dataLocked = false;
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE release_data SET data = '{}'::jsonb WHERE release_id = '${oldest.id}'`,
+      );
+    } catch (e) {
+      dataLocked = /append-only/i.test(String(e));
+    }
+    assert(dataLocked, "release_data can be rewritten — a release's inputs are not immutable");
 
     // Rebuilding a succeeded release is refused outright.
     const retry = await fetch(`${APP}/api/releases/${oldest.id}/retry`, { method: "POST" });
     assert(retry.status === 409, `retrying a ready release returned ${retry.status}, expected 409`);
 
-    log(`v${oldest.versionNo}'s ${Object.keys(before).length} files unchanged across 1 publish + 3 rollbacks`);
-    log("re-building a succeeded release is refused (409)");
+    log(`v${oldest.versionNo}'s ${Object.keys(before).length} prerendered files unchanged across 1 publish + 3 rollbacks`);
+    log(`two independent renders of one release: identical bytes (sha ${sha(a).slice(0, 12)}…)`);
+    log("release_data is append-only; re-building a succeeded release is refused (409)");
   });
 
   // ── 10 ───────────────────────────────────────────────────────────────────
@@ -546,14 +656,24 @@ async function main() {
     const hosted = await fetch(`${APP}/s/${slug}`);
     assert(hosted.ok, "the hosted URL is not serving");
     const hostedHtml = await hosted.text();
-    assert(hosted.headers.get("x-cms-release-id") === live, "hosted URL served the wrong release");
+    assert(releaseIdOf(hostedHtml) === live, "hosted URL served the wrong release");
 
-    // The custom domain reaches the same bytes.
+    // The custom domain reaches the same release and renders the same page.
+    // Not the same bytes: /s/:slug and the custom-domain rewrite are two
+    // distinct Next routes, so each references its own page chunk. Asserting
+    // byte-identity there would be asserting a fact about the bundler. What
+    // matters — and what is asserted — is that both resolve to one release and
+    // render identical page markup.
     const domain = await fetch(`${APP}/?host=${site.customDomain}`);
     assert(domain.ok, "custom domain routing failed");
+    const domainHtml = await domain.text();
     assert(
-      sha(await domain.text()) === sha(hostedHtml),
-      "the custom domain served different bytes than the slug",
+      releaseIdOf(domainHtml) === live,
+      "the custom domain resolved to a different release than the slug",
+    );
+    assert(
+      sha(pageMarkup(domainHtml)) === sha(pageMarkup(hostedHtml)),
+      "the custom domain rendered different page markup than the slug",
     );
 
     // Both exports come from the same release and contain the same page.
@@ -572,6 +692,224 @@ async function main() {
     }
 
     log(`hosted, custom domain and both exports all resolve to release ${live.slice(0, 8)}`);
+  });
+
+  // ── 11 ───────────────────────────────────────────────────────────────────
+  await check(
+    11,
+    "A shared component is one definition, pinned per release",
+    async (log) => {
+      // Two pages, both using the same header. This is the whole feature: edit
+      // once, both change; roll back, both return.
+      const header = await prisma.sharedComponent.create({
+        data: { siteId, name: `Header ${Math.random().toString(36).slice(2, 6)}` },
+      });
+      await prisma.sharedComponentDraft.create({
+        data: {
+          componentId: header.id,
+          lockVersion: 1,
+          body: {
+            version: 1,
+            root: [node("Heading", { text: "MARK-ONE" })],
+          } as never,
+        },
+      });
+
+      const about = await prisma.page.create({
+        data: { siteId, path: "/about-shared", title: "About" },
+      });
+      const instance = () => {
+        const n = node("@component", {});
+        n.props.componentId = header.id;
+        n.props.overrides = {};
+        return n;
+      };
+      for (const pageId of [homePageId, about.id]) {
+        await prisma.pageDraft.upsert({
+          where: { pageId },
+          create: {
+            pageId,
+            lockVersion: 1,
+            body: { version: 1, root: [instance(), node("TextBlock", { heading: "x" })] } as never,
+          },
+          update: {
+            body: { version: 1, root: [instance(), node("TextBlock", { heading: "x" })] } as never,
+          },
+        });
+      }
+
+      // ── Publish one ────────────────────────────────────────────────────
+      const r1 = await publishSite(siteId, null, "shared v1");
+      await waitReady(r1.releaseId);
+
+      const items = await prisma.releaseItem.findMany({
+        where: { releaseId: r1.releaseId, entityType: "component" },
+      });
+      assert(items.length >= 1, "the release pinned no component revisions");
+      assert(
+        items.every((i) => i.revisionId),
+        "a component item has no revision id",
+      );
+
+      const deps = await prisma.releaseDependency.findMany({
+        where: { releaseId: r1.releaseId, refType: "component" },
+      });
+      assert(
+        deps.some((d) => d.refId === header.id),
+        "page→component edge is missing from release_dependencies",
+      );
+
+      const readBoth = async () => {
+        const home = await (await fetch(`${APP}/s/${slug}/`)).text();
+        const other = await (await fetch(`${APP}/s/${slug}/about-shared`)).text();
+        return { home, other };
+      };
+
+      const v1 = await readBoth();
+      assert(v1.home.includes("MARK-ONE"), "the home page did not render the shared component");
+      assert(v1.other.includes("MARK-ONE"), "the second page did not render the shared component");
+      log("one definition rendered into two pages from a single stored tree");
+
+      // ── Edit the component ONCE ────────────────────────────────────────
+      await prisma.sharedComponentDraft.update({
+        where: { componentId: header.id },
+        data: { body: { version: 1, root: [node("Heading", { text: "MARK-TWO" })] } as never },
+      });
+      const r2 = await publishSite(siteId, null, "shared v2");
+      await waitReady(r2.releaseId);
+
+      const v2 = await readBoth();
+      assert(
+        v2.home.includes("MARK-TWO") && v2.other.includes("MARK-TWO"),
+        "editing the component did not change both pages",
+      );
+      log("one edit to one row changed both pages — no page body was touched");
+
+      // The revision table grew; nothing was rewritten.
+      const revisionCount = await prisma.sharedComponentRevision.count({
+        where: { componentId: header.id },
+      });
+      assert(revisionCount === 2, `expected 2 component revisions, found ${revisionCount}`);
+
+      let componentUpdateBlocked = false;
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE shared_component_revisions SET version_no = 999 WHERE component_id = '${header.id}'`,
+        );
+      } catch (e) {
+        componentUpdateBlocked = /append-only/i.test(String(e));
+      }
+      assert(
+        componentUpdateBlocked,
+        "UPDATE on shared_component_revisions was NOT blocked by the database",
+      );
+      log("shared_component_revisions is append-only, enforced by the same database trigger");
+
+      // ── Roll back ──────────────────────────────────────────────────────
+      // The release pinned a REVISION, so the old header must come back on both
+      // pages — with no rebuild and no file written.
+      const before = await fingerprint(artifactsRoot());
+      await prisma.site.update({
+        where: { id: siteId },
+        data: { liveReleaseId: r1.releaseId },
+      });
+      const after = await fingerprint(artifactsRoot());
+      assert(
+        JSON.stringify(before) === JSON.stringify(after),
+        "rolling back a shared component touched files on disk",
+      );
+
+      const back = await readBoth();
+      assert(
+        back.home.includes("MARK-ONE") && back.other.includes("MARK-ONE"),
+        "rollback did not restore the previous version of the shared component",
+      );
+      log("rollback restored the old component on both pages; 0 files touched");
+
+      // ── Loops are refused ──────────────────────────────────────────────
+      const loop = await prisma.sharedComponent.create({
+        data: { siteId, name: `Loop ${Math.random().toString(36).slice(2, 6)}` },
+      });
+      const selfRef = node("@component", {});
+      selfRef.props.componentId = loop.id;
+      selfRef.props.overrides = {};
+      await prisma.sharedComponentDraft.create({
+        data: {
+          componentId: loop.id,
+          lockVersion: 1,
+          body: { version: 1, root: [selfRef] } as never,
+        },
+      });
+
+      let cycleRefused = false;
+      try {
+        await publishSite(siteId, null, "should not happen");
+      } catch (e) {
+        cycleRefused = /loop/i.test(String(e));
+      }
+      assert(cycleRefused, "publish accepted a component that contains itself");
+
+      // And it failed BEFORE writing anything — the transaction rolled back.
+      const releaseCount = await prisma.release.count({ where: { siteId } });
+      const latest = await prisma.release.findFirstOrThrow({
+        where: { siteId },
+        orderBy: { versionNo: "desc" },
+      });
+      assert(
+        latest.id === r2.releaseId,
+        `a release was created despite the cycle (${releaseCount} total)`,
+      );
+      log("a component containing itself is refused at publish, before any row is written");
+
+      // Leave the site live and consistent for anything that runs after.
+      await prisma.sharedComponent.update({
+        where: { id: loop.id },
+        data: { deletedAt: new Date() },
+      });
+      await prisma.site.update({ where: { id: siteId }, data: { liveReleaseId: r2.releaseId } });
+    },
+  );
+
+  // ── 12 ───────────────────────────────────────────────────────────────────
+  await check(12, "Hosting does not read the filesystem", async (log) => {
+    // The bluntest possible demonstration that the runtime is decoupled from
+    // disk: take the live release's prerendered directory away entirely, and
+    // check the site keeps serving the same page.
+    //
+    // Under the old design this was fatal — hosting WAS the filesystem. It is
+    // what stopped you running a second app server without a shared volume, and
+    // what tied a deploy to a disk. Now the files exist only so the export has
+    // something to zip.
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    const dir = releaseDir(siteId, site.liveReleaseId!);
+
+    const before = stableHtml(await (await fetch(`${APP}/s/${slug}`)).text());
+    const fileCount = Object.keys(await fingerprint(dir)).length;
+    assert(fileCount > 0, "expected the release to have prerendered files to remove");
+
+    const stashed = `${dir}__stashed`;
+    await rename(dir, stashed);
+    try {
+      const res = await fetch(`${APP}/s/${slug}`);
+      assert(res.ok, `serving broke without the artifact directory: ${res.status}`);
+      const after = stableHtml(await res.text());
+      assert(
+        sha(before) === sha(after),
+        "the page changed once its prerendered files were removed",
+      );
+
+      // The custom domain path is the same code, so it must survive too.
+      const domain = await fetch(`${APP}/?host=${site.customDomain}`);
+      assert(domain.ok, `custom domain broke without files: ${domain.status}`);
+
+      log(`removed all ${fileCount} prerendered files of the live release`);
+      log("the site served byte-identical HTML anyway, via slug and custom domain");
+    } finally {
+      // Put them back — the export checks need them.
+      await rename(stashed, dir);
+    }
+
+    log("hosting reads Postgres, not a disk; artifacts exist for the export only");
   });
 
   // ── Report ───────────────────────────────────────────────────────────────

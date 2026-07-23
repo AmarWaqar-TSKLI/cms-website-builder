@@ -10,7 +10,7 @@ import { loadEnv } from "../src/lib/env";
 loadEnv();
 
 import { PrismaClient } from "@prisma/client";
-import { createNode } from "../src/lib/registry";
+import { createComponentRef, createNode } from "../src/lib/registry";
 import type { PageBody, PageNode } from "../src/lib/registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "../src/lib/theme";
 import { toJson } from "../src/lib/json";
@@ -44,6 +44,7 @@ const TABLES = [
   "collection_products", "collections", "product_variants", "products",
   "build_jobs", "release_dependencies", "release_items", "releases",
   "media", "theme_revisions", "themes",
+  "shared_component_revisions", "shared_component_drafts", "shared_components",
   "page_revisions", "page_drafts", "pages",
   "site_modules", "sites", "memberships", "users", "organizations",
 ];
@@ -181,6 +182,39 @@ async function main() {
     data: { siteId: site.id, email: "buyer@example.test", name: "Sam Buyer" },
   });
 
+  // ── A shared component, used by both pages ────────────────────────────────
+  // Defined once here. Both page drafts below hold a REFERENCE to it and none of
+  // its content. Edit it in the editor, publish, and both pages change; roll
+  // back, and both pages get this version again — because the release pinned the
+  // revision, not the component.
+  console.log("→ shared components");
+  const banner = await prisma.sharedComponent.create({
+    data: {
+      siteId: site.id,
+      name: "Announcement bar",
+      draft: {
+        create: {
+          updatedBy: user.id,
+          lockVersion: 1,
+          body: toJson(
+            body([
+              node("TextBlock", {
+                heading: "One definition, two pages",
+                body: "This bar is a shared component. Neither page stores its text — they store a reference to it. Open it from the palette, change a word, publish, and both pages change together.",
+                bgColor: "#0f172a",
+                fgColor: "#e2e8f0",
+                paddingTop: 18,
+                paddingBottom: 18,
+                contentWidth: "wide",
+                align: "center",
+              }),
+            ]),
+          ),
+        },
+      },
+    },
+  });
+
   console.log("→ pages + drafts");
   const home = await prisma.page.create({
     data: { siteId: site.id, path: "/", type: "page", title: "Home" },
@@ -189,12 +223,15 @@ async function main() {
     data: { siteId: site.id, path: "/about", type: "page", title: "About" },
   });
 
+  const bannerOn = (instanceId: string) => createComponentRef(banner.id, instanceId);
+
   // Note what is stored: names and values. No markup anywhere. (Non-negotiable #1)
   await prisma.pageDraft.create({
     data: {
       pageId: home.id,
       updatedBy: user.id,
       body: toJson(body([
+        bannerOn("n-banner-home"),
         node("Hero", {
           headline: "Everything here is a description.",
           subhead:
@@ -266,6 +303,7 @@ async function main() {
       pageId: about.id,
       updatedBy: user.id,
       body: toJson(body([
+        bannerOn("n-banner-about"),
         node("Hero", {
           headline: "Rollback is one column.",
           subhead: "UPDATE sites SET live_release_id = <older release>. Nothing rebuilds.",

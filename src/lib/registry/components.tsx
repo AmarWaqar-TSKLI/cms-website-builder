@@ -18,6 +18,9 @@
  */
 import React from "react";
 import type { CSSProperties, ReactNode } from "react";
+// Relative, not "@/": this module is also loaded by the build worker and the
+// test runner, which run outside Next's resolver.
+import { AddToCart } from "../../components/site/AddToCart";
 import { Section, alignOf, justifyFor, withStyleProps } from "./style";
 import type { RegistryEntry, RenderProps, ResolvedProduct, ThemeTokens } from "./types";
 
@@ -648,14 +651,21 @@ const ProductGrid: RegistryEntry = {
                   </div>
                 ) : null}
                 <div style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  // The runtime script binds to this. The HTML file never changes;
-                  // clicking it writes a row to `orders`. That is the D8 line.
-                  data-cms-add-to-cart={p.variantId ?? ""}
-                  data-cms-title={p.title}
-                  data-cms-price={String(p.priceCents)}
+                {/*
+                  A client component, rendered from a server component. On the
+                  hosted runtime React hydrates it and the click is real; in the
+                  exported artifact nothing hydrates and the bundled vanilla
+                  script binds to the data-* attributes it emits. One component,
+                  both paths — see components/site/AddToCart.tsx.
+                */}
+                <AddToCart
+                  siteId={ctx.siteId}
+                  variantId={p.variantId ?? ""}
+                  title={p.title}
+                  priceCents={p.priceCents}
+                  label={p.missing ? "Unavailable" : String(props.ctaLabel ?? "Add to cart")}
                   disabled={p.missing || !p.variantId}
+                  preview={ctx.editing}
                   style={{
                     marginTop: "10px",
                     background: t.colorAccent,
@@ -668,9 +678,7 @@ const ProductGrid: RegistryEntry = {
                     fontSize: "14px",
                     cursor: "pointer",
                   }}
-                >
-                  {p.missing ? "Unavailable" : String(props.ctaLabel ?? "Add to cart")}
-                </button>
+                />
               </div>
             </article>
           ))}

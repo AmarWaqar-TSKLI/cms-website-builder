@@ -8,12 +8,17 @@
  * names. Selecting here selects on the canvas, and dragging here reorders.
  */
 import { getSchema } from "@/lib/registry";
-import type { PageNode } from "@/lib/registry/types";
+import type { PageNode, ResolvedSharedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
+import { componentIdOf, isComponentRef } from "@/lib/shared-components";
 import { cx } from "../ui";
 import { DRAG_MOVE } from "./Canvas";
 
-export function Layers() {
+export function Layers({
+  components = {},
+}: {
+  components?: Record<string, ResolvedSharedComponent>;
+}) {
   const body = useEditor((s) => s.body);
 
   return (
@@ -21,7 +26,9 @@ export function Layers() {
       <div className="border-b border-ink-800 px-4 py-3">
         <p className="text-[12px] font-medium text-ink-200">Page outline</p>
         <p className="mt-1 text-[11px] leading-relaxed text-ink-500">
-          This is the stored tree. Drag to reorder.
+          This is the stored tree — the literal contents of the draft row. A{" "}
+          <span className="text-[#22c7a9]">◈ component</span> shows as one node here because that is
+          all the page stores: a reference.
         </p>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
@@ -30,7 +37,7 @@ export function Layers() {
             The page is empty.
           </p>
         ) : (
-          <Branch nodes={body.root} parentId={null} depth={0} />
+          <Branch nodes={body.root} parentId={null} depth={0} components={components} />
         )}
       </div>
     </div>
@@ -41,10 +48,12 @@ function Branch({
   nodes,
   parentId,
   depth,
+  components,
 }: {
   nodes: PageNode[];
   parentId: string | null;
   depth: number;
+  components: Record<string, ResolvedSharedComponent>;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);
@@ -56,7 +65,9 @@ function Branch({
       {nodes.map((node, i) => {
         const schema = getSchema(node.type);
         const selected = node.id === selectedId;
-        const label = summarise(node);
+        const instance = isComponentRef(node);
+        const definition = instance ? components[componentIdOf(node) ?? ""] : undefined;
+        const label = instance ? "" : summarise(node);
         return (
           <li key={node.id}>
             <div
@@ -86,16 +97,32 @@ function Branch({
                 selected ? "bg-flux-500/15 text-ink-100" : "text-ink-300 hover:bg-ink-850",
               )}
             >
-              <span className="w-4 shrink-0 text-center text-[11px] text-ink-500">
-                {schema?.icon ?? "?"}
+              <span
+                className={cx(
+                  "w-4 shrink-0 text-center text-[11px]",
+                  instance ? "text-[#22c7a9]" : "text-ink-500",
+                )}
+              >
+                {instance ? "◈" : (schema?.icon ?? "?")}
               </span>
               <span className="min-w-0 flex-1 truncate text-[12px]">
-                <span className="font-medium">{schema?.label ?? node.type}</span>
+                <span className={cx("font-medium", instance && "text-[#22c7a9]")}>
+                  {instance
+                    ? (definition?.name ?? "Missing component")
+                    : (schema?.label ?? node.type)}
+                </span>
                 {label && <span className="ml-1.5 text-ink-500">{label}</span>}
+                {instance && <span className="ml-1.5 text-ink-500">shared</span>}
               </span>
             </button>
-            {node.children?.length ? (
-              <Branch nodes={node.children} parentId={node.id} depth={depth + 1} />
+            {/* An instance's children live in the component, not on this page. */}
+            {!instance && node.children?.length ? (
+              <Branch
+                nodes={node.children}
+                parentId={node.id}
+                depth={depth + 1}
+                components={components}
+              />
             ) : null}
           </li>
         );

@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 
 export type ModuleName = "blog" | "commerce" | "forms";
-export type RefKind = "product" | "collection" | "post" | "media";
+export type RefKind = "product" | "collection" | "post" | "media" | "component";
 
 /**
  * How a prop is edited AND — for `ref`/`refList` — what it points at.
@@ -74,6 +74,13 @@ export interface ComponentSchema {
   props: Record<string, PropDef>;
   /** Set false to opt out of the shared style controls (e.g. Spacer, Divider). */
   styleable?: boolean;
+  /**
+   * Kept out of the palette. Used by the shared-component reference, which is
+   * a real registry entry (so extraction, rendering and the properties panel all
+   * work unchanged) but is never dragged in generically — you insert a specific
+   * symbol, and the palette lists those separately.
+   */
+  hidden?: boolean;
 }
 
 /** A node in the stored description. This is the entire page format. */
@@ -82,6 +89,12 @@ export interface PageNode {
   type: string;
   props: Record<string, unknown>;
   children: PageNode[];
+  /**
+   * Provenance, set ONLY by shared-component expansion at render time and never
+   * stored. Its presence means "this node belongs to a symbol" — the editor uses
+   * it to refuse in-place edits, and a test asserts it never reaches the database.
+   */
+  fromComponent?: { instanceId: string; componentId: string; innerId: string };
 }
 
 export interface PageBody {
@@ -89,6 +102,13 @@ export interface PageBody {
   version: 1;
   root: PageNode[];
 }
+
+/**
+ * A shared component's stored body. Deliberately the same format as a page's:
+ * a symbol is a tree of the same blocks, which is why the same editor, the same
+ * registry and the same renderer all work on it without a special case.
+ */
+export type ComponentBody = PageBody;
 
 /** Design tokens from theme_revisions.tokens — emitted as CSS custom properties. */
 export interface ThemeTokens {
@@ -138,8 +158,28 @@ export interface RenderContext {
   products: Record<string, ResolvedProduct>;
   collections: Record<string, ResolvedCollection>;
   media: Record<string, ResolvedMedia>;
+  /**
+   * Shared component trees, keyed by component id.
+   *
+   * Unlike products and collections, these are NOT live data: the build resolves
+   * them from the revision the release pinned, so a released page renders the
+   * header it was published with, not today's header. That is the difference
+   * between Tier-1 and Tier-2 arriving in the same context object.
+   */
+  components: Record<string, ResolvedSharedComponent>;
   /** True when rendering the editor canvas — lets components show placeholders. */
   editing?: boolean;
+}
+
+/** A shared component's tree, resolved from the revision this release pinned. */
+export interface ResolvedSharedComponent {
+  id: string;
+  name: string;
+  root: PageNode[];
+  /** Revision this came from — stamped into the markup so provenance is checkable. */
+  revisionId?: string;
+  /** Deleted, or never pinned by this release. Renders a visible placeholder. */
+  missing?: boolean;
 }
 
 export interface ResolvedProduct {

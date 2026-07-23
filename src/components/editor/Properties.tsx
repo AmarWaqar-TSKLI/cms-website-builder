@@ -13,9 +13,18 @@
  * every block for free.
  */
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { findNode, getSchema } from "@/lib/registry";
-import type { PropDef, PropGroup, RefKind, ThemeTokens } from "@/lib/registry/types";
+import type {
+  PageNode,
+  PropDef,
+  PropGroup,
+  RefKind,
+  ResolvedSharedComponent,
+  ThemeTokens,
+} from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
+import { componentIdOf, isComponentRef, overridesOf } from "@/lib/shared-components";
 import { Badge, cx } from "../ui";
 
 export interface RefOptions {
@@ -23,6 +32,7 @@ export interface RefOptions {
   product: { value: string; label: string }[];
   media: { value: string; label: string }[];
   post: { value: string; label: string }[];
+  component: { value: string; label: string }[];
 }
 
 const GROUP_LABEL: Record<PropGroup, string> = {
@@ -31,12 +41,183 @@ const GROUP_LABEL: Record<PropGroup, string> = {
   style: "Style",
 };
 
+/**
+ * The panel for one instance of a shared component.
+ *
+ * Its job is to make the two scopes unmistakable. Editing the component changes
+ * every page using it; overriding changes this page and nothing else. Both are
+ * one click away, and neither can be reached by accident.
+ */
+function InstancePanel({
+  node,
+  components,
+}: {
+  node: PageNode;
+  components: Record<string, ResolvedSharedComponent>;
+}) {
+  const router = useRouter();
+  const setOverride = useEditor((s) => s.setOverride);
+  const clearOverrides = useEditor((s) => s.clearOverrides);
+  const detachComponent = useEditor((s) => s.detachComponent);
+  const removeNode = useEditor((s) => s.removeNode);
+  const duplicateNode = useEditor((s) => s.duplicateNode);
+  const nudge = useEditor((s) => s.nudge);
+
+  const componentId = componentIdOf(node);
+  const definition = componentId ? components[componentId] : undefined;
+  const overrides = overridesOf(node);
+
+  if (!definition) {
+    return (
+      <div className="p-5">
+        <p className="text-[13px] font-medium text-ink-200">Component not found</p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
+          This instance points at a component that has been deleted. Published releases that pinned
+          one of its revisions are unaffected — they render it from the frozen revision.
+        </p>
+        <div className="mt-4">
+          <SmallButton onClick={() => removeNode(node.id)} danger>
+            Remove this instance
+          </SmallButton>
+        </div>
+      </div>
+    );
+  }
+
+  // Every text-ish prop inside the symbol, flattened, so the panel can offer
+  // per-instance overrides without the user having to click into the symbol.
+  const overridable: { nodeId: string; label: string; key: string; def: PropDef }[] = [];
+  const collect = (nodes: PageNode[]) => {
+    for (const n of nodes) {
+      const schema = getSchema(n.type);
+      if (schema) {
+        for (const [key, def] of Object.entries(schema.props)) {
+          if (def.kind !== "text" && def.kind !== "textarea" && def.kind !== "url") continue;
+          if ((def.group ?? "content") !== "content") continue;
+          overridable.push({ nodeId: n.id, label: `${schema.label} · ${def.label}`, key, def });
+        }
+      }
+      collect(n.children ?? []);
+    }
+  };
+  collect(definition.root ?? []);
+
+  const overrideCount = Object.values(overrides).reduce(
+    (total, patch) => total + Object.keys(patch ?? {}).length,
+    0,
+  );
+
+  const valueFor = (nodeId: string, key: string) => {
+    const patched = overrides[nodeId]?.[key];
+    if (patched !== undefined) return patched;
+    return findNode(definition.root ?? [], nodeId)?.props?.[key] ?? "";
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-ink-800 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-[14px] font-semibold text-ink-100">
+            <span className="text-[#22c7a9]">◈</span>
+            {definition.name}
+          </span>
+          <Badge tone="neutral">shared</Badge>
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
+          One definition, used in several places. This block is a reference to it, not a copy.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => router.push(`/editor/component/${definition.id}`)}
+          className="mt-3 w-full rounded-lg border border-[#22c7a9]/40 px-3 py-2 text-[12px] font-medium text-[#22c7a9] transition-colors hover:border-[#22c7a9] hover:bg-[#22c7a9]/10"
+        >
+          Edit component → changes every page using it
+        </button>
+
+        <div className="mt-2 flex flex-wrap gap-1">
+          <SmallButton onClick={() => nudge(node.id, -1)}>↑ Up</SmallButton>
+          <SmallButton onClick={() => nudge(node.id, 1)}>↓ Down</SmallButton>
+          <SmallButton onClick={() => duplicateNode(node.id)}>Duplicate</SmallButton>
+          <SmallButton onClick={() => detachComponent(node.id, definition)}>Detach</SmallButton>
+          <SmallButton onClick={() => removeNode(node.id)} danger>
+            Delete
+          </SmallButton>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <Group
+          title={overrideCount ? `This page only (${overrideCount})` : "This page only"}
+          defaultOpen
+        >
+          <p className="mb-3 text-[11.5px] leading-relaxed text-ink-500">
+            Changes here apply to this instance and nothing else. Leave a field as it is and it keeps
+            following the component.
+          </p>
+
+          {overridable.length === 0 ? (
+            <p className="text-[12px] text-ink-500">
+              This component has no text to override yet.
+            </p>
+          ) : (
+            overridable.map(({ nodeId, label, key, def }) => {
+              const overridden = overrides[nodeId]?.[key] !== undefined;
+              return (
+                <div key={`${nodeId}:${key}`} className="mb-3">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium text-ink-300">{label}</span>
+                    {overridden && (
+                      <span className="font-mono text-[9.5px] uppercase tracking-wider text-[#22c7a9]">
+                        overridden
+                      </span>
+                    )}
+                  </div>
+                  {def.kind === "textarea" ? (
+                    <textarea
+                      rows={3}
+                      value={String(valueFor(nodeId, key) ?? "")}
+                      onChange={(e) => setOverride(node.id, nodeId, key, e.target.value)}
+                      className={cx(
+                        "w-full resize-y rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
+                        overridden ? "border-[#22c7a9]/50" : "border-ink-700",
+                      )}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={String(valueFor(nodeId, key) ?? "")}
+                      onChange={(e) => setOverride(node.id, nodeId, key, e.target.value)}
+                      className={cx(
+                        "w-full rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
+                        overridden ? "border-[#22c7a9]/50" : "border-ink-700",
+                      )}
+                    />
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {overrideCount > 0 && (
+            <SmallButton onClick={() => clearOverrides(node.id)}>
+              Reset to the component
+            </SmallButton>
+          )}
+        </Group>
+      </div>
+    </div>
+  );
+}
+
 export function Properties({
   refOptions,
   tokens,
+  components,
 }: {
   refOptions: RefOptions;
   tokens: ThemeTokens;
+  components: Record<string, ResolvedSharedComponent>;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const body = useEditor((s) => s.body);
@@ -60,6 +241,14 @@ export function Properties({
         </p>
       </div>
     );
+  }
+
+  // A shared component instance gets its own panel. The generic schema-driven
+  // form would show two useless fields — an id and a blob of overrides — where
+  // what is actually wanted is: what is this, where do I edit it, and what can I
+  // change here without changing it everywhere.
+  if (isComponentRef(node)) {
+    return <InstancePanel node={node} components={components} />;
   }
 
   const schema = getSchema(node.type);

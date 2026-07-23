@@ -29,14 +29,31 @@ export async function checkReleaseDependencies(releaseId: string): Promise<Depen
 
   const ids = (t: RefKind) => deps.filter((d) => d.refType === t).map((d) => d.refId);
 
-  const [products, collections, media, posts] = await Promise.all([
+  const [products, collections, media, posts, components] = await Promise.all([
     prisma.product.findMany({ where: { id: { in: ids("product") } } }),
     prisma.collection.findMany({ where: { id: { in: ids("collection") } } }),
     prisma.media.findMany({ where: { id: { in: ids("media") } } }),
     prisma.post.findMany({ where: { id: { in: ids("post") } } }),
+    prisma.sharedComponent.findMany({ where: { id: { in: ids("component") } } }),
   ]);
 
   return deps.map((dep) => {
+    // A shared component is Tier-1: the release pinned an immutable revision, so
+    // the built page renders it whatever happened to the symbol afterwards. It is
+    // listed here for visibility — "this release uses the Site Header" — and it
+    // is always "ok", because deleting a symbol genuinely cannot break a release
+    // that already pinned one of its revisions. That is exactly the guarantee a
+    // deleted product does NOT come with.
+    if (dep.refType === "component") {
+      const row = components.find((c) => c.id === dep.refId);
+      return {
+        refType: dep.refType,
+        refId: dep.refId,
+        label: row ? row.name : "(component, pinned by revision)",
+        status: "ok" as const,
+      };
+    }
+
     const row =
       dep.refType === "product"
         ? products.find((p) => p.id === dep.refId)

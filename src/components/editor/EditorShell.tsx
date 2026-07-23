@@ -1,10 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { findNode, getSchema } from "@/lib/registry";
 import { useEditor } from "@/lib/editor/store";
-import { useAutosave } from "@/lib/editor/useAutosave";
-import type { ModuleName, PageBody, RenderContext, ThemeLayout, ThemeTokens } from "@/lib/registry/types";
+import { useAutosave, flushDraft } from "@/lib/editor/useAutosave";
+import { stripExpansion } from "@/lib/shared-components";
+import type {
+  ModuleName,
+  PageBody,
+  RenderContext,
+  ResolvedSharedComponent,
+  ThemeLayout,
+  ThemeTokens,
+} from "@/lib/registry/types";
 import { Canvas } from "./Canvas";
 import { Palette } from "./Palette";
 import { Properties, type RefOptions } from "./Properties";
@@ -24,6 +34,16 @@ export interface EditorBootstrap {
   layout: ThemeLayout;
   refOptions: RefOptions;
   siblings: { id: string; path: string; title: string }[];
+  /** The site's shared components, for the palette and for canvas expansion. */
+  components: ResolvedSharedComponent[];
+  /**
+   * Set when this session is editing a shared component instead of a page.
+   *
+   * Everything else on this screen is identical, which is the point: a symbol is
+   * a tree of the same blocks in the same format, so it gets the same editor
+   * rather than a lesser one.
+   */
+  component?: { id: string; name: string };
 }
 
 type LeftTab = "blocks" | "outline";
@@ -45,18 +65,46 @@ export function EditorShell(boot: EditorBootstrap) {
   const pastLength = useEditor((s) => s.past.length);
   const futureLength = useEditor((s) => s.future.length);
 
+  const body = useEditor((s) => s.body);
+  const router = useRouter();
+
   const [leftTab, setLeftTab] = useState<LeftTab>("blocks");
   const [rightTab, setRightTab] = useState<RightTab>("design");
   const [device, setDevice] = useState<(typeof DEVICES)[number]["id"]>("desktop");
+  const [busy, setBusy] = useState(false);
+
+  const editingComponent = boot.component;
 
   // Theme edits apply to the canvas immediately, before they are saved.
   const [tokens, setTokens] = useState<ThemeTokens>(boot.ctx.tokens);
   const [layout, setLayout] = useState<ThemeLayout>(boot.layout);
-  const ctx: RenderContext = { ...boot.ctx, tokens };
+
+  /**
+   * While editing a symbol, its own live tree replaces the saved copy in the
+   * expansion map. Without this, a symbol that contained another instance of
+   * itself — or simply the preview of what you are typing — would render from a
+   * stale snapshot.
+   */
+  const components = useMemo(() => {
+    const map: Record<string, ResolvedSharedComponent> = {};
+    for (const c of boot.components) map[c.id] = c;
+    if (editingComponent) {
+      map[editingComponent.id] = {
+        id: editingComponent.id,
+        name: editingComponent.name,
+        root: body.root,
+      };
+    }
+    return map;
+  }, [boot.components, editingComponent, body.root]);
+
+  const ctx: RenderContext = { ...boot.ctx, tokens, components };
+
+  const targetId = editingComponent?.id ?? boot.page.id;
 
   useEffect(() => {
-    init(boot.page.id, boot.body, boot.lockVersion);
-  }, [init, boot.page.id, boot.body, boot.lockVersion]);
+    init(targetId, boot.body, boot.lockVersion, editingComponent ? "component" : "page");
+  }, [init, targetId, boot.body, boot.lockVersion, editingComponent]);
 
   useAutosave(true);
 
@@ -95,6 +143,87 @@ export function EditorShell(boot: EditorBootstrap) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
 
+  /**
+   * Make component — lift the selected block out of this page and replace it
+   * with a reference to a new shared definition.
+   *
+   * The order matters. Create the component first; only swap the node once the
+   * server has confirmed it, so a failed request leaves the page exactly as it
+   * was rather than pointing at a symbol that does not exist.
+   */
+  const makeComponent = useCallback(async () => {
+    const state = useEditor.getState();
+    const selected = state.selectedId;
+    if (!selected || busy) return;
+
+    const node = findNodeIn(state.body.root, selected);
+    if (!node) return;
+
+    const suggested = defaultComponentName(node.type, boot.components.length);
+    const name = window.prompt("Name this component", suggested)?.trim();
+    if (!name) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/sites/${boot.site.id}/components`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          // A single block becomes a one-block component. `stripExpansion`
+          // guards the invariant that only storable nodes are ever sent.
+          body: { version: 1, root: stripExpansion([node]) },
+        }),
+      });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        window.alert(data.message ?? "A component with that name already exists.");
+        return;
+      }
+      if (!res.ok) {
+        window.alert(`Could not create the component (${res.status}).`);
+        return;
+      }
+
+      const created = (await res.json()) as { id: string };
+
+      // Swap the block for a reference to it, then persist and reload so the
+      // palette and the expansion map both pick the new symbol up.
+      useEditor.getState().replaceWithComponentRef(selected, created.id);
+      await flushDraft();
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }, [boot.site.id, boot.components.length, busy, router]);
+
+  /** Create an empty symbol and go straight to editing it. */
+  const newComponent = useCallback(async () => {
+    if (busy) return;
+    const name = window.prompt("Name the new component")?.trim();
+    if (!name) return;
+
+    setBusy(true);
+    try {
+      await flushDraft(); // don't lose the current page's edits on navigate
+      const res = await fetch(`/api/sites/${boot.site.id}/components`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, body: { version: 1, root: [] } }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.message ?? `Could not create the component (${res.status}).`);
+        return;
+      }
+      const created = (await res.json()) as { id: string };
+      router.push(`/editor/component/${created.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [boot.site.id, busy, router]);
+
   const frameWidth = DEVICES.find((d) => d.id === device)!.width;
 
   return (
@@ -111,24 +240,50 @@ export function EditorShell(boot: EditorBootstrap) {
 
         <div className="h-5 w-px shrink-0 bg-ink-700" />
 
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-          {boot.siblings.map((p) => (
-            <Link
-              key={p.id}
-              href={`/editor/${p.id}`}
-              className={cx(
-                "shrink-0 rounded-lg px-2.5 py-1.5 font-mono text-[11.5px] transition-colors",
-                p.id === boot.page.id
-                  ? "bg-ink-800 text-ink-100"
-                  : "text-ink-400 hover:bg-ink-850 hover:text-ink-200",
-              )}
-            >
-              {p.path}
-            </Link>
-          ))}
-        </div>
+        {editingComponent ? (
+          // Editing a symbol is a different act from editing a page, and the
+          // header says so plainly — because one save here changes every page
+          // that uses it, and that should never come as a surprise.
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#22c7a9]/15 px-2.5 py-1.5 text-[12px] font-medium text-[#22c7a9]">
+              ◈ {editingComponent.name}
+            </span>
+            <span className="truncate text-[11.5px] text-ink-500">
+              shared component — editing this changes every page that uses it
+            </span>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+            {boot.siblings.map((p) => (
+              <Link
+                key={p.id}
+                href={`/editor/${p.id}`}
+                className={cx(
+                  "shrink-0 rounded-lg px-2.5 py-1.5 font-mono text-[11.5px] transition-colors",
+                  p.id === boot.page.id
+                    ? "bg-ink-800 text-ink-100"
+                    : "text-ink-400 hover:bg-ink-850 hover:text-ink-200",
+                )}
+              >
+                {p.path}
+              </Link>
+            ))}
+          </div>
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {!editingComponent && (
+            <button
+              type="button"
+              onClick={makeComponent}
+              disabled={!selectedId || busy}
+              title="Turn the selected block into a shared component reusable across pages"
+              className="rounded-lg border border-[#22c7a9]/40 px-2.5 py-1.5 text-[12px] text-[#22c7a9] transition-colors hover:border-[#22c7a9] hover:bg-[#22c7a9]/10 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              ◈ Make component
+            </button>
+          )}
+
           <div className="flex items-center gap-0.5 rounded-lg border border-ink-800 p-0.5">
             <IconButton title="Undo (Ctrl+Z)" onClick={undo} disabled={pastLength === 0}>
               ↶
@@ -187,7 +342,18 @@ export function EditorShell(boot: EditorBootstrap) {
             onChange={(id) => setLeftTab(id as LeftTab)}
           />
           <div className="min-h-0 flex-1">
-            {leftTab === "blocks" ? <Palette modules={boot.modules} /> : <Layers />}
+            {leftTab === "blocks" ? (
+              <Palette
+                modules={boot.modules}
+                // A symbol cannot list itself: the most obvious loop, refused at
+                // the point of temptation. Deeper loops are caught at publish.
+                components={boot.components.filter((c) => c.id !== editingComponent?.id)}
+                onNewComponent={newComponent}
+                onEditComponent={(id) => router.push(`/editor/component/${id}`)}
+              />
+            ) : (
+              <Layers components={components} />
+            )}
           </div>
         </aside>
 
@@ -204,19 +370,38 @@ export function EditorShell(boot: EditorBootstrap) {
                 <span className="h-2.5 w-2.5 rounded-full bg-ink-700" />
               </span>
               <span className="ml-2 flex-1 truncate rounded-md bg-ink-950 px-2.5 py-1 text-center font-mono text-[11px] text-ink-400">
-                {boot.site.slug}
-                {boot.page.path}
+                {editingComponent
+                  ? `◈ ${editingComponent.name}`
+                  : `${boot.site.slug}${boot.page.path}`}
               </span>
-              <span className="rounded-full border border-ink-700 px-2 py-0.5 text-[10px] text-ink-500">
-                draft
+              <span
+                className={cx(
+                  "rounded-full border px-2 py-0.5 text-[10px]",
+                  editingComponent
+                    ? "border-[#22c7a9]/40 text-[#22c7a9]"
+                    : "border-ink-700 text-ink-500",
+                )}
+              >
+                {editingComponent ? "shared" : "draft"}
               </span>
             </div>
             <Canvas ctx={ctx} />
           </div>
 
           <p className="mx-auto mt-4 max-w-3xl text-center text-[11px] leading-relaxed text-ink-500">
-            Double-click text to edit it in place. Drag blocks from the left, or drag them on the
-            canvas to reorder.
+            {editingComponent ? (
+              <>
+                Editing a shared component. Every page using it changes when you publish — and rolls
+                back with it too, because a release pins the revision, not the component.
+              </>
+            ) : (
+              <>
+                Double-click text to edit it in place. Drag blocks from the left, or drag them on the
+                canvas to reorder. Text inside a{" "}
+                <span className="text-[#22c7a9]">◈ component</span> becomes an override on this page
+                only.
+              </>
+            )}
           </p>
         </main>
 
@@ -232,7 +417,9 @@ export function EditorShell(boot: EditorBootstrap) {
             onChange={(id) => setRightTab(id as RightTab)}
           />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {rightTab === "design" && <Properties refOptions={boot.refOptions} tokens={tokens} />}
+            {rightTab === "design" && (
+              <Properties refOptions={boot.refOptions} tokens={tokens} components={components} />
+            )}
             {rightTab === "theme" && (
               <ThemePanel
                 siteId={boot.site.id}
@@ -252,6 +439,17 @@ export function EditorShell(boot: EditorBootstrap) {
       </div>
     </div>
   );
+}
+
+/** Local re-export so the shell doesn't reach into the registry for one lookup. */
+function findNodeIn(nodes: PageBody["root"], id: string) {
+  return findNode(nodes, id);
+}
+
+/** "Hero" + no existing symbols → "Hero 1". Just a starting point to type over. */
+function defaultComponentName(type: string, existing: number): string {
+  const base = getSchema(type)?.label ?? type;
+  return `${base} ${existing + 1}`;
 }
 
 function Tabs({

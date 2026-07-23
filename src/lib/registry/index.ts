@@ -8,12 +8,20 @@
  * table, which is why what you see while editing is what gets frozen on disk.
  */
 import { COMPONENTS } from "./components";
+import { SHARED_COMPONENT_ENTRY } from "./shared";
 import type { ComponentSchema, ModuleName, PageNode, RegistryEntry } from "./types";
 
 export * from "./types";
 
+/**
+ * Every entry, including the shared-component reference. That one is `hidden`,
+ * so it resolves like any other block but never appears in the palette — you add
+ * a specific symbol, not "a component".
+ */
+const ALL_ENTRIES: RegistryEntry[] = [...COMPONENTS, SHARED_COMPONENT_ENTRY];
+
 const REGISTRY: Record<string, RegistryEntry> = Object.fromEntries(
-  COMPONENTS.map((c) => [c.schema.name, c]),
+  ALL_ENTRIES.map((c) => [c.schema.name, c]),
 );
 
 export function getComponent(type: string): RegistryEntry | undefined {
@@ -25,7 +33,7 @@ export function getSchema(type: string): ComponentSchema | undefined {
 }
 
 export function allSchemas(): ComponentSchema[] {
-  return COMPONENTS.map((c) => c.schema);
+  return ALL_ENTRIES.map((c) => c.schema);
 }
 
 /**
@@ -34,7 +42,7 @@ export function allSchemas(): ComponentSchema[] {
  */
 export function paletteFor(enabledModules: ModuleName[]): ComponentSchema[] {
   return allSchemas().filter(
-    (s) => !s.requiresModule || enabledModules.includes(s.requiresModule),
+    (s) => !s.hidden && (!s.requiresModule || enabledModules.includes(s.requiresModule)),
   );
 }
 
@@ -45,6 +53,17 @@ export function createNode(type: string, id: string): PageNode {
   const props: Record<string, unknown> = {};
   for (const [key, def] of Object.entries(schema.props)) props[key] = def.default;
   return { id, type, props, children: [] };
+}
+
+/**
+ * Build a reference to a shared component.
+ *
+ * Note what is NOT copied here: none of the symbol's content. An instance is a
+ * pointer plus its own overrides, which is why editing the symbol changes every
+ * instance and why adding one to a page costs a few bytes.
+ */
+export function createComponentRef(componentId: string, id: string): PageNode {
+  return { id, type: "@component", props: { componentId, overrides: {} }, children: [] };
 }
 
 /** Depth-first walk over a stored description. Used by extraction and rendering. */

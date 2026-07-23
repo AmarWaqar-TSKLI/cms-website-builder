@@ -162,3 +162,35 @@ export async function requireApp(): Promise<void> {
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Provenance, read from the document rather than a response header.
+ *
+ * A React Server Component cannot set response headers, so the release a page
+ * came from is stamped into the markup as a meta tag instead. That is arguably
+ * the better place for it: the provenance now travels with the page — into a
+ * saved copy, into an exported zip, into whatever a CDN cached — instead of
+ * living on a response that gets thrown away.
+ */
+export function releaseIdOf(html: string): string | null {
+  return /<meta name="cms:release-id" content="([^"]+)"/.exec(html)?.[1] ?? null;
+}
+
+/**
+ * The document, with Next's hydration payload removed.
+ *
+ * Next streams the RSC payload to the browser as a series of
+ * `<script>self.__next_f.push(...)</script>` calls, and splits it across those
+ * script tags at boundaries that depend on how fast the server produced data.
+ * Identical input can therefore yield the same document with its hydration
+ * payload chunked differently — a few dozen bytes of framing, never a difference
+ * in content.
+ *
+ * So the byte-identity claims in this suite are made about THIS: the actual
+ * document a visitor sees, with the framework's transport stripped. That is the
+ * honest form of the claim, and it is still the strong one — it is what a CDN
+ * caches, what a browser renders, and what a rollback has to reproduce exactly.
+ */
+export function stableHtml(html: string): string {
+  return html.replace(/<script>self\.__next_f\.push\([\s\S]*?\)<\/script>/g, "");
+}

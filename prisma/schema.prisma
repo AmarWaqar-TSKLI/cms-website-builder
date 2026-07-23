@@ -73,6 +73,7 @@ model Site {
 
   modules   SiteModule[]
   pages     Page[]
+  components SharedComponent[]
   themes    Theme[]
   releases  Release[]    @relation("SiteReleases")
   media     Media[]
@@ -160,6 +161,75 @@ model PageRevision {
   @@map("page_revisions")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED COMPONENTS ("symbols") — defined once, referenced by many pages.
+//
+// This is the ONE thing stored below page granularity, and the distinction
+// matters: the unit is a shared *definition*, not a node on a page. A page
+// revision still holds its whole tree; what a tree can now contain is a
+// reference to a component, which publish pins to one exact revision.
+//
+// Storing every block as its own row instead would make "what did this page
+// look like on Tuesday?" a recursive query over N independently-versioned rows,
+// and would turn reordering into a multi-row transaction. That is the design
+// this file refuses. Symbols get the reuse without paying for it.
+//
+// The trio below is a deliberate copy of Page / PageDraft / PageRevision — same
+// identity-only parent, same overwrite-only draft keyed by its parent id, same
+// append-only revision table guarded by the same trigger. One versioning story,
+// applied twice.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Identity only, exactly like Page. No content column.
+model SharedComponent {
+  id        String    @id @default(uuid())
+  siteId    String    @map("site_id")
+  name      String
+  icon      String    @default("◈")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  site      Site                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  draft     SharedComponentDraft?
+  revisions SharedComponentRevision[]
+
+  // Partial unique index UNIQUE(site_id, name) WHERE deleted_at IS NULL lives in
+  // raw SQL, same reason as pages: a deleted symbol must not reserve its name.
+  @@index([siteId])
+  @@map("shared_components")
+}
+
+/// OVERWRITE-ONLY, one row per component — component_id IS the primary key.
+model SharedComponentDraft {
+  componentId String   @id @map("component_id")
+  body        Json
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+  lockVersion Int      @default(0) @map("lock_version")
+
+  component SharedComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@map("shared_component_drafts")
+}
+
+/// APPEND-ONLY. Guarded by the same cms_forbid_mutation() trigger as
+/// page_revisions. This is what makes "roll back and the old header returns"
+/// true: the release pinned a revision id, and that row can never change.
+model SharedComponentRevision {
+  id          String   @id @default(uuid())
+  componentId String   @map("component_id")
+  body        Json
+  versionNo   Int      @map("version_no")
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  component SharedComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([componentId, versionNo])
+  @@index([componentId])
+  @@map("shared_component_revisions")
+}
+
 model Theme {
   id                String  @id @default(uuid())
   siteId            String  @map("site_id")
@@ -216,6 +286,7 @@ model Release {
   items        ReleaseItem[]
   dependencies ReleaseDependency[]
   buildJobs    BuildJob[]
+  frozenData   ReleaseData?
 
   @@unique([siteId, versionNo])
   @@index([siteId, createdAt])
@@ -225,6 +296,7 @@ model Release {
 enum EntityType {
   page
   theme
+  component
 }
 
 /// THE MANIFEST. Pins exactly which revision of which entity belongs to this
@@ -234,10 +306,14 @@ model ReleaseItem {
   releaseId  String     @map("release_id")
   entityType EntityType @map("entity_type")
   entityId   String     @map("entity_id")
-  /// Polymorphic: points at page_revisions when entity_type='page' and at
-  /// theme_revisions when entity_type='theme'. Deliberately carries no foreign
-  /// key — a single column cannot reference two tables. Integrity is instead
-  /// guaranteed by the append-only trigger: neither target can ever be deleted.
+  /// Polymorphic: points at page_revisions when entity_type='page', at
+  /// theme_revisions when entity_type='theme', and at shared_component_revisions
+  /// when entity_type='component'. Deliberately carries no foreign key — a single
+  /// column cannot reference three tables. Integrity is instead guaranteed by the
+  /// append-only trigger: no target can ever be deleted.
+  ///
+  /// Adding shared components to the manifest cost exactly one enum value. That
+  /// is the whole reason this column was left polymorphic.
   revisionId String     @map("revision_id")
 
   release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
@@ -246,11 +322,39 @@ model ReleaseItem {
   @@map("release_items")
 }
 
+/// THE FROZEN SIDE OF TIER 2.
+///
+/// Written once, by the build job, before a release ever goes live. Holds the
+/// resolved products, collections and media a release's pages reference — titles
+/// and prices as they were at publish time.
+///
+/// This exists so that rendering a release is a pure function of immutable rows.
+/// Without it, a page served from the runtime would show today's prices while
+/// the same page served from an export showed the publish-time ones, and "this
+/// release renders the same thing every time" would stop being true. It is the
+/// database equivalent of what the old static artifact froze into its HTML.
+///
+/// Append-only, same trigger as the revision tables.
+model ReleaseData {
+  releaseId String   @id @map("release_id")
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@map("release_data")
+}
+
 enum RefType {
   product
   collection
   post
   media
+  /// A page depending on a shared component. Unlike the others this points at
+  /// versioned (Tier-1) data, which is why it is also pinned in release_items.
+  /// Recording it here too is what answers "which live releases use this header?"
+  /// before someone deletes it — the same question, the same reverse index.
+  component
 }
 
 /// The reverse index that makes D5's accepted cost VISIBLE rather than fatal.

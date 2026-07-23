@@ -2,27 +2,34 @@
  * BUILD — job two of two. (D4)
  *
  * Slow, fallible, and completely isolated from the snapshot. It reads the
- * manifest, resolves live data, renders HTML files to disk, and only at the very
- * end flips sites.live_release_id.
+ * manifest, FREEZES the live data the release references, prerenders the pages
+ * to disk, and only at the very end flips sites.live_release_id.
+ *
+ * What changed when hosting moved to the runtime, and why the job still exists:
+ *
+ *   - Freezing Tier-2 data into `release_data` is now the load-bearing step.
+ *     Until that row exists, the runtime refuses to render the release, because
+ *     rendering it would mean reading live prices and the output would stop
+ *     being reproducible. This is what makes a release a complete, immutable
+ *     input rather than a set of pointers into moving data.
+ *
+ *   - Writing HTML files is no longer how anyone is served. It is how the export
+ *     works, and a useful smoke test that the release really does render. The
+ *     runtime never opens these files.
  *
  * If any step throws, the release is marked failed and the site's live pointer
- * is never touched — visitors keep getting the previous artifact. There is a
- * test that kills a build mid-flight and asserts exactly that.
+ * is never touched — visitors keep getting the previous release. There is a test
+ * that kills a build mid-flight and asserts exactly that.
  */
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "./db";
 import { artifactsRoot, pathToFile, releaseDir } from "./paths";
-import { renderPageHtml } from "./render";
+import { renderPageHtml } from "./render/html";
 import { asLayout, asTokens } from "./theme";
 import { extractRefsFromBody, mergeRefs } from "./refs";
-import type {
-  PageBody,
-  RenderContext,
-  ResolvedCollection,
-  ResolvedMedia,
-  ResolvedProduct,
-} from "./registry/types";
+import { freezeTierTwo } from "./runtime/snapshot";
+import type { PageBody, RenderContext, ResolvedSharedComponent } from "./registry/types";
 
 export { artifactsRoot, pathToFile, releaseDir } from "./paths";
 
@@ -31,6 +38,9 @@ export interface BuildOutcome {
   files: string[];
   artifactUrl: string;
   durationMs: number;
+  /** For the worker's warm-up step. Not part of the build itself. */
+  slug: string;
+  paths: string[];
 }
 
 export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
@@ -44,6 +54,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
 
   // ── Read the manifest. This is the ONLY input. ────────────────────────────
   const pageItems = release.items.filter((i) => i.entityType === "page");
+  const componentItems = release.items.filter((i) => i.entityType === "component");
   const themeItem = release.items.find((i) => i.entityType === "theme");
   if (pageItems.length === 0) throw new Error("Release pins no pages");
 
@@ -55,85 +66,67 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     ? await prisma.themeRevision.findUnique({ where: { id: themeItem.revisionId } })
     : null;
 
+  // ── Shared components, as this release pinned them ────────────────────────
+  // Read by REVISION id, never by component id. That distinction is the whole
+  // feature: rebuilding a two-year-old release renders the header that release
+  // shipped with, not the one the symbol has today.
+  const componentRevisions = componentItems.length
+    ? await prisma.sharedComponentRevision.findMany({
+        where: { id: { in: componentItems.map((i) => i.revisionId) } },
+        include: { component: true },
+      })
+    : [];
+
+  const components: Record<string, ResolvedSharedComponent> = {};
+  for (const rev of componentRevisions) {
+    components[rev.componentId] = {
+      id: rev.componentId,
+      name: rev.component.name,
+      root: ((rev.body as unknown) as PageBody)?.root ?? [],
+      revisionId: rev.id,
+      // NOT marked missing when the symbol has since been soft-deleted. This is
+      // the sharp line between the two tiers, and it is worth being exact about:
+      //
+      //   a deleted PRODUCT degrades a built page, because Tier-2 data is live
+      //   by design and the artifact only ever held a snapshot of it (D5);
+      //
+      //   a deleted COMPONENT does not, because the revision this release pinned
+      //   is Tier-1 and immutable. Deleting the symbol removes it from the
+      //   palette and from future publishes. It cannot reach back and change
+      //   what an already-published release renders.
+      //
+      // Without this, rebuilding an old release would produce different bytes
+      // than the first build did, and "immutable artifact" would be a fiction.
+      missing: false,
+    };
+  }
+
   const tokens = asTokens(themeRevision?.tokens);
   const layout = asLayout(themeRevision?.layout);
 
-  // ── Resolve live (Tier-2) data referenced by these bodies ─────────────────
-  // Snapshotting live data into a frozen file is D5's accepted cost, made
-  // explicit here. Soft-deleted records resolve to `missing` rather than
-  // disappearing, so the page degrades visibly instead of silently changing.
-  const bodies = revisions.map((r) => r.body as unknown as PageBody);
+  // ── Which live (Tier-2) records do these bodies reference? ────────────────
+  //
+  // Symbol bodies are extracted from too. A ProductGrid living inside a shared
+  // footer references products just as much as one placed directly on a page,
+  // and those products' titles and prices get frozen into every page that uses
+  // the footer. Miss this and those pages render "(deleted product)" for data
+  // that is perfectly present.
+  const bodies = [
+    ...revisions.map((r) => r.body as unknown as PageBody),
+    ...componentRevisions.map((r) => r.body as unknown as PageBody),
+  ];
   const refs = mergeRefs(bodies.map(extractRefsFromBody));
 
-  const collectionIds = refs.filter((r) => r.refType === "collection").map((r) => r.refId);
-  const mediaIds = refs.filter((r) => r.refType === "media").map((r) => r.refId);
-  const directProductIds = refs.filter((r) => r.refType === "product").map((r) => r.refId);
-
-  const collectionRows = collectionIds.length
-    ? await prisma.collection.findMany({
-        where: { id: { in: collectionIds } },
-        include: { products: { orderBy: { position: "asc" } } },
-      })
-    : [];
-
-  const collections: Record<string, ResolvedCollection> = {};
-  for (const id of collectionIds) {
-    const row = collectionRows.find((c) => c.id === id);
-    collections[id] = row
-      ? {
-          id: row.id,
-          title: row.title,
-          handle: row.handle,
-          productIds: row.products.map((p) => p.productId),
-          missing: row.deletedAt !== null,
-        }
-      : { id, title: "(deleted collection)", handle: "", productIds: [], missing: true };
-  }
-
-  const productIds = [
-    ...new Set([...directProductIds, ...Object.values(collections).flatMap((c) => c.productIds)]),
-  ];
-  const productRows = productIds.length
-    ? await prisma.product.findMany({
-        where: { id: { in: productIds } },
-        include: { variants: { orderBy: { priceCents: "asc" }, take: 1 } },
-      })
-    : [];
-
-  const products: Record<string, ResolvedProduct> = {};
-  for (const id of productIds) {
-    const row = productRows.find((p) => p.id === id);
-    products[id] = row
-      ? {
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          imageUrl: row.imageUrl,
-          priceCents: row.variants[0]?.priceCents ?? 0,
-          variantId: row.variants[0]?.id ?? null,
-          missing: row.deletedAt !== null || row.status === "archived",
-        }
-      : {
-          id,
-          title: "(deleted product)",
-          description: "",
-          imageUrl: null,
-          priceCents: 0,
-          variantId: null,
-          missing: true,
-        };
-  }
-
-  const mediaRows = mediaIds.length
-    ? await prisma.media.findMany({ where: { id: { in: mediaIds } } })
-    : [];
-  const media: Record<string, ResolvedMedia> = {};
-  for (const id of mediaIds) {
-    const row = mediaRows.find((m) => m.id === id);
-    media[id] = row
-      ? { id: row.id, url: row.storageKey, alt: "", missing: row.deletedAt !== null }
-      : { id, url: "", alt: "", missing: true };
-  }
+  // ── THE STEP THAT MAKES A RELEASE COMPLETE ────────────────────────────────
+  // Resolve every Tier-2 record these bodies reference and write it once, to a
+  // row that can never be updated. From here on this release renders the same
+  // thing forever, from the runtime or from an export, today or in two years.
+  //
+  // A retry reuses what the first attempt froze rather than re-resolving, so a
+  // build that fails and is retried an hour later cannot quietly publish a
+  // different price.
+  const frozen = await freezeTierTwo(release.id, bodies);
+  const { products, collections, media } = frozen;
 
   const ctx: RenderContext = {
     siteId: release.siteId,
@@ -144,6 +137,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     products,
     collections,
     media,
+    components,
   };
 
   // ── Render to disk ────────────────────────────────────────────────────────
@@ -200,6 +194,14 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
           revisionId: r.id,
           revisionVersion: r.versionNo,
         })),
+        // Which revision of each shared component this artifact was built from.
+        // An exported zip is then self-describing all the way down.
+        components: componentRevisions.map((r) => ({
+          id: r.componentId,
+          name: r.component.name,
+          revisionId: r.id,
+          revisionVersion: r.versionNo,
+        })),
         dependencies: refs,
       },
       null,
@@ -229,6 +231,8 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     releaseId: release.id,
     files: written,
     artifactUrl,
+    slug: release.site.slug,
+    paths: revisions.map((r) => r.page.path),
     durationMs: Date.now() - startedAt,
   };
 }

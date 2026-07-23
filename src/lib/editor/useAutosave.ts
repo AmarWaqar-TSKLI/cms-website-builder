@@ -13,9 +13,17 @@
  * walkthrough shows the two counters side by side while you type.
  */
 import { useEffect, useRef } from "react";
-import { useEditor } from "./store";
+import { useEditor, type EditTarget } from "./store";
 
 export const AUTOSAVE_MS = 2000;
+
+/**
+ * The only difference between editing a page and editing a shared component.
+ * Same store, same canvas, same interval, same optimistic lock — one URL.
+ */
+export function draftEndpoint(target: EditTarget, id: string): string {
+  return target === "component" ? `/api/components/${id}/draft` : `/api/pages/${id}/draft`;
+}
 
 export function useAutosave(enabled = true) {
   const inFlight = useRef(false);
@@ -35,7 +43,7 @@ export function useAutosave(enabled = true) {
       useEditor.getState().setStatus("saving");
 
       try {
-        const res = await fetch(`/api/pages/${state.pageId}/draft`, {
+        const res = await fetch(draftEndpoint(state.target, state.pageId), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ body: state.body, lockVersion: state.lockVersion }),
@@ -45,7 +53,7 @@ export function useAutosave(enabled = true) {
           const data = await res.json();
           useEditor
             .getState()
-            .setStatus("conflict", data.message ?? "This page was edited in another tab.");
+            .setStatus("conflict", data.message ?? "This was edited in another tab.");
           return;
         }
         if (!res.ok) {
@@ -87,7 +95,7 @@ export async function flushDraft(): Promise<boolean> {
       body: JSON.stringify({ body: state.body, lockVersion: state.lockVersion }),
     });
     if (res.status === 409) {
-      useEditor.getState().setStatus("conflict", "This page was edited in another tab.");
+      useEditor.getState().setStatus("conflict", "This was edited in another tab.");
       return false;
     }
     if (!res.ok) return false;

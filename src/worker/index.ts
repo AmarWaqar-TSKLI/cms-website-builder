@@ -19,6 +19,7 @@ loadEnv();
 
 import { prisma } from "../lib/db";
 import { buildRelease } from "../lib/build";
+import { warmRelease } from "../lib/runtime/warm";
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS || 250);
 const WORKER_ID = `worker-${process.pid}`;
@@ -67,6 +68,17 @@ async function handle(job: ClaimedJob) {
     log(
       `built ${outcome.files.length} files in ${outcome.durationMs}ms → live pointer moved to ${short(job.release_id)}`,
     );
+
+    // ── After-care, outside the job ───────────────────────────────────────
+    // Ask the runtime to render each path of the new release once, so the first
+    // real visitor is not the one who pays for a cold render.
+    //
+    // Deliberately AFTER the job is marked done and outside the try that would
+    // fail it. The release is already live and correct; a cache that could not
+    // be primed is a latency footnote, never a build failure.
+    const warm = await warmRelease(outcome.slug, outcome.paths);
+    if (warm.warmed.length) log(`warmed ${warm.warmed.length} path(s) on the runtime`);
+    if (warm.failed.length) log(`could not warm: ${warm.failed.join(", ")} (harmless)`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log(`FAILED job ${short(job.id)} after ${Date.now() - started}ms: ${message}`);
