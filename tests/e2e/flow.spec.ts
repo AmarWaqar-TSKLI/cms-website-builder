@@ -131,9 +131,12 @@ test.describe("edit → publish → serve → rollback", () => {
 
     // Open the component itself from the palette's pencil button.
     await page.getByRole("button", { name: "✎" }).first().click();
-    await expect(page.getByText(/shared component — editing this changes every page/)).toBeVisible({
-      timeout: 20_000,
-    });
+
+    // The blast radius is stated in numbers before a key is pressed. The seed
+    // puts this component on both pages, so it must say so — a vague "changes
+    // every page that uses it" is a sentence people stop reading.
+    await expect(page.getByText(/Used on 2 pages/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Publishing changes 2 pages at once/)).toBeVisible();
 
     // Edit the component's own heading, through the same generated panel.
     await page.locator('[data-cms-type="TextBlock"]').first().click();

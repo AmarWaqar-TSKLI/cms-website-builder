@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { findNode, getSchema } from "@/lib/registry";
+import { describeUsage, type ComponentUsage } from "@/lib/component-usage";
 import { useEditor } from "@/lib/editor/store";
 import { useAutosave, flushDraft } from "@/lib/editor/useAutosave";
 import { stripExpansion } from "@/lib/shared-components";
@@ -42,8 +43,11 @@ export interface EditorBootstrap {
    * Everything else on this screen is identical, which is the point: a symbol is
    * a tree of the same blocks in the same format, so it gets the same editor
    * rather than a lesser one.
+   *
+   * `usage` is loaded server-side so the blast radius is visible before the first
+   * keystroke, not discovered after publishing.
    */
-  component?: { id: string; name: string };
+  component?: { id: string; name: string; usage: ComponentUsage };
 }
 
 type LeftTab = "blocks" | "outline";
@@ -242,15 +246,40 @@ export function EditorShell(boot: EditorBootstrap) {
 
         {editingComponent ? (
           // Editing a symbol is a different act from editing a page, and the
-          // header says so plainly — because one save here changes every page
-          // that uses it, and that should never come as a surprise.
+          // header says so in NUMBERS. "Changes every page that uses it" is a
+          // sentence people stop seeing; "changes 12 pages: /, /about, /pricing"
+          // is a fact they can act on before they type.
           <div className="flex min-w-0 items-center gap-2">
             <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#22c7a9]/15 px-2.5 py-1.5 text-[12px] font-medium text-[#22c7a9]">
               ◈ {editingComponent.name}
             </span>
-            <span className="truncate text-[11.5px] text-ink-500">
-              shared component — editing this changes every page that uses it
+            <span
+              className={cx(
+                "shrink-0 rounded-lg px-2 py-1.5 text-[11.5px] font-medium",
+                editingComponent.usage.totalPages > 0
+                  ? "bg-warn-500/15 text-warn-500"
+                  : "text-ink-500",
+              )}
+              title={
+                editingComponent.usage.totalPages > 0
+                  ? `Publishing will change: ${[
+                      ...editingComponent.usage.pages.map((p) => p.path),
+                      ...editingComponent.usage.indirectPages.map((p) => `${p.path} (nested)`),
+                    ].join(", ")}`
+                  : "Nothing points at this component yet"
+              }
+            >
+              {describeUsage(editingComponent.usage)}
             </span>
+            {editingComponent.usage.totalPages > 0 && (
+              <span className="truncate text-[11.5px] text-ink-500">
+                {[...editingComponent.usage.pages, ...editingComponent.usage.indirectPages]
+                  .slice(0, 4)
+                  .map((p) => p.path)
+                  .join("  ")}
+                {editingComponent.usage.totalPages > 4 ? "  …" : ""}
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
@@ -391,8 +420,22 @@ export function EditorShell(boot: EditorBootstrap) {
           <p className="mx-auto mt-4 max-w-3xl text-center text-[11px] leading-relaxed text-ink-500">
             {editingComponent ? (
               <>
-                Editing a shared component. Every page using it changes when you publish — and rolls
-                back with it too, because a release pins the revision, not the component.
+                {editingComponent.usage.totalPages > 0 ? (
+                  <>
+                    You are editing a shared component.{" "}
+                    <span className="text-warn-500">
+                      Publishing changes {editingComponent.usage.totalPages} page
+                      {editingComponent.usage.totalPages === 1 ? "" : "s"} at once
+                    </span>
+                    . To change only one of them, go back to that page and edit the text directly —
+                    that records an override for that page alone.
+                  </>
+                ) : (
+                  <>
+                    You are editing a shared component. Nothing uses it yet, so publishing changes
+                    nothing else.
+                  </>
+                )}
               </>
             ) : (
               <>

@@ -156,12 +156,25 @@ function InstancePanel({
           One definition, used in several places. This block is a reference to it, not a copy.
         </p>
 
+        {/*
+          The two scopes, side by side and in that order, because the safe one is
+          the one people usually want. Editing the component is deliberately the
+          second option and carries its page count, so nobody reaches it thinking
+          they are changing this page.
+        */}
+        <div className="mt-3 rounded-lg border border-ink-800 bg-ink-950 p-2.5">
+          <p className="text-[11.5px] leading-relaxed text-ink-300">
+            <span className="font-medium text-ink-100">Only this page?</span> Edit the text below,
+            or double-click it on the canvas. Other pages keep the component&rsquo;s version.
+          </p>
+        </div>
+
         <button
           type="button"
           onClick={() => router.push(`/editor/component/${definition.id}`)}
-          className="mt-3 w-full rounded-lg border border-[#22c7a9]/40 px-3 py-2 text-[12px] font-medium text-[#22c7a9] transition-colors hover:border-[#22c7a9] hover:bg-[#22c7a9]/10"
+          className="mt-2 w-full rounded-lg border border-warn-500/40 px-3 py-2 text-[12px] font-medium text-warn-500 transition-colors hover:border-warn-500 hover:bg-warn-500/10"
         >
-          Edit component → changes every page using it
+          Edit the component itself → changes every page using it
         </button>
 
         <div className="mt-2 flex flex-wrap gap-1">

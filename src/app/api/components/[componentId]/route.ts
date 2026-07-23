@@ -18,46 +18,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { releasesReferencing } from "@/lib/dependencies";
-import { directComponentRefs } from "@/lib/shared-components";
-import type { PageBody } from "@/lib/registry/types";
+import { usageOf } from "@/lib/component-usage";
 
 export const dynamic = "force-dynamic";
-
-/** Pages whose CURRENT draft references this component. */
-async function draftUsage(siteId: string, componentId: string) {
-  const pages = await prisma.page.findMany({
-    where: { siteId, deletedAt: null },
-    include: { draft: true },
-    orderBy: { path: "asc" },
-  });
-
-  // Scanned in application code rather than with a JSONB query. At demo scale
-  // that is the honest, readable choice; at real scale this is the one place
-  // that would want a materialised page→component edge table, maintained by the
-  // same autosave that writes the draft.
-  return pages
-    .filter((p) => {
-      const body = p.draft?.body as unknown as PageBody | undefined;
-      return directComponentRefs(body?.root ?? []).includes(componentId);
-    })
-    .map((p) => ({ id: p.id, path: p.path, title: p.title }));
-}
-
-/** Other components whose draft references this one. */
-async function componentUsage(siteId: string, componentId: string) {
-  const others = await prisma.sharedComponent.findMany({
-    where: { siteId, deletedAt: null, id: { not: componentId } },
-    include: { draft: true },
-    orderBy: { name: "asc" },
-  });
-
-  return others
-    .filter((c) => {
-      const body = c.draft?.body as unknown as PageBody | undefined;
-      return directComponentRefs(body?.root ?? []).includes(componentId);
-    })
-    .map((c) => ({ id: c.id, name: c.name }));
-}
 
 export async function GET(
   _req: Request,
@@ -71,9 +34,8 @@ export async function GET(
   });
   if (!component) return NextResponse.json({ error: "Component not found" }, { status: 404 });
 
-  const [pages, components, releases] = await Promise.all([
-    draftUsage(component.siteId, componentId),
-    componentUsage(component.siteId, componentId),
+  const [usage, releases] = await Promise.all([
+    usageOf(component.siteId, componentId),
     releasesReferencing("component", componentId),
   ]);
 
@@ -89,7 +51,7 @@ export async function GET(
       versionNo: r.versionNo,
       createdAt: r.createdAt,
     })),
-    usedBy: { pages, components },
+    usedBy: usage,
     liveReleases: releases.filter((r) => r.isLive),
   });
 }
@@ -151,17 +113,15 @@ export async function DELETE(
   });
   if (!component) return NextResponse.json({ error: "Component not found" }, { status: 404 });
 
-  const [pages, components] = await Promise.all([
-    draftUsage(component.siteId, componentId),
-    componentUsage(component.siteId, componentId),
-  ]);
+  const usage = await usageOf(component.siteId, componentId);
+  const { pages, components } = usage;
 
   if (!force && (pages.length || components.length)) {
     return NextResponse.json(
       {
         error: "in_use",
         message: `“${component.name}” is still used by ${pages.length} page(s) and ${components.length} component(s).`,
-        usedBy: { pages, components },
+        usedBy: usage,
       },
       { status: 409 },
     );

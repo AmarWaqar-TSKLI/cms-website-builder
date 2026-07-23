@@ -12,6 +12,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { loadEditorContext } from "@/lib/editor/bootstrap";
+import { usageOf } from "@/lib/component-usage";
 import type { ComponentBody } from "@/lib/registry/types";
 import { EditorShell } from "@/components/editor/EditorShell";
 
@@ -35,11 +36,15 @@ export default async function ComponentEditorPage({
   const context = await loadEditorContext(component.siteId);
   if (!context) notFound();
 
+  // Loaded before the screen renders, so the blast radius is on screen BEFORE
+  // anyone types. A warning that arrives after the edit is not a warning.
+  const usage = await usageOf(component.siteId, component.id);
+
   const home = context.siblings[0];
 
   return (
     <EditorShell
-      component={{ id: component.id, name: component.name }}
+      component={{ id: component.id, name: component.name, usage }}
       page={
         home
           ? { id: home.id, path: home.path, title: home.title }
