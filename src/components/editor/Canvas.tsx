@@ -266,7 +266,9 @@ function NodeFrame({
         // that would silently change every other page using it. It records an
         // override on THIS instance, keyed by the node's id inside the symbol.
         // Changing the symbol for everyone is a separate, deliberate act: open it.
-        if (owned) setOverride(owned.instanceId, owned.innerId, propName, value);
+        // `overrideKey`, not `innerId` — with nesting they differ, and only the
+        // former names a node the page can actually find. See rebase().
+        if (owned) setOverride(owned.instanceId, owned.overrideKey, propName, value);
         else updateProp(node.id, propName, value);
       };
       const onKey = (ev: KeyboardEvent) => {
@@ -410,7 +412,7 @@ function NodeFrame({
           {isInstance && definition && (
             <ToolbarButton
               title="Detach — turn this into ordinary blocks this page owns"
-              onClick={() => detachComponent(node.id, definition)}
+              onClick={() => detachComponent(node.id, ctx.components ?? {})}
             >
               ⛓
             </ToolbarButton>

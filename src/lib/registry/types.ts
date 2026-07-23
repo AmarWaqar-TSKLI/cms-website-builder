@@ -93,8 +93,21 @@ export interface PageNode {
    * Provenance, set ONLY by shared-component expansion at render time and never
    * stored. Its presence means "this node belongs to a symbol" — the editor uses
    * it to refuse in-place edits, and a test asserts it never reaches the database.
+   *
+   * The four fields answer two different questions, and with nested components
+   * they have different answers:
+   *   componentId / innerId  — the INNERMOST component that owns this node, and
+   *                            its id in there. "Which component do I open?"
+   *   instanceId / overrideKey — the OUTERMOST instance, the one that really
+   *                            exists in the page's stored tree, and this node's
+   *                            path inside it. "Where do I record an override?"
    */
-  fromComponent?: { instanceId: string; componentId: string; innerId: string };
+  fromComponent?: {
+    instanceId: string;
+    componentId: string;
+    innerId: string;
+    overrideKey: string;
+  };
 }
 
 export interface PageBody {

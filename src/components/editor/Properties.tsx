@@ -24,7 +24,7 @@ import type {
   ThemeTokens,
 } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
-import { componentIdOf, isComponentRef, overridesOf } from "@/lib/shared-components";
+import { componentIdOf, expandComponents, isComponentRef, overridesOf } from "@/lib/shared-components";
 import { Badge, cx } from "../ui";
 
 export interface RefOptions {
@@ -85,32 +85,61 @@ function InstancePanel({
   }
 
   // Every text-ish prop inside the symbol, flattened, so the panel can offer
-  // per-instance overrides without the user having to click into the symbol.
-  const overridable: { nodeId: string; label: string; key: string; def: PropDef }[] = [];
-  const collect = (nodes: PageNode[]) => {
+  // per-instance overrides without the user having to open the symbol.
+  //
+  // Built from the EXPANDED tree, not the stored one. A component that contains
+  // other components stores only references to them, so walking the stored tree
+  // would stop at the reference and silently hide everything underneath — on a
+  // deeply composed block that is most of the content. Expanding first means the
+  // panel offers the text a person can actually see on the canvas, however many
+  // components deep it lives.
+  const overridable: { key: string; label: string; prop: string; def: PropDef }[] = [];
+  const collect = (nodes: PageNode[], depth: number) => {
     for (const n of nodes) {
       const schema = getSchema(n.type);
-      if (schema) {
-        for (const [key, def] of Object.entries(schema.props)) {
+      // The path relative to this instance — the same key rebase() uses.
+      const key = n.fromComponent?.overrideKey;
+      if (schema && key && !isComponentRef(n)) {
+        for (const [prop, def] of Object.entries(schema.props)) {
           if (def.kind !== "text" && def.kind !== "textarea" && def.kind !== "url") continue;
           if ((def.group ?? "content") !== "content") continue;
-          overridable.push({ nodeId: n.id, label: `${schema.label} · ${def.label}`, key, def });
+          overridable.push({
+            key,
+            // Nested content is marked so it is obvious the text lives further
+            // down than the component you clicked.
+            label: `${"↳ ".repeat(Math.max(0, depth))}${schema.label} · ${def.label}`,
+            prop,
+            def,
+          });
         }
       }
-      collect(n.children ?? []);
+      collect(n.children ?? [], isComponentRef(n) ? depth + 1 : depth);
     }
   };
-  collect(definition.root ?? []);
+  // Expand this instance exactly as the canvas does, then walk the result.
+  collect(expandComponents([node], components)[0]?.children ?? [], 0);
 
   const overrideCount = Object.values(overrides).reduce(
     (total, patch) => total + Object.keys(patch ?? {}).length,
     0,
   );
 
-  const valueFor = (nodeId: string, key: string) => {
-    const patched = overrides[nodeId]?.[key];
+  // The current value: the override if one exists, otherwise whatever the
+  // expanded tree resolved to (which may itself come from a nested component).
+  const expanded = expandComponents([node], components)[0]?.children ?? [];
+  const resolved = new Map<string, PageNode>();
+  const index = (nodes: PageNode[]) => {
+    for (const n of nodes) {
+      if (n.fromComponent?.overrideKey) resolved.set(n.fromComponent.overrideKey, n);
+      index(n.children ?? []);
+    }
+  };
+  index(expanded);
+
+  const valueFor = (key: string, prop: string) => {
+    const patched = overrides[key]?.[prop];
     if (patched !== undefined) return patched;
-    return findNode(definition.root ?? [], nodeId)?.props?.[key] ?? "";
+    return resolved.get(key)?.props?.[prop] ?? "";
   };
 
   return (
@@ -139,7 +168,7 @@ function InstancePanel({
           <SmallButton onClick={() => nudge(node.id, -1)}>↑ Up</SmallButton>
           <SmallButton onClick={() => nudge(node.id, 1)}>↓ Down</SmallButton>
           <SmallButton onClick={() => duplicateNode(node.id)}>Duplicate</SmallButton>
-          <SmallButton onClick={() => detachComponent(node.id, definition)}>Detach</SmallButton>
+          <SmallButton onClick={() => detachComponent(node.id, components)}>Detach</SmallButton>
           <SmallButton onClick={() => removeNode(node.id)} danger>
             Delete
           </SmallButton>
@@ -161,10 +190,10 @@ function InstancePanel({
               This component has no text to override yet.
             </p>
           ) : (
-            overridable.map(({ nodeId, label, key, def }) => {
-              const overridden = overrides[nodeId]?.[key] !== undefined;
+            overridable.map(({ key, label, prop, def }) => {
+              const overridden = overrides[key]?.[prop] !== undefined;
               return (
-                <div key={`${nodeId}:${key}`} className="mb-3">
+                <div key={`${key}:${prop}`} className="mb-3">
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <span className="text-[11px] font-medium text-ink-300">{label}</span>
                     {overridden && (
@@ -176,8 +205,8 @@ function InstancePanel({
                   {def.kind === "textarea" ? (
                     <textarea
                       rows={3}
-                      value={String(valueFor(nodeId, key) ?? "")}
-                      onChange={(e) => setOverride(node.id, nodeId, key, e.target.value)}
+                      value={String(valueFor(key, prop) ?? "")}
+                      onChange={(e) => setOverride(node.id, key, prop, e.target.value)}
                       className={cx(
                         "w-full resize-y rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
                         overridden ? "border-[#22c7a9]/50" : "border-ink-700",
@@ -186,8 +215,8 @@ function InstancePanel({
                   ) : (
                     <input
                       type="text"
-                      value={String(valueFor(nodeId, key) ?? "")}
-                      onChange={(e) => setOverride(node.id, nodeId, key, e.target.value)}
+                      value={String(valueFor(key, prop) ?? "")}
+                      onChange={(e) => setOverride(node.id, key, prop, e.target.value)}
                       className={cx(
                         "w-full rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
                         overridden ? "border-[#22c7a9]/50" : "border-ink-700",

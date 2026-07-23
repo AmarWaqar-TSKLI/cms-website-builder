@@ -68,9 +68,13 @@ describe("shared components — expansion", () => {
       definitions({ header: [heading("h1", "x")] }),
     );
     expect(out[0].children[0].fromComponent).toEqual({
-      instanceId: "i1",
+      // Which component owns it → what "Edit component" opens.
       componentId: "header",
       innerId: "h1",
+      // Where an override goes → an instance the page's stored tree really has.
+      // With one level these coincide; the nesting tests below show them diverge.
+      instanceId: "i1",
+      overrideKey: "h1",
     });
   });
 
@@ -232,5 +236,99 @@ describe("shared components — cycles", () => {
         shared: body([heading("h1", "x")]),
       }),
     ).toBeNull();
+  });
+});
+
+describe("shared components — deep nesting", () => {
+  // The case that matters in practice: a page uses a Card component, the Card
+  // uses a Button component, the Button contains text. Three levels, and the
+  // page only ever stored one node.
+  const nested = () =>
+    definitions({
+      card: [
+        (() => {
+          const col = createNode("Columns", "c1");
+          col.children = [heading("t1", "Card title"), createComponentRef("button", "b1")];
+          return col;
+        })(),
+      ],
+      button: [heading("btn", "Click me")],
+    });
+
+  it("expands every level and keeps ids unique down the whole path", () => {
+    const out = expandComponents([createComponentRef("card", "i1")], nested());
+
+    const columns = out[0].children[0];
+    expect(columns.id).toBe("i1~c1");
+
+    const title = columns.children[0];
+    const buttonInstance = columns.children[1];
+    const buttonText = buttonInstance.children[0];
+
+    expect(title.id).toBe("i1~t1");
+    expect(buttonInstance.id).toBe("i1~b1");
+    // Three levels deep, prefixed once per level. No collision is possible
+    // because each level contributes its own instance id.
+    expect(buttonText.id).toBe("i1~b1~btn");
+    expect(buttonText.props.text).toBe("Click me");
+  });
+
+  it("points provenance at the innermost owner, so 'edit' opens the right component", () => {
+    const out = expandComponents([createComponentRef("card", "i1")], nested());
+    const buttonText = out[0].children[0].children[1].children[0];
+
+    // The text belongs to Button, not to Card — clicking edit must open Button.
+    expect(buttonText.fromComponent?.componentId).toBe("button");
+    expect(buttonText.fromComponent?.innerId).toBe("btn");
+  });
+
+  it("addresses overrides at the OUTERMOST instance, the one the page really has", () => {
+    const out = expandComponents([createComponentRef("card", "i1")], nested());
+    const buttonText = out[0].children[0].children[1].children[0];
+
+    // "i1" is a node in the page's stored tree. "b1" is not — it only exists
+    // inside Card's tree. Addressing the override at b1 would silently do
+    // nothing, because the page could never find it.
+    expect(buttonText.fromComponent?.instanceId).toBe("i1");
+    expect(buttonText.fromComponent?.overrideKey).toBe("b1~btn");
+  });
+
+  it("applies a page-level override to text three components deep", () => {
+    const ref = createComponentRef("card", "i1");
+    ref.props.overrides = { "b1~btn": { text: "Buy now" } };
+
+    const out = expandComponents([ref], nested());
+    const buttonText = out[0].children[0].children[1].children[0];
+    expect(buttonText.props.text).toBe("Buy now");
+  });
+
+  it("keeps two instances of the same deep component independent", () => {
+    const a = createComponentRef("card", "i1");
+    a.props.overrides = { "b1~btn": { text: "Buy now" } };
+    const b = createComponentRef("card", "i2");
+
+    const out = expandComponents([a, b], nested());
+    const textA = out[0].children[0].children[1].children[0];
+    const textB = out[1].children[0].children[1].children[0];
+
+    expect(textA.props.text).toBe("Buy now");
+    expect(textB.props.text).toBe("Click me");
+    expect(textA.id).not.toBe(textB.id);
+  });
+
+  it("lets one page place the same component at different positions", () => {
+    // Position is owned by the PAGE, never by the component. The same definition
+    // appears first on one page and third on another simply because the trees
+    // that reference it put the node in a different place.
+    const pageA = [createComponentRef("button", "x1"), heading("a1", "after")];
+    const pageB = [heading("b1", "before"), heading("b2", "also"), createComponentRef("button", "x2")];
+
+    const outA = expandComponents(pageA, nested());
+    const outB = expandComponents(pageB, nested());
+
+    expect(outA[0].type).toBe("@component");
+    expect(outA[0].children[0].props.text).toBe("Click me");
+    expect(outB[2].type).toBe("@component");
+    expect(outB[2].children[0].props.text).toBe("Click me");
   });
 });

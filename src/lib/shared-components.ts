@@ -232,16 +232,37 @@ function rebase(
   componentId: string,
   overrides: OverrideMap,
 ): PageNode {
-  // A node from a NESTED symbol already carries provenance; keep the innermost.
-  const innerId = node.fromComponent?.innerId ?? node.id;
-  const patch = overrides[innerId];
+  // The node's path RELATIVE TO THIS INSTANCE, and the key its overrides use.
+  //
+  // Expansion runs innermost-first, so by the time this level sees a node from a
+  // nested component its id is already the inner path — "b1~t1" for a text node
+  // inside a Button instance inside this component. Prefixing then yields
+  // "i1~b1~t1", and this key is exactly the part after the outermost instance.
+  //
+  // Because the OUTERMOST call runs last, the fields below settle on the values
+  // the page can actually act on: `instanceId` ends as the instance that really
+  // exists in the page's stored tree, and `overrideKey` as the full path to this
+  // node inside it. Addressing an override at the inner instance instead would
+  // name a node that only exists inside a component's tree — the page could not
+  // find it, and the override would silently do nothing.
+  const overrideKey = node.id;
+  const patch = overrides[overrideKey];
 
   return {
     ...node,
     id: `${instanceId}${INSTANCE_SEPARATOR}${node.id}`,
+    // Outer overrides are applied after inner ones, so a page-level override
+    // beats a default set inside the component. That is the precedence you want.
     props: patch ? { ...node.props, ...patch } : node.props,
     children: (node.children ?? []).map((c) => rebase(c, instanceId, componentId, overrides)),
-    fromComponent: node.fromComponent ?? { instanceId, componentId, innerId },
+    fromComponent: {
+      // Innermost owner — answers "which component do I open to edit this?".
+      componentId: node.fromComponent?.componentId ?? componentId,
+      innerId: node.fromComponent?.innerId ?? node.id,
+      // Outermost instance + path — answers "where do I record an override?".
+      instanceId,
+      overrideKey,
+    },
   };
 }
 

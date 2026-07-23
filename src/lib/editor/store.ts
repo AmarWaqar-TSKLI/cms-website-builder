@@ -28,7 +28,7 @@ import {
   removeFromTree,
   walk,
 } from "../registry";
-import { componentIdOf, overridesOf, stripExpansion } from "../shared-components";
+import { componentIdOf, expandComponents, overridesOf, stripExpansion } from "../shared-components";
 import type { PageBody, PageNode, ResolvedSharedComponent } from "../registry/types";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "failed" | "conflict";
@@ -67,7 +67,7 @@ interface EditorState {
   replaceWithComponentRef: (nodeId: string, componentId: string) => void;
   setOverride: (instanceId: string, innerId: string, key: string, value: unknown) => void;
   clearOverrides: (instanceId: string) => void;
-  detachComponent: (instanceId: string, definition: ResolvedSharedComponent) => void;
+  detachComponent: (instanceId: string, components: Record<string, ResolvedSharedComponent>) => void;
   updateProp: (id: string, key: string, value: unknown) => void;
   updateProps: (id: string, patch: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
@@ -241,16 +241,19 @@ export const useEditor = create<EditorState>((set, get) => {
      * `stripExpansion` matters here: what gets inserted must be storable page
      * nodes, not render-time provenance.
      */
-    detachComponent: (instanceId, definition) =>
+    detachComponent: (instanceId, components) =>
       set((state) => {
         const instance = findNode(state.body.root, instanceId);
         const where = locate(state.body.root, instanceId);
         if (!instance || !where) return state;
 
-        const overrides = overridesOf(instance);
-        const copies = stripExpansion(definition.root ?? []).map((node) =>
-          cloneWithNewIds(applyOverrides(node, overrides), nextId),
-        );
+        // Expand first, then keep the result. Expansion has already resolved
+        // nested components and applied every override at every level, so what
+        // comes back is exactly what the canvas was showing. Re-deriving it from
+        // the raw definition instead would quietly drop overrides on nested
+        // content, which is the one thing detaching must not lose.
+        const expanded = expandComponents([instance], components)[0]?.children ?? [];
+        const copies = stripExpansion(expanded).map((node) => cloneWithNewIds(node, nextId));
 
         const { tree } = removeFromTree(state.body.root, instanceId);
         let next = tree;
@@ -394,19 +397,6 @@ export const useEditor = create<EditorState>((set, get) => {
 // history is recorded, not part of the document.
 let lastEditKey: string | null = null;
 let lastEditAt = 0;
-
-/** Bake an instance's overrides into a copy of the symbol's tree, for detach. */
-function applyOverrides(
-  node: PageNode,
-  overrides: Record<string, Record<string, unknown>>,
-): PageNode {
-  const patch = overrides[node.id];
-  return {
-    ...node,
-    props: patch ? { ...node.props, ...patch } : { ...node.props },
-    children: (node.children ?? []).map((c) => applyOverrides(c, overrides)),
-  };
-}
 
 /** The instance a selected node belongs to, if any — used by the properties panel. */
 export function componentInstanceIdOf(node: PageNode | null): string | null {
