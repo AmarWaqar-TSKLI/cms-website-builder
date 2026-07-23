@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Small presentational kit for the dashboard.
  *
@@ -5,7 +7,7 @@
  * column names are welcome, but only as secondary detail — a muted caption, a
  * `title` tooltip, or inside the "What's happening underneath?" disclosure.
  */
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import Link from "next/link";
 import { cx } from "../ui";
 
@@ -112,8 +114,8 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-2xl border bg-ink-900/70 backdrop-blur-[1px]",
-        tone === "live" ? "border-live-500/25" : "border-ink-700",
+        "rounded-2xl border bg-ink-900 shadow-[0_1px_2px_rgba(17,24,32,0.04)]",
+        tone === "live" ? "border-live-500/30" : "border-ink-800",
         className,
       )}
     >
@@ -126,6 +128,34 @@ export function Card({
  * Panel header: plain-English title first, optional one-line explanation, and
  * the underlying tables as a small muted caption that never labels a control.
  */
+/**
+ * TECHNICAL DETAILS — off by default.
+ *
+ * This product has two readers. Somebody running a shop wants to know whether
+ * their site is live; a developer evaluating the architecture wants to know
+ * which table a number came from. Showing table names to the first reader is
+ * noise at best and intimidating at worst, and hiding them from the second
+ * throws away the thing that makes the design legible.
+ *
+ * So it is one switch rather than two products. Off, this is a website builder.
+ * On, every panel says what it is backed by.
+ */
+const TechnicalContext = createContext(false);
+
+export function TechnicalDetails({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  return <TechnicalContext.Provider value={enabled}>{children}</TechnicalContext.Provider>;
+}
+
+export function useTechnical() {
+  return useContext(TechnicalContext);
+}
+
 export function CardHead({
   title,
   hint,
@@ -135,21 +165,23 @@ export function CardHead({
 }: {
   title: ReactNode;
   hint?: ReactNode;
+  /** Shown only when technical details are switched on. */
   tables?: string;
   action?: ReactNode;
   className?: string;
 }) {
+  const technical = useTechnical();
   return (
     <div className={cx("flex flex-wrap items-start justify-between gap-x-4 gap-y-2", className)}>
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold tracking-tight text-ink-100">{title}</h2>
+        <h2 className="display text-[17px] text-ink-100">{title}</h2>
         {hint && <p className="mt-1 max-w-prose text-[12.5px] leading-relaxed text-ink-400">{hint}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        {tables && (
+        {technical && tables && (
           <code
-            title={`Backed by the ${tables} table${tables.includes("·") ? "s" : ""}`}
-            className="hidden font-mono text-[10.5px] tracking-tight text-ink-500 sm:block"
+            title={`Stored in the ${tables} table${tables.includes("·") ? "s" : ""}`}
+            className="hidden rounded-md bg-ink-850 px-2 py-1 font-mono text-[10.5px] tracking-tight text-ink-500 sm:block"
           >
             {tables}
           </code>
@@ -207,7 +239,7 @@ export function Tile({
 /* ── the escape hatch for everything technical ───────────────────────────── */
 
 export function UnderTheHood({
-  summary = "What's happening underneath?",
+  summary = "How this works underneath",
   children,
 }: {
   summary?: string;

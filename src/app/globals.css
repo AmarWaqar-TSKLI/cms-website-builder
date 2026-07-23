@@ -1,12 +1,67 @@
 @import "tailwindcss";
 
 /*
-  Chrome styling only — the dashboard, editor, walkthrough and landing page.
-  Published artifacts share NONE of this: their components use inline styles so
-  an exported zip renders from file:// with no stylesheet at all.
+  THE PRODUCT'S SKIN — dashboard, editor, login, walkthrough.
+
+  Published sites share NONE of this. Their components use inline styles from
+  the site's own theme, so an exported zip renders from file:// with no
+  stylesheet at all, and a customer's site never inherits the builder's look.
+
+  ── The palette ────────────────────────────────────────────────────────────
+  Light, because the people using this are not developers and a dark tool reads
+  as somebody else's software. The neutrals are cool rather than pure grey —
+  biased a few degrees toward the blue accent so they read as chosen.
+
+  The accent is an ink blue borrowed from the world this product is actually in:
+  publishing. It stays clear of the greens, ambers and reds, which are reserved
+  entirely for state — "live", "needs attention", "failed" — so colour always
+  means the same thing.
+
+  ── The ramp ───────────────────────────────────────────────────────────────
+  The scale reads by ROLE, not by lightness: 950 is the page, 900 is a card, 800
+  is a border, 100 is the strongest text. That was true when this was dark and it
+  is still true now, which is why flipping the theme was a change to these eleven
+  values rather than to every component.
 */
 
 @theme {
+  --color-ink-950: #f4f6f8; /* page ground */
+  --color-ink-900: #ffffff; /* cards, panels, bars */
+  --color-ink-850: #eef1f5; /* hover on a surface */
+  --color-ink-800: #e2e6ec; /* hairlines and borders */
+  --color-ink-700: #d0d6df; /* stronger borders, inputs */
+  --color-ink-600: #aab3c0; /* placeholders, disabled */
+  --color-ink-500: #7c8797; /* faint labels */
+  --color-ink-400: #5a6472; /* secondary text */
+  --color-ink-300: #414b58; /* body text */
+  --color-ink-200: #232c37; /* strong body */
+  --color-ink-100: #111820; /* headings */
+
+  /* Ink blue. 500 fills, 400 is the darker hover, 300 is text on white. */
+  --color-flux-500: #1f5fa9;
+  --color-flux-400: #184c87;
+  --color-flux-300: #1b5a9e;
+
+  /* State only. Never decoration, never an accent. */
+  --color-live-500: #0e7c58;
+  --color-warn-500: #a96400;
+  --color-fail-500: #c0342f;
+
+  /* Reuse, which is its own idea and deserves its own hue. */
+  --color-reuse-500: #0f766e;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/*
+  The landing film commits to a dark world on purpose — it is marketing with a
+  3D canvas, not a tool somebody works in for eight hours. Re-declaring the same
+  variables under one class flips everything inside it, because every utility
+  resolves through these vars rather than a literal colour.
+*/
+.theme-dark {
   --color-ink-950: #08080a;
   --color-ink-900: #0d0d11;
   --color-ink-850: #121217;
@@ -27,28 +82,49 @@
   --color-warn-500: #f0a83c;
   --color-fail-500: #f2555a;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+  background: var(--color-ink-950);
+  color: var(--color-ink-100);
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   background: var(--color-ink-950);
-  color: var(--color-ink-100);
+  color: var(--color-ink-200);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-::selection {
-  background: var(--color-flux-500);
-  color: white;
+/* Page and section titles. Used sparingly — the serif is the warmth, and it
+   stops being warm the moment it is everywhere. */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
 }
 
-/* Scrollbars — the dashboard has a lot of panes. */
+::selection {
+  background: color-mix(in oklab, var(--color-flux-500) 22%, transparent);
+  color: var(--color-ink-100);
+}
+
+/*
+  Focus. Every interactive thing must show where the keyboard is — declared once
+  here rather than remembered per component.
+*/
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-flux-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Scrollbars — the editor has a lot of panes. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-ink-700) transparent;
@@ -69,8 +145,8 @@ body {
 }
 
 @utility panel {
-  background: color-mix(in oklab, var(--color-ink-900) 92%, white 8%);
-  border: 1px solid var(--color-ink-700);
+  background: var(--color-ink-900);
+  border: 1px solid var(--color-ink-800);
   border-radius: 14px;
 }
 
@@ -80,11 +156,11 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* A count that just changed — used by the DB inspector so a new revision row
-   announces itself instead of appearing silently. */
+/* A count that just changed — the DB inspector uses it so a new row announces
+   itself instead of appearing silently. */
 @keyframes cms-flash {
   0% {
-    background: color-mix(in oklab, var(--color-flux-500) 55%, transparent);
+    background: color-mix(in oklab, var(--color-flux-500) 28%, transparent);
   }
   100% {
     background: transparent;

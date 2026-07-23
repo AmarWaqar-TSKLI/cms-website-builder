@@ -15,10 +15,14 @@ export function AccountBar({
   user,
   sites,
   currentSiteId,
+  technical,
+  onTechnicalChange,
 }: {
   user: { name: string; email: string };
   sites: { id: string; name: string; slug: string }[];
   currentSiteId: string;
+  technical: boolean;
+  onTechnicalChange: (next: boolean) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -61,6 +65,21 @@ export function AccountBar({
       )}
 
       <div className="ml-auto flex items-center gap-2.5">
+        {/*
+          One switch, two audiences. Off, this reads as a website builder; on,
+          every panel names the table behind it. Shipping two products, or
+          showing table names to somebody running a shop, would both be worse.
+        */}
+        <label className="hidden cursor-pointer select-none items-center gap-2 text-[12px] text-ink-400 sm:flex">
+          <input
+            type="checkbox"
+            checked={technical}
+            onChange={(e) => onTechnicalChange(e.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--color-flux-500)]"
+          />
+          Technical details
+        </label>
+        <span className="hidden h-4 w-px bg-ink-800 sm:block" />
         <span
           title={user.email}
           className="grid h-7 w-7 place-items-center rounded-full bg-flux-500/20 text-[11px] font-semibold text-flux-300"

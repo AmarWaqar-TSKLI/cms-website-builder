@@ -21,7 +21,19 @@ import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
 import { AccountBar } from "./AccountBar";
 import { ActivityFeed } from "./ActivityFeed";
-import { Btn, Card, CardHead, LinkBtn, Tile, UnderTheHood, exactTime, money } from "./dash-ui";
+import { NextStep } from "./NextStep";
+import {
+  Btn,
+  Card,
+  CardHead,
+  LinkBtn,
+  TechnicalDetails,
+  Tile,
+  useTechnical,
+  UnderTheHood,
+  exactTime,
+  money,
+} from "./dash-ui";
 
 /* ── shapes ───────────────────────────────────────────────────────────────── */
 
@@ -266,6 +278,21 @@ export function DashboardShell({
     [load],
   );
 
+  /**
+   * Technical details, off by default and remembered per browser.
+   *
+   * Read in an effect rather than during render so the server and the first
+   * client paint agree — reading localStorage while rendering is the classic
+   * way to get a hydration mismatch.
+   */
+  const [technical, setTechnical] = useState(false);
+  useEffect(() => {
+    setTechnical(window.localStorage.getItem("cms.technical") === "1");
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("cms.technical", technical ? "1" : "0");
+  }, [technical]);
+
   /* derived facts, in plain terms */
   const live = useMemo(
     () => (releases ?? []).find((r) => r.id === liveId) ?? null,
@@ -288,9 +315,28 @@ export function DashboardShell({
       new Date(p.draftUpdatedAt).getTime() > new Date(lastPublishedAt).getTime(),
   ).length;
 
+  /**
+   * The one thing to suggest. Derived, not stored — a "you have unsaved work"
+   * flag would be another thing that can be wrong, and everything needed to work
+   * it out is already on screen.
+   */
+  const nextStep: "never-published" | "has-changes" | "up-to-date" | "building" = building
+    ? "building"
+    : !live
+      ? "never-published"
+      : pagesWithEdits > 0
+        ? "has-changes"
+        : "up-to-date";
+
   return (
-    <>
-      <AccountBar user={user} sites={sites} currentSiteId={site.id} />
+    <TechnicalDetails enabled={technical}>
+      <AccountBar
+        user={user}
+        sites={sites}
+        currentSiteId={site.id}
+        technical={technical}
+        onTechnicalChange={setTechnical}
+      />
       <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
       <TopBar />
 
@@ -321,6 +367,17 @@ export function DashboardShell({
         onPublish={publish}
         editHref={editHref}
       />
+
+      <div className="mb-6">
+        <NextStep
+          state={nextStep}
+          pageCount={pages.length}
+          pendingCount={pagesWithEdits}
+          editHref={editHref}
+          onPublish={publish}
+          publishing={busy === "publish"}
+        />
+      </div>
 
       {flash && (
         <div
@@ -444,15 +501,18 @@ export function DashboardShell({
         </UnderTheHood>
       </div>
       {/* ── Who did what ─────────────────────────────────────────────────── */}
-      <Card className="mt-6">
+      <Card className="mt-6 p-5 sm:p-6">
         <CardHead
-          title="Activity"
-          hint="Every change, with a name against it. Written as it happens, into a table nothing can edit afterwards."
+          title="Recent activity"
+          hint="Who changed what, and when."
+          tables="activity_log"
         />
-        <ActivityFeed activity={activity} />
+        <div className="mt-4">
+          <ActivityFeed activity={activity} />
+        </div>
       </Card>
     </main>
-    </>
+    </TechnicalDetails>
   );
 }
 
@@ -532,7 +592,7 @@ function Hero({
             <span className="text-[12px] text-ink-500">{site.orgName}</span>
           </div>
 
-          <h1 className="mt-3 truncate text-[28px] font-semibold tracking-tight text-ink-100 sm:text-[32px]">
+          <h1 className="display mt-3 truncate text-[30px] text-ink-100 sm:text-[36px]">
             {site.name}
           </h1>
 
@@ -551,8 +611,8 @@ function Hero({
               </>
             ) : (
               <>
-                Nobody can see this site yet. Publish it once and it gets a real address, a version
-                you can return to, and files you can download.
+                Nobody can see this website yet. Publishing gives it a real web address and saves
+                this exact version, so you can always come back to it.
               </>
             )}
           </p>
@@ -582,14 +642,12 @@ function Hero({
 
         <div className="flex w-full shrink-0 flex-col gap-2 self-stretch sm:w-[240px] sm:self-start lg:self-center">
           {!live ? (
-            <>
-              <Btn variant="primary" onClick={onPublish} disabled={publishing || building || !loaded}>
-                {publishing || building ? "Publishing…" : "Publish for the first time"}
-              </Btn>
-              <LinkBtn href={editHref} variant="ghost">
-                Edit your pages
-              </LinkBtn>
-            </>
+            // Deliberately no publish button here. The "Start here" card below
+            // owns that action, and two primary buttons for one job make a
+            // person stop to work out whether they differ.
+            <LinkBtn href={editHref} variant="primary">
+              Edit your pages
+            </LinkBtn>
           ) : (
             <>
               <LinkBtn href={liveUrl} external variant="primary" title="Opens your published site">
@@ -644,7 +702,7 @@ function PagesPanel({
         hint={
           pagesWithEdits > 0
             ? `${pagesWithEdits} page${pagesWithEdits === 1 ? " has" : "s have"} changes that aren't published yet.`
-            : "Click a page to open it in the editor."
+            : "Click any page to change what is on it."
         }
         tables="pages · page_drafts · page_revisions"
       />
@@ -722,8 +780,8 @@ function PagesPanel({
       )}
 
       <p className="mt-4 border-t border-ink-800 pt-3.5 text-[11.5px] leading-relaxed text-ink-500">
-        Editing never touches what is online. Your changes sit safely in a draft until you publish
-        — and every publish keeps the previous one intact.{" "}
+        Editing never changes your live website. Your work saves privately as you go, and only
+        becomes public when you publish.{" "}
         <a
           href="/walkthrough"
           className="text-flux-300 underline decoration-flux-300/40 underline-offset-2 transition-colors hover:decoration-flux-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
@@ -781,6 +839,7 @@ function PublishPanel({
   firstTime: boolean;
   className?: string;
 }) {
+  const technical = useTechnical();
   const [showAll, setShowAll] = useState(false);
   const list = releases ?? [];
   const visible = showAll ? list : list.slice(0, VISIBLE_VERSIONS);
@@ -789,7 +848,7 @@ function PublishPanel({
     <Card className={cx("flex flex-col p-5 sm:p-6", className)}>
       <CardHead
         title="Publish"
-        hint="Takes everything as it stands right now and makes it the version visitors see."
+        hint="Makes everything you have changed visible to the public."
       />
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -858,16 +917,18 @@ function PublishPanel({
       )}
 
       <div className="mt-6 flex items-baseline justify-between gap-3">
-        <h3 className="text-[13px] font-semibold text-ink-200">Version history</h3>
-        <code
-          title="Backed by the releases and release_items tables"
-          className="font-mono text-[10.5px] text-ink-500"
-        >
-          releases
-        </code>
+        <h3 className="text-[13px] font-semibold text-ink-200">Earlier versions</h3>
+        {technical && (
+          <code
+            title="Stored in the releases and release_items tables"
+            className="rounded-md bg-ink-850 px-2 py-1 font-mono text-[10.5px] text-ink-500"
+          >
+            releases
+          </code>
+        )}
       </div>
       <p className="mt-1 text-[11.5px] leading-relaxed text-ink-500">
-        Every version is kept. Restoring one puts it back online instantly.
+        Every time you publish we keep a copy, so you can put an older one back whenever you like.
       </p>
 
       {!loaded ? (
@@ -880,7 +941,7 @@ function PublishPanel({
         <div className="mt-3 rounded-xl border border-dashed border-ink-700 px-4 py-6 text-center">
           <p className="text-[12.5px] text-ink-300">No versions yet.</p>
           <p className="mt-1 text-[11.5px] text-ink-500">
-            Your first publish creates version 1, and every one after it stays here to return to.
+            Once you publish, older versions of your website live here — so a mistake is never permanent.
           </p>
         </div>
       ) : (
@@ -1052,11 +1113,11 @@ function ExportPanel({
   return (
     <Card className={cx("p-5 sm:p-6", className)}>
       <CardHead
-        title="Take your site elsewhere"
+        title="Download your website"
         hint={
           releaseId
             ? `Three ways to get the same site${versionNo ? ` — all of them version ${versionNo}` : ""}. Nothing here locks you in.`
-            : "Once you publish, you can open, download or self-host your site from here."
+            : "Your website is yours. Once published you can download the whole thing as files, or move it to another host."
         }
         tables="releases.artifact_url"
       />
@@ -1064,7 +1125,7 @@ function ExportPanel({
       {!releaseId ? (
         <div className="mt-4 flex flex-col items-start gap-3 rounded-xl border border-dashed border-ink-700 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12.5px] text-ink-400">
-            There are no files yet — a version has to be built first.
+            Nothing to download yet. Publish once and the files appear here.
           </p>
           <Btn variant="secondary" size="sm" onClick={onPublish} disabled={publishing || building}>
             {building ? "Publishing…" : "Publish now"}
@@ -1162,7 +1223,7 @@ function CommercePanel({
     <Card className={cx("p-5 sm:p-6", className)}>
       <CardHead
         title="Store"
-        hint="Products, prices and orders. This data is live: it isn't part of a version, and restoring an older design never touches it."
+        hint="Your products, prices and orders. These are always live — changing your design, or going back to an older version, never touches them."
         tables="products · orders"
         action={
           <LinkBtn href="/dashboard/products" size="sm" variant="secondary">
@@ -1193,9 +1254,9 @@ function CommercePanel({
           title="sum of orders.total_cents"
         />
         <Tile
-          label="Features on"
-          value={modules.length ? modules.map(capitalise).join(", ") : "Core"}
-          sub={modules.length ? "beyond the core builder" : "no add-ons enabled"}
+          label="Selling"
+          value={modules.length ? "On" : "Off"}
+          sub={modules.length ? "you can list and sell products" : "pages only, no shop"}
           title="site_modules"
         />
       </div>

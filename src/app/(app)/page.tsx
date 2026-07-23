@@ -16,7 +16,15 @@ import ReleaseStack from "@/components/landing/ReleaseStack";
  */
 export default function LandingPage() {
   return (
-    <main className="relative w-full overflow-x-clip">
+    <main
+      /*
+        The landing film keeps the dark world it was designed for — a 3D canvas
+        and a scroll narrative are a different job from a tool somebody works in
+        all day. `theme-dark` re-declares the palette variables for this subtree
+        only, so the product around it stays light.
+      */
+      className="theme-dark relative w-full overflow-x-clip"
+    >
       <Hero />
       <PremiseScene />
       <PackagingScene />

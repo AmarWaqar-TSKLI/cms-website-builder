@@ -126,7 +126,7 @@ test.describe("edit → publish → serve → rollback", () => {
 
     // ── Roll back through the dashboard ───────────────────────────────────
     await page.goto("/dashboard");
-    await expect(page.getByText("Version history")).toBeVisible();
+    await expect(page.getByText("Earlier versions")).toBeVisible();
 
     const rollbackButton = page
       .getByRole("button", { name: /Restore|Roll back to this version/ })
