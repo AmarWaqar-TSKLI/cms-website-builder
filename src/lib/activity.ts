@@ -33,6 +33,8 @@ export type ActivityAction =
   | "theme.updated"
   | "product.created"
   | "product.deleted"
+  | "media.uploaded"
+  | "media.deleted"
   | "user.signed_in"
   | "user.signed_out";
 
@@ -41,7 +43,7 @@ export interface ActivityInput {
   userId?: string | null;
   actorName: string;
   action: ActivityAction;
-  entityType?: "page" | "component" | "release" | "theme" | "product" | "site" | null;
+  entityType?: "page" | "component" | "release" | "theme" | "product" | "media" | "site" | null;
   entityId?: string | null;
   summary: string;
   meta?: Prisma.InputJsonValue;

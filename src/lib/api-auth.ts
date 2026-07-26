@@ -112,3 +112,20 @@ export async function guardProduct(productId: string): Promise<Guarded<{ siteId:
     return deny(err);
   }
 }
+
+/** Guard by MEDIA id — resolve to its site, then check membership. */
+export async function guardMedia(mediaId: string): Promise<Guarded<{ siteId: string }>> {
+  try {
+    const user = await requireUser();
+    const media = await prisma.media.findUnique({
+      where: { id: mediaId },
+      select: { siteId: true },
+    });
+    // Same 403 for "missing" and "not yours" — see the note on guardRelease.
+    if (!media) throw new AuthError(403, "No access to this image");
+    await requireSiteAccess(user.id, media.siteId);
+    return { ok: true, user, extra: { siteId: media.siteId } };
+  } catch (err) {
+    return deny(err);
+  }
+}
