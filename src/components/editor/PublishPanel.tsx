@@ -3,15 +3,16 @@
 /**
  * Publish, watched happening.
  *
- * The panel shows the two jobs separately because they ARE separate: the
- * snapshot's elapsed time and the job's status at the moment the response
- * returned, then the build resolving afterwards via polling. Seeing "committed
- * in 47ms — job queued" followed a second later by "ready" is the clearest
- * statement of D4 the interface can make.
+ * Publishing is really two steps, and the panel shows them as two steps because
+ * that is the honest picture: your changes are saved instantly, and then your
+ * site is rebuilt in the background while the current one stays online. In plain
+ * language by default; with "Technical details" on, each step also names the
+ * transaction, the job and the pointer swap underneath it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushDraft } from "@/lib/editor/useAutosave";
-import { Badge, Dot, Mono, Note, SectionLabel } from "../ui";
+import { Badge, Dot, Mono } from "../ui";
+import { useTechnical } from "../technical";
 
 interface PublishResponse {
   releaseId: string;
@@ -41,6 +42,7 @@ export function PublishPanel({
   siteSlug: string;
   onPublished?: () => void;
 }) {
+  const technical = useTechnical();
   const [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<PublishResponse | null>(null);
   const [release, setRelease] = useState<ReleaseStatus | null>(null);
@@ -72,7 +74,7 @@ export function PublishPanel({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Publish failed");
+        setError(data.error ?? "Something went wrong while publishing.");
         setBusy(false);
         return;
       }
@@ -93,7 +95,7 @@ export function PublishPanel({
         }
       }, 400);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      setError(err instanceof Error ? err.message : "Couldn’t reach the server. Check your connection.");
       setBusy(false);
     }
   }, [siteId, notes, onPublished]);
@@ -101,16 +103,17 @@ export function PublishPanel({
   return (
     <div className="space-y-4 p-4">
       <div>
-        <SectionLabel>Publish</SectionLabel>
-        <Note>
-          One transaction promotes every page&apos;s draft to an immutable revision and queues a
-          build. It returns before anything is rendered.
-        </Note>
+        <p className="display text-[15px] text-ink-100">Publish</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-400">
+          Makes everything you’ve changed visible to the public. Your current site stays online
+          until the new version is ready.
+        </p>
       </div>
 
       <input
         className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-[13px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500"
-        placeholder="Release notes (optional)"
+        placeholder="What changed? (optional)"
+        aria-label="Note describing this version (optional)"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
       />
@@ -121,7 +124,7 @@ export function PublishPanel({
         disabled={busy}
         className="w-full rounded-xl bg-flux-500 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Publishing…" : "Publish site"}
+        {busy ? "Publishing…" : "Publish changes"}
       </button>
 
       {error && (
@@ -134,29 +137,60 @@ export function PublishPanel({
         <div className="space-y-3 rounded-xl border border-ink-800 bg-ink-950 p-3">
           <Step
             tone="live"
-            title={`Snapshot committed in ${snapshot.elapsedMs}ms`}
+            title="Saved this version"
             detail={
               <>
-                v{snapshot.versionNo} · {snapshot.pageCount} revisions appended ·{" "}
-                {snapshot.dependencyCount} dependencies recorded
+                Version {snapshot.versionNo} · {snapshot.pageCount} page
+                {snapshot.pageCount === 1 ? "" : "s"}. Your changes are safely stored and can’t be
+                lost.
+                {technical && (
+                  <span className="mt-1 block font-mono text-[10.5px] text-ink-500">
+                    Snapshot committed in {snapshot.elapsedMs}ms · {snapshot.pageCount} revisions
+                    appended · {snapshot.dependencyCount} dependencies recorded
+                  </span>
+                )}
               </>
             }
           />
           <Step
             tone={snapshot.jobStatusAtReturn === "queued" ? "warn" : "building"}
-            title={`Build job was “${snapshot.jobStatusAtReturn}” when publish returned`}
-            detail="The API answered before any HTML existed. Nothing is live yet."
+            title="Getting your site ready"
+            detail={
+              <>
+                Nothing is public yet — the previous version is still what visitors see.
+                {technical && (
+                  <span className="mt-1 block font-mono text-[10.5px] text-ink-500">
+                    Publish returned while the build job was “{snapshot.jobStatusAtReturn}”, before
+                    any HTML existed.
+                  </span>
+                )}
+              </>
+            }
           />
           {release?.status === "building" && (
-            <Step tone="building" pulse title="Worker is building…" detail="Separate process, polling build_jobs." />
+            <Step
+              tone="building"
+              pulse
+              title="Building your site…"
+              detail={
+                technical
+                  ? "A separate worker process is rendering it — polling build_jobs."
+                  : "This usually takes a few seconds."
+              }
+            />
           )}
           {release?.status === "ready" && (
             <Step
               tone="live"
-              title="Artifact written — live pointer moved"
+              title="Your site is live"
               detail={
                 <>
-                  <Mono className="text-ink-300">{release.id}</Mono>
+                  Version {release.versionNo} is online for everyone.
+                  {technical && (
+                    <span className="mt-1 block">
+                      <Mono className="text-ink-400">{release.id}</Mono>
+                    </span>
+                  )}
                   <span className="mt-2 flex flex-wrap gap-2">
                     <a
                       className="text-flux-300 underline decoration-flux-500/40 underline-offset-2"
@@ -164,19 +198,19 @@ export function PublishPanel({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      hosted
+                      View live ↗
                     </a>
                     <a
                       className="text-flux-300 underline decoration-flux-500/40 underline-offset-2"
                       href={`/api/releases/${release.id}/export/static`}
                     >
-                      static zip
+                      Download .zip
                     </a>
                     <a
                       className="text-flux-300 underline decoration-flux-500/40 underline-offset-2"
                       href={`/api/releases/${release.id}/export/container`}
                     >
-                      container
+                      Container
                     </a>
                   </span>
                 </>
@@ -186,12 +220,12 @@ export function PublishPanel({
           {release?.status === "failed" && (
             <Step
               tone="failed"
-              title="Build failed — site unaffected"
+              title="Couldn’t build this version — your live site is safe"
               detail={
                 <>
                   {release.buildError}
                   <span className="mt-1 block text-ink-400">
-                    The previous release is still being served. Retry from the releases panel.
+                    Your previous version is still online. You can try again from the dashboard.
                   </span>
                 </>
               }
