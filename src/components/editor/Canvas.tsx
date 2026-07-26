@@ -116,7 +116,7 @@ function EmptyDropZone({ parentId, inline }: { parentId: string | null; inline?:
       )}
       style={{
         minHeight: inline ? 120 : 140,
-        outline: active ? "2px dashed #6d5cff" : "1px dashed #d4d4d8",
+        outline: active ? "2px dashed var(--color-flux-500)" : "1px dashed #d4d4d8",
         outlineOffset: -2,
       }}
     >
@@ -246,7 +246,7 @@ function NodeFrame({
       e.preventDefault();
       setEditing(true);
       target.contentEditable = "plaintext-only";
-      target.style.outline = "2px solid #6d5cff";
+      target.style.outline = "2px solid var(--color-flux-500)";
       target.style.outlineOffset = "2px";
       target.focus();
 
@@ -298,8 +298,8 @@ function NodeFrame({
 
   if (!entry) {
     return (
-      <div className="p-6 text-center font-mono text-xs text-red-500">
-        Unknown component “{node.type}”
+      <div className="p-6 text-center text-xs text-fail-500">
+        This block can’t be shown here.
       </div>
     );
   }
@@ -361,12 +361,12 @@ function NodeFrame({
         "relative outline-none transition-shadow",
         selected
           ? instanceShared
-            ? "shadow-[inset_0_0_0_2px_#22c7a9]"
-            : "shadow-[inset_0_0_0_2px_#6d5cff]"
+            ? "shadow-[inset_0_0_0_2px_var(--color-reuse-500)]"
+            : "shadow-[inset_0_0_0_2px_var(--color-flux-500)]"
           : hovered
             ? instanceShared
-              ? "shadow-[inset_0_0_0_1px_rgba(34,199,169,.6)]"
-              : "shadow-[inset_0_0_0_1px_rgba(109,92,255,.5)]"
+              ? "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-reuse-500)_55%,transparent)]"
+              : "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-flux-500)_50%,transparent)]"
             : "",
       )}
     >
@@ -388,11 +388,11 @@ function NodeFrame({
       {(selected || hovered) && (
         <span
           className={cx(
-            "pointer-events-none absolute left-0 top-0 z-20 rounded-br-md px-2 py-0.5 font-mono text-[10px] font-medium text-white",
+            "pointer-events-none absolute left-0 top-0 z-20 rounded-br-md px-2 py-0.5 text-[10px] font-medium text-white",
             instanceShared
               ? selected
-                ? "bg-[#22c7a9]"
-                : "bg-[#22c7a9]/60"
+                ? "bg-reuse-500"
+                : "bg-reuse-500/60"
               : selected
                 ? "bg-flux-500"
                 : "bg-flux-500/60",
@@ -408,13 +408,13 @@ function NodeFrame({
         <div
           className={cx(
             "absolute right-0 top-0 z-20 flex items-center gap-0.5 rounded-bl-md px-1 py-0.5",
-            instanceShared ? "bg-[#22c7a9]" : "bg-flux-500",
+            instanceShared ? "bg-reuse-500" : "bg-flux-500",
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {instanceShared && definition && (
             <ToolbarButton
-              title={`Edit “${definition.name}” — changes every page using it`}
+              title={`Edit “${definition.name}” everywhere — updates every page that uses it`}
               onClick={() => router.push(`/editor/component/${definition.id}`)}
             >
               ✎
@@ -422,7 +422,7 @@ function NodeFrame({
           )}
           {instanceShared && definition && (
             <ToolbarButton
-              title="Detach — turn this into ordinary blocks this page owns"
+              title="Stop reusing here — turn this into normal blocks only this page has"
               onClick={() => detachComponent(node.id, ctx.components ?? {})}
             >
               ⛓
