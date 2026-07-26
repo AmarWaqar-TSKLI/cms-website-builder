@@ -7,9 +7,14 @@
  * column names are welcome, but only as secondary detail — a muted caption, a
  * `title` tooltip, or inside the "What's happening underneath?" disclosure.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import { cx } from "../ui";
+// Technical-details now lives in a shared module so the editor can read the same
+// switch. Re-exported here so every existing dashboard import keeps working.
+import { TechnicalDetails, useTechnical } from "../technical";
+
+export { TechnicalDetails, useTechnical };
 
 /* ── buttons ──────────────────────────────────────────────────────────────── */
 
@@ -128,34 +133,6 @@ export function Card({
  * Panel header: plain-English title first, optional one-line explanation, and
  * the underlying tables as a small muted caption that never labels a control.
  */
-/**
- * TECHNICAL DETAILS — off by default.
- *
- * This product has two readers. Somebody running a shop wants to know whether
- * their site is live; a developer evaluating the architecture wants to know
- * which table a number came from. Showing table names to the first reader is
- * noise at best and intimidating at worst, and hiding them from the second
- * throws away the thing that makes the design legible.
- *
- * So it is one switch rather than two products. Off, this is a website builder.
- * On, every panel says what it is backed by.
- */
-const TechnicalContext = createContext(false);
-
-export function TechnicalDetails({
-  enabled,
-  children,
-}: {
-  enabled: boolean;
-  children: ReactNode;
-}) {
-  return <TechnicalContext.Provider value={enabled}>{children}</TechnicalContext.Provider>;
-}
-
-export function useTechnical() {
-  return useContext(TechnicalContext);
-}
-
 export function CardHead({
   title,
   hint,
