@@ -14,12 +14,23 @@ import { expect, test, type Page } from "@playwright/test";
  * it exercises the session cookie, the middleware redirect and the server-side
  * guard on every single request it goes on to make.
  */
-async function signIn(page: Page, email = "amar@acme.test") {
+async function signIn(
+  page: Page,
+  email = "amar@acme.test",
+  { dismissWelcome = true }: { dismissWelcome?: boolean } = {},
+) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("demo1234");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+  // A brand-new session meets the first-run welcome. Dismiss it so it isn't
+  // sitting over the dashboard for journeys that go on to use it. The onboarding
+  // test below opts out, to check the welcome on its own terms.
+  if (dismissWelcome) {
+    const skip = page.getByRole("button", { name: "Skip" });
+    if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
+  }
 }
 
 /** Provenance now lives in the markup rather than a response header. */
@@ -237,6 +248,45 @@ test.describe("edit → publish → serve → rollback", () => {
     // …and the engine blocks are always there. (The accessible name starts with
     // the palette icon glyph, so this matches loosely rather than anchored.)
     await expect(page.getByRole("button", { name: /Hero/ }).first()).toBeVisible();
+  });
+});
+
+/**
+ * First-run onboarding.
+ *
+ * A brand-new user should be oriented before they touch anything, and never
+ * pestered again. This drives that whole contract through the interface: the
+ * welcome greets them by name, steps through, hands off to the editor, stays
+ * gone on the next visit, and can be summoned back on demand.
+ */
+test.describe("first-run onboarding", () => {
+  test("a new user is welcomed once, then never pestered", async ({ page }) => {
+    // Opt out of the auto-dismiss so we can see the welcome itself.
+    await signIn(page, "amar@acme.test", { dismissWelcome: false });
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByText(/Welcome, Amar/)).toBeVisible();
+
+    // Step through the four beats to the end.
+    await dialog.getByRole("button", { name: "Next" }).click();
+    await dialog.getByRole("button", { name: "Next" }).click();
+    await dialog.getByRole("button", { name: "Next" }).click();
+
+    // The last step offers to start building; taking it dismisses and opens the editor.
+    await dialog.getByRole("link", { name: "Start building" }).click();
+    await page.waitForURL(/\/editor\//, { timeout: 20_000 });
+
+    // Back on the dashboard it does not reappear — the choice is remembered.
+    await page.goto("/dashboard");
+    await expect(page.getByRole("button", { name: "Show intro" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // But anyone can summon it again from the top bar.
+    await page.getByRole("button", { name: "Show intro" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "Skip" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });
 
