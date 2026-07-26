@@ -57,12 +57,13 @@ async function setHeadline(page: Page, headline: string) {
   await expect(page.getByText(/Saved|Up to date/).first()).toBeVisible({ timeout: 20_000 });
 }
 
-/** Open the Publish tab and run a publish, waiting for the artifact to land. */
+/** Open the Publish tab and run a publish, waiting for the site to go live. */
 async function publish(page: Page) {
   await page.getByRole("button", { name: "Publish", exact: true }).first().click();
-  await page.getByRole("button", { name: "Publish site" }).click();
-  await expect(page.getByText(/Snapshot committed in \d+ms/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Artifact written/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Publish changes" }).click();
+  // Plain-language flow now: the snapshot lands first, then the build goes live.
+  await expect(page.getByText(/Saved this version/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Your site is live/)).toBeVisible({ timeout: 60_000 });
 }
 
 test.describe("edit → publish → serve → rollback", () => {
@@ -232,7 +233,7 @@ test.describe("edit → publish → serve → rollback", () => {
 
     // The seeded site HAS commerce, so the block is present…
     await expect(page.getByRole("button", { name: /Product grid/ })).toBeVisible();
-    await expect(page.getByText("Commerce module")).toBeVisible();
+    await expect(page.getByText(/online store is on/)).toBeVisible();
     // …and the engine blocks are always there. (The accessible name starts with
     // the palette icon glyph, so this matches loosely rather than anchored.)
     await expect(page.getByRole("button", { name: /Hero/ }).first()).toBeVisible();
@@ -273,7 +274,7 @@ test.describe("two people, one page", () => {
       await expect(saraPage.getByText(/Amar Waqar is editing this page/)).toBeVisible();
 
       // The controls that would write are gone for her.
-      await expect(saraPage.getByRole("button", { name: /Make component/ })).toHaveCount(0);
+      await expect(saraPage.getByRole("button", { name: /Reuse across pages/ })).toHaveCount(0);
       // The top-bar Publish, not the right-panel tab of the same name.
       await expect(
         saraPage.getByRole("button", { name: "Publish", exact: true }).first(),
