@@ -21,12 +21,14 @@ import type {
   PropGroup,
   RefKind,
   ResolvedComponent,
+  ResolvedMedia,
   ThemeTokens,
 } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { componentIdOf, expandComponents, isComponentRef, overridesOf } from "@/lib/shared-components";
 import { Badge, cx } from "../ui";
 import { useTechnical } from "../technical";
+import { MediaField } from "./MediaField";
 
 export interface RefOptions {
   collection: { value: string; label: string }[];
@@ -265,10 +267,14 @@ export function Properties({
   refOptions,
   tokens,
   components,
+  siteId,
+  media,
 }: {
   refOptions: RefOptions;
   tokens: ThemeTokens;
   components: Record<string, ResolvedComponent>;
+  siteId: string;
+  media: Record<string, ResolvedMedia>;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const body = useEditor((s) => s.body);
@@ -347,6 +353,8 @@ export function Properties({
                     tokens={tokens}
                     value={node.props[key]}
                     refOptions={refOptions}
+                    siteId={siteId}
+                    media={media}
                     onChange={(v) => updateProp(node.id, key, v)}
                   />
                 );
@@ -447,15 +455,39 @@ function Field({
   onChange,
   refOptions,
   tokens,
+  siteId,
+  media,
 }: {
   def: PropDef;
   value: unknown;
   onChange: (v: unknown) => void;
   refOptions: RefOptions;
   tokens: ThemeTokens;
+  siteId: string;
+  media: Record<string, ResolvedMedia>;
 }) {
   const isRef = def.kind === "ref" || def.kind === "refList";
   const technical = useTechnical();
+
+  // Images get a real picker — thumbnails, upload, choose, clear — instead of the
+  // generic "pick an id from a dropdown" every other reference uses.
+  if (def.kind === "ref" && def.ref === "media") {
+    return (
+      <div className="block">
+        <span className="mb-1.5 block text-[11.5px] font-medium text-ink-200">{def.label}</span>
+        <MediaField
+          value={String(value ?? "")}
+          onChange={onChange}
+          siteId={siteId}
+          media={media}
+          options={refOptions.media}
+        />
+        {def.help && (
+          <span className="mt-1.5 block text-[10.5px] leading-snug text-ink-500">{def.help}</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <label className="block">

@@ -558,7 +558,13 @@ export function EditorShell(boot: EditorBootstrap) {
           />
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rightTab === "design" && (
-              <Properties refOptions={boot.refOptions} tokens={tokens} components={components} />
+              <Properties
+                refOptions={boot.refOptions}
+                tokens={tokens}
+                components={components}
+                siteId={boot.site.id}
+                media={ctx.media}
+              />
             )}
             {rightTab === "theme" && (
               <ThemePanel
