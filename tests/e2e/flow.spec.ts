@@ -23,7 +23,8 @@ async function signIn(
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("demo1234");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+  // Generous: under a full-suite run the app can be mid-build when this fires.
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
   // A brand-new session meets the first-run welcome. Dismiss it so it isn't
   // sitting over the dashboard for journeys that go on to use it. The onboarding
   // test below opts out, to check the welcome on its own terms.
@@ -344,6 +345,34 @@ test.describe("blog", () => {
     // …and turns into an unpublishable, published post.
     await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(title)).toBeVisible();
+  });
+
+  test("a published post is readable at its own /blog/<slug> page", async ({ page }) => {
+    await signIn(page);
+    const site = await siteInfo(page);
+
+    // The seeded home page carries a PostList of the seeded posts, so publishing
+    // freezes them and their detail pages become reachable.
+    const pub = await page.request.post(`/api/sites/${site.id}/publish`, {
+      data: { notes: "blog detail e2e" },
+    });
+    const { releaseId } = await pub.json();
+    await expect
+      .poll(
+        async () => (await (await page.request.get(`/api/releases/${releaseId}`)).json()).status,
+        { timeout: 60_000 },
+      )
+      .toBe("ready");
+
+    // The teaser list on the home page links to the detail page.
+    const home = await (await page.request.get(`/s/${site.slug}`)).text();
+    expect(home).toContain("From the blog");
+    expect(home).toContain("/blog/page-is-a-description");
+
+    // The detail page renders the post's title and its frozen body.
+    const detail = await (await page.request.get(`/s/${site.slug}/blog/page-is-a-description`)).text();
+    expect(detail).toContain("Why a page is a description");
+    expect(detail).toContain("The database never stores HTML");
   });
 });
 

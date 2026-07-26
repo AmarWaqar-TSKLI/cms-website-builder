@@ -102,6 +102,7 @@ describe("registry", () => {
           title: "Hello World Post",
           slug: "hello",
           excerpt: "A short summary.",
+          body: "The full text.",
           publishedAt: "2026-01-02T00:00:00.000Z",
         },
       },
@@ -116,7 +117,7 @@ describe("registry", () => {
     const goneCtx: RenderContext = {
       ...ctx,
       posts: {
-        post_1: { id: "post_1", title: "Gone Post", slug: "g", excerpt: "", publishedAt: null, missing: true },
+        post_1: { id: "post_1", title: "Gone Post", slug: "g", excerpt: "", body: "", publishedAt: null, missing: true },
       },
     };
     const html2 = renderToStaticMarkup(
