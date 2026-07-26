@@ -25,6 +25,7 @@ import { SaveIndicator } from "./SaveIndicator";
 import { Layers } from "./Layers";
 import { ThemePanel } from "./ThemePanel";
 import { cx } from "../ui";
+import { TechnicalDetails, TechnicalToggle } from "../technical";
 
 export interface EditorBootstrap {
   page: { id: string; path: string; title: string };
@@ -81,6 +82,17 @@ export function EditorShell(boot: EditorBootstrap) {
   const [rightTab, setRightTab] = useState<RightTab>("design");
   const [device, setDevice] = useState<(typeof DEVICES)[number]["id"]>("desktop");
   const [busy, setBusy] = useState(false);
+
+  // The same "Technical details" switch the dashboard has, remembered under the
+  // same key so flipping it in either place changes both. Read in an effect (not
+  // during render) so the server and first client paint agree on `false`.
+  const [technical, setTechnical] = useState(false);
+  useEffect(() => {
+    setTechnical(window.localStorage.getItem("cms.technical") === "1");
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("cms.technical", technical ? "1" : "0");
+  }, [technical]);
 
   const editingComponent = boot.component;
 
@@ -174,12 +186,13 @@ export function EditorShell(boot: EditorBootstrap) {
   }, [onKeyDown]);
 
   /**
-   * Make component — lift the selected block out of this page and replace it
-   * with a reference to a new shared definition.
+   * Reuse across pages — lift the selected block out of this page and replace it
+   * with a reference to a new reusable block, so the same thing can appear on
+   * other pages and stay in sync.
    *
-   * The order matters. Create the component first; only swap the node once the
-   * server has confirmed it, so a failed request leaves the page exactly as it
-   * was rather than pointing at a symbol that does not exist.
+   * The order matters. Create the reusable block first; only swap the node once
+   * the server has confirmed it, so a failed request leaves the page exactly as
+   * it was rather than pointing at something that does not exist.
    */
   const makeComponent = useCallback(async () => {
     const state = useEditor.getState();
@@ -190,7 +203,7 @@ export function EditorShell(boot: EditorBootstrap) {
     if (!node) return;
 
     const suggested = defaultComponentName(node.type, boot.components.length);
-    const name = window.prompt("Name this component", suggested)?.trim();
+    const name = window.prompt("Name this reusable block", suggested)?.trim();
     if (!name) return;
 
     setBusy(true);
@@ -208,11 +221,11 @@ export function EditorShell(boot: EditorBootstrap) {
 
       if (res.status === 409) {
         const data = await res.json();
-        window.alert(data.message ?? "A component with that name already exists.");
+        window.alert(data.message ?? "A reusable block with that name already exists.");
         return;
       }
       if (!res.ok) {
-        window.alert(`Could not create the component (${res.status}).`);
+        window.alert(`Could not create the reusable block (${res.status}).`);
         return;
       }
 
@@ -228,10 +241,10 @@ export function EditorShell(boot: EditorBootstrap) {
     }
   }, [boot.site.id, boot.components.length, busy, router]);
 
-  /** Create an empty symbol and go straight to editing it. */
+  /** Create an empty reusable block and go straight to editing it. */
   const newComponent = useCallback(async () => {
     if (busy) return;
-    const name = window.prompt("Name the new component")?.trim();
+    const name = window.prompt("Name the new reusable block")?.trim();
     if (!name) return;
 
     setBusy(true);
@@ -244,7 +257,7 @@ export function EditorShell(boot: EditorBootstrap) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        window.alert(data.message ?? `Could not create the component (${res.status}).`);
+        window.alert(data.message ?? `Could not create the reusable block (${res.status}).`);
         return;
       }
       const created = (await res.json()) as { id: string };
@@ -257,7 +270,8 @@ export function EditorShell(boot: EditorBootstrap) {
   const frameWidth = DEVICES.find((d) => d.id === device)!.width;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-ink-950">
+    <TechnicalDetails enabled={technical}>
+    <div className="flex h-screen flex-col overflow-hidden bg-ink-950 text-ink-200">
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       {/*
         The read-only banner. Deliberately the first thing on the screen and
@@ -305,8 +319,8 @@ export function EditorShell(boot: EditorBootstrap) {
           // sentence people stop seeing; "changes 12 pages: /, /about, /pricing"
           // is a fact they can act on before they type.
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#22c7a9]/15 px-2.5 py-1.5 text-[12px] font-medium text-[#22c7a9]">
-              ◈ {editingComponent.name}
+            <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-reuse-500/12 px-2.5 py-1.5 text-[12px] font-medium text-reuse-500">
+              <span aria-hidden>◈</span> {editingComponent.name}
             </span>
             <span
               className={cx(
@@ -361,10 +375,14 @@ export function EditorShell(boot: EditorBootstrap) {
               type="button"
               onClick={makeComponent}
               disabled={!selectedId || busy}
-              title="Turn the selected block into a shared component reusable across pages"
-              className="rounded-lg border border-[#22c7a9]/40 px-2.5 py-1.5 text-[12px] text-[#22c7a9] transition-colors hover:border-[#22c7a9] hover:bg-[#22c7a9]/10 disabled:cursor-not-allowed disabled:opacity-30"
+              title={
+                selectedId
+                  ? "Reuse this block on other pages. Edit it once and every page that uses it updates together."
+                  : "Select a block first, then reuse it across pages."
+              }
+              className="rounded-lg border border-reuse-500/40 px-2.5 py-1.5 text-[12px] font-medium text-reuse-500 transition-colors hover:border-reuse-500 hover:bg-reuse-500/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              ◈ Make component
+              <span aria-hidden>◈</span> Reuse across pages
             </button>
           )}
 
@@ -400,10 +418,18 @@ export function EditorShell(boot: EditorBootstrap) {
 
           <SaveIndicator />
 
+          <span className="hidden h-5 w-px bg-ink-800 xl:block" />
+          <TechnicalToggle
+            enabled={technical}
+            onChange={setTechnical}
+            className="hidden xl:flex"
+          />
+
           <a
             href={`/s/${boot.site.slug}`}
             target="_blank"
             rel="noreferrer"
+            title="Open your published site in a new tab"
             className="rounded-lg border border-ink-700 px-2.5 py-1.5 text-[12px] text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
           >
             View live
@@ -471,13 +497,18 @@ export function EditorShell(boot: EditorBootstrap) {
               </span>
               <span
                 className={cx(
-                  "rounded-full border px-2 py-0.5 text-[10px]",
+                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
                   editingComponent
-                    ? "border-[#22c7a9]/40 text-[#22c7a9]"
+                    ? "border-reuse-500/40 text-reuse-500"
                     : "border-ink-700 text-ink-500",
                 )}
+                title={
+                  editingComponent
+                    ? "A block you can reuse on several pages"
+                    : "A private preview of your edits — not your live site"
+                }
               >
-                {editingComponent ? "shared" : "draft"}
+                {editingComponent ? "Reusable block" : "Preview"}
               </span>
             </div>
             <Canvas ctx={ctx} />
@@ -488,27 +519,27 @@ export function EditorShell(boot: EditorBootstrap) {
               <>
                 {editingComponent.usage.totalPages > 0 ? (
                   <>
-                    You are editing a shared component.{" "}
+                    You&rsquo;re editing a reusable block.{" "}
                     <span className="text-warn-500">
                       Publishing changes {editingComponent.usage.totalPages} page
                       {editingComponent.usage.totalPages === 1 ? "" : "s"} at once
                     </span>
-                    . To change only one of them, go back to that page and edit the text directly —
-                    that records an override for that page alone.
+                    . To change just one of them, open that page and edit the text there instead —
+                    that leaves the other pages as they are.
                   </>
                 ) : (
                   <>
-                    You are editing a shared component. Nothing uses it yet, so publishing changes
-                    nothing else.
+                    You&rsquo;re editing a reusable block. No pages use it yet, so publishing
+                    won&rsquo;t change anything else.
                   </>
                 )}
               </>
             ) : (
               <>
-                Double-click text to edit it in place. Drag blocks from the left, or drag them on the
-                canvas to reorder. Text inside a{" "}
-                <span className="text-[#22c7a9]">◈ component</span> becomes an override on this page
-                only.
+                Double-click any text to edit it right here. Drag blocks in from the left, or drag
+                them around the page to reorder. Editing text inside a{" "}
+                <span className="font-medium text-reuse-500">◈ reusable block</span> changes only
+                this page.
               </>
             )}
           </p>
@@ -519,7 +550,7 @@ export function EditorShell(boot: EditorBootstrap) {
           <Tabs
             tabs={[
               { id: "design", label: "Block" },
-              { id: "theme", label: "Site" },
+              { id: "theme", label: "Design" },
               { id: "publish", label: "Publish" },
             ]}
             active={rightTab}
@@ -547,6 +578,7 @@ export function EditorShell(boot: EditorBootstrap) {
         </aside>
       </div>
     </div>
+    </TechnicalDetails>
   );
 }
 
