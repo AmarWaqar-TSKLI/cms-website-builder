@@ -422,6 +422,16 @@ customer paid.
   at build time instead.
 - **Versioning products so pages never break.** Fixes a rendering edge case by
   making orders and inventory time-travel. Strictly worse.
-- **Blog module.** Schema is present (`posts`, `post_revisions`, `tags`,
-  `post_tags`); no UI. Commerce was built fully first because it is what proves
-  D8 and D5. Blog mostly re-demonstrates versioning already shown.
+- **Blog module.** ~~Schema is present (`posts`, `post_revisions`, `tags`,
+  `post_tags`); no UI.~~ Commerce was built fully first because it is what proves
+  D8 and D5; the blog was deferred because it mostly re-demonstrates versioning
+  already shown. *Built later:* a `PostList` block and a dashboard blog manager.
+  It reuses the commerce machinery wholesale — posts are Tier-2, `PostList` uses
+  a `post` reference, and freezing, `release_dependencies` and the rollback
+  warning already handled `post` because the schema and `dependencies.ts`
+  anticipated it. The one genuinely new piece was a multi-reference picker in the
+  properties panel, which `refList` had declared but nothing had ever used. Post
+  bodies are versioned in `post_revisions` (every save is a version); posts have
+  no draft table, so unlike a page the working copy is simply the latest
+  revision. A public post-detail page is still to come — today `PostList` is a
+  teaser list of title, date and summary.
