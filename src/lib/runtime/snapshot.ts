@@ -110,7 +110,7 @@ export async function resolveTierTwo(bodies: PageBody[]): Promise<FrozenTierTwo>
   for (const id of mediaIds) {
     const row = mediaRows.find((m) => m.id === id);
     media[id] = row
-      ? { id: row.id, url: row.storageKey, alt: "", missing: row.deletedAt !== null }
+      ? { id: row.id, url: row.storageKey, alt: row.alt ?? "", missing: row.deletedAt !== null }
       : { id, url: "", alt: "", missing: true };
   }
 

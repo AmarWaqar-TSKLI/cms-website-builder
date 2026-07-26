@@ -475,8 +475,17 @@ model ReleaseDependency {
 model Media {
   id         String    @id @default(uuid())
   siteId     String    @map("site_id")
+  // storageKey holds the image itself as a data: URI, not a path to object
+  // storage. That is the load-bearing choice from decision I13: a data URI is
+  // what lets an exported artifact opened from file:// render with no network.
+  // Uploads (added later) downscale in the browser and store the result here, so
+  // the property survives even though images are now real rather than seeded.
   storageKey String    @map("storage_key")
   mime       String
+  // The original file name, kept for a readable label in the library and picker.
+  filename   String?
+  // Alt text for accessibility. Nullable because seeded and older rows predate it.
+  alt        String?
   width      Int?
   height     Int?
   sizeBytes  Int?      @map("size_bytes")

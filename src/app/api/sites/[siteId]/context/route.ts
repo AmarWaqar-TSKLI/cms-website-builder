@@ -68,7 +68,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
 
   const media: Record<string, ResolvedMedia> = {};
   for (const m of mediaRows) {
-    media[m.id] = { id: m.id, url: m.storageKey, alt: "", missing: m.deletedAt !== null };
+    media[m.id] = { id: m.id, url: m.storageKey, alt: m.alt ?? "", missing: m.deletedAt !== null };
   }
 
   return NextResponse.json({
@@ -86,7 +86,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
     refOptions: {
       collection: collectionRows.map((c) => ({ value: c.id, label: c.title })),
       product: productRows.map((p) => ({ value: p.id, label: p.title })),
-      media: mediaRows.map((m, i) => ({ value: m.id, label: `Image ${i + 1}` })),
+      media: mediaRows.map((m, i) => ({ value: m.id, label: m.filename ?? `Image ${i + 1}` })),
       post: [],
     },
   });
