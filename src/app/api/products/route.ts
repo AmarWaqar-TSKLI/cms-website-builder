@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
+import { validateImageDataUri } from "@/lib/media";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "siteId and title required" }, { status: 400 });
   }
 
+  // A product image is stored inline as a data URI, exactly like media (I13).
+  let imageUrl: string | null = null;
+  if (typeof payload.imageUrl === "string" && payload.imageUrl) {
+    const valid = validateImageDataUri(payload.imageUrl);
+    if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: 400 });
+    imageUrl = valid.value.dataUri;
+  }
+
   const product = await prisma.product.create({
     data: {
       siteId: payload.siteId,
       title: String(payload.title),
       description: String(payload.description ?? ""),
+      imageUrl,
       status: "active",
       variants: {
         create: {

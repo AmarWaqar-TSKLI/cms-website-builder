@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { guardProduct } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { releasesReferencing } from "@/lib/dependencies";
+import { validateImageDataUri } from "@/lib/media";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ produc
   const payload = await req.json().catch(() => null);
   if (!payload) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
+  // imageUrl is optional: a valid data URI sets it, an empty string clears it,
+  // and absence leaves it untouched.
+  let imagePatch: { imageUrl: string | null } | Record<string, never> = {};
+  if (payload.imageUrl !== undefined) {
+    if (typeof payload.imageUrl === "string" && payload.imageUrl) {
+      const valid = validateImageDataUri(payload.imageUrl);
+      if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: 400 });
+      imagePatch = { imageUrl: valid.value.dataUri };
+    } else {
+      imagePatch = { imageUrl: null };
+    }
+  }
+
   const product = await prisma.product.update({
     where: { id: productId },
     data: {
@@ -48,6 +62,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ produc
       ...(payload.description !== undefined ? { description: String(payload.description) } : {}),
       ...(payload.status !== undefined ? { status: payload.status } : {}),
       ...(payload.restore ? { deletedAt: null } : {}),
+      ...imagePatch,
     },
   });
 
