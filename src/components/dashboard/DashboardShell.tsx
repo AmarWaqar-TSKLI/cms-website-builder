@@ -540,6 +540,9 @@ function TopBar() {
         >
           Show intro
         </Btn>
+        <LinkBtn href="/dashboard/blog" size="sm" variant="quiet">
+          Blog
+        </LinkBtn>
         <LinkBtn href="/dashboard/media" size="sm" variant="quiet">
           Images
         </LinkBtn>
