@@ -233,6 +233,8 @@ export interface ResolvedPost {
   title: string;
   slug: string;
   excerpt: string;
+  /** The post's text, frozen from its current revision — what the detail page shows. */
+  body: string;
   /** ISO string, or null for a post that was never published. */
   publishedAt: string | null;
   /** Soft-deleted at build time → the list drops it instead of breaking. */

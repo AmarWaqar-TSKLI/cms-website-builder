@@ -18,6 +18,7 @@
  */
 import { prisma } from "../db";
 import { extractRefsFromBody, mergeRefs } from "../refs";
+import { bodyTextOf } from "../posts";
 import type {
   PageBody,
   ResolvedCollection,
@@ -116,26 +117,41 @@ export async function resolveTierTwo(bodies: PageBody[]): Promise<FrozenTierTwo>
       : { id, url: "", alt: "", missing: true };
   }
 
-  // Posts freeze exactly like products: the list shows the title, excerpt and
-  // date that were true at build time. A post that was deleted, or is no longer
-  // published, resolves to `missing` so the list drops it rather than breaking.
+  // Posts freeze exactly like products: title, excerpt, date and the body of the
+  // current revision are captured at build time, so both the list and the detail
+  // page render the same thing forever. A post that was deleted, or is no longer
+  // published, resolves to `missing` so it's dropped rather than breaking.
   const postIds = refs.filter((r) => r.refType === "post").map((r) => r.refId);
   const postRows = postIds.length
     ? await prisma.post.findMany({ where: { id: { in: postIds } } })
     : [];
+  const revIds = postRows.map((p) => p.currentRevisionId).filter((x): x is string => Boolean(x));
+  const revRows = revIds.length
+    ? await prisma.postRevision.findMany({ where: { id: { in: revIds } } })
+    : [];
   const posts: Record<string, ResolvedPost> = {};
   for (const id of postIds) {
     const row = postRows.find((p) => p.id === id);
+    const rev = row ? revRows.find((r) => r.id === row.currentRevisionId) : undefined;
     posts[id] = row
       ? {
           id: row.id,
           title: row.title,
           slug: row.slug,
           excerpt: row.excerpt,
+          body: bodyTextOf(rev?.body),
           publishedAt: row.publishedAt?.toISOString() ?? null,
           missing: row.deletedAt !== null || row.status !== "published",
         }
-      : { id, title: "(deleted post)", slug: "", excerpt: "", publishedAt: null, missing: true };
+      : {
+          id,
+          title: "(deleted post)",
+          slug: "",
+          excerpt: "",
+          body: "",
+          publishedAt: null,
+          missing: true,
+        };
   }
 
   return { products, collections, media, posts, frozenAt: new Date().toISOString() };

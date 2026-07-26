@@ -87,6 +87,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
       title: p.title,
       slug: p.slug,
       excerpt: p.excerpt,
+      body: "",
       publishedAt: p.publishedAt?.toISOString() ?? null,
       missing: false,
     };

@@ -122,6 +122,9 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
       title: p.title,
       slug: p.slug,
       excerpt: p.excerpt,
+      // The canvas only ever renders the LIST, never a post's body, so the body
+      // is left empty here — the detail page is a hosted route, not a block.
+      body: "",
       publishedAt: p.publishedAt?.toISOString() ?? null,
       missing: false,
     };
