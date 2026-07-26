@@ -29,6 +29,7 @@ import { renderPageHtml } from "./render/html";
 import { asLayout, asTokens } from "./theme";
 import { extractRefsFromBody, mergeRefs } from "./refs";
 import { freezeTierTwo } from "./runtime/snapshot";
+import { postPageNodes, postPath } from "./post-page";
 import { displayNameOf } from "./shared-components";
 import type { PageBody, RenderContext, ResolvedComponent } from "./registry/types";
 
@@ -174,6 +175,27 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     });
 
     const rel = pathToFile(page.path);
+    const dest = path.join(outDir, rel);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await writeFile(dest, html, "utf8");
+    written.push(rel.split(path.sep).join("/"));
+  }
+
+  // Post-detail pages, rendered from the frozen posts any page referenced. Same
+  // renderer, so an exported zip carries real /blog/<slug>/ pages, not just the
+  // teaser lists that link to them.
+  for (const post of Object.values(posts)) {
+    if (post.missing) continue;
+    const html = renderPageHtml({
+      title: post.title,
+      path: postPath(post.slug),
+      body: postPageNodes(post),
+      layout,
+      ctx,
+      releaseVersion: release.versionNo,
+      builtAt,
+    });
+    const rel = pathToFile(postPath(post.slug));
     const dest = path.join(outDir, rel);
     await mkdir(path.dirname(dest), { recursive: true });
     await writeFile(dest, html, "utf8");
