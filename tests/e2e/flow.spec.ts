@@ -291,6 +291,36 @@ test.describe("first-run onboarding", () => {
 });
 
 /**
+ * Real image uploads.
+ *
+ * The library used to offer only the seeded gradients. This uploads an actual
+ * file through the real pipeline — browser downscale → data URI → POST → stored —
+ * and confirms it lands in the library, which is the whole feature end to end.
+ */
+test.describe("media uploads", () => {
+  // A 1×1 transparent PNG, enough for the browser to load, downscale and re-encode.
+  const TINY_PNG =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  test("a picked file becomes a usable image in the library", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/dashboard/media");
+    await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible();
+
+    // The file input is hidden (a styled button triggers it); Playwright can set
+    // files on it directly without needing it visible.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "e2e-upload.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(TINY_PNG, "base64"),
+    });
+
+    // It appears in the grid, named after the file that produced it.
+    await expect(page.getByText("e2e-upload.png")).toBeVisible({ timeout: 20_000 });
+  });
+});
+
+/**
  * The editing lock, with two real browsers.
  *
  * This is the one behaviour that cannot be checked with a single session, so it
