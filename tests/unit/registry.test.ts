@@ -89,6 +89,42 @@ describe("registry", () => {
     }
   });
 
+  it("renders a PostList with the chosen posts, and drops gone ones", () => {
+    const entry = getComponent("PostList")!;
+    const node = createNode("PostList", "n1");
+    node.props.posts = ["post_1"];
+
+    const withPost: RenderContext = {
+      ...ctx,
+      posts: {
+        post_1: {
+          id: "post_1",
+          title: "Hello World Post",
+          slug: "hello",
+          excerpt: "A short summary.",
+          publishedAt: "2026-01-02T00:00:00.000Z",
+        },
+      },
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(React.Fragment, null, entry.render({ node, props: node.props, ctx: withPost })),
+    );
+    expect(html).toContain("Hello World Post");
+    expect(html).toContain("A short summary.");
+
+    // A post that was deleted or unpublished at build time is dropped, not shown.
+    const goneCtx: RenderContext = {
+      ...ctx,
+      posts: {
+        post_1: { id: "post_1", title: "Gone Post", slug: "g", excerpt: "", publishedAt: null, missing: true },
+      },
+    };
+    const html2 = renderToStaticMarkup(
+      React.createElement(React.Fragment, null, entry.render({ node, props: node.props, ctx: goneCtx })),
+    );
+    expect(html2).not.toContain("Gone Post");
+  });
+
   it("resolves a name string to a component — the whole point of D1", () => {
     expect(getComponent("Hero")).toBeDefined();
     expect(getComponent("NotARealComponent")).toBeUndefined();

@@ -321,6 +321,33 @@ test.describe("media uploads", () => {
 });
 
 /**
+ * The blog module.
+ *
+ * Write a post, publish it, and see the manager reflect both — the create →
+ * version → publish loop through the real interface, against the real API.
+ */
+test.describe("blog", () => {
+  test("write a post and publish it", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/dashboard/blog");
+    await expect(page.getByRole("heading", { name: "Blog", exact: true })).toBeVisible();
+
+    const title = `E2E Post ${Date.now().toString(36).toUpperCase()}`;
+    // "New post" asks for a title through a browser prompt.
+    page.once("dialog", (d) => d.accept(title));
+    await page.getByRole("button", { name: "New post" }).click();
+
+    // The new post opens in the editor…
+    await expect(page.getByRole("heading", { name: "Edit post" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+    // …and turns into an unpublishable, published post.
+    await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(title)).toBeVisible();
+  });
+});
+
+/**
  * The editing lock, with two real browsers.
  *
  * This is the one behaviour that cannot be checked with a single session, so it
