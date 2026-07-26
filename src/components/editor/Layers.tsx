@@ -12,6 +12,7 @@ import type { PageNode, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { componentIdOf, isComponentRef } from "@/lib/shared-components";
 import { cx } from "../ui";
+import { useTechnical } from "../technical";
 import { DRAG_MOVE } from "./Canvas";
 
 export function Layers({
@@ -20,15 +21,21 @@ export function Layers({
   components?: Record<string, ResolvedComponent>;
 }) {
   const body = useEditor((s) => s.body);
+  const technical = useTechnical();
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 px-4 py-3">
         <p className="text-[12px] font-medium text-ink-200">Page outline</p>
         <p className="mt-1 text-[11px] leading-relaxed text-ink-500">
-          This is the stored tree — the literal contents of the draft row. A{" "}
-          <span className="text-[#22c7a9]">◈ component</span> shows as one node here because that is
-          all the page stores: a reference.
+          Everything on this page, in order. Drag to reorder. A{" "}
+          <span className="font-medium text-reuse-500">◈ reusable block</span> shows as a single
+          item — the page just points at it.
+          {technical && (
+            <span className="mt-1 block font-mono text-ink-600">
+              This is the stored tree — the literal contents of the draft row.
+            </span>
+          )}
         </p>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
@@ -100,19 +107,19 @@ function Branch({
               <span
                 className={cx(
                   "w-4 shrink-0 text-center text-[11px]",
-                  instance ? "text-[#22c7a9]" : "text-ink-500",
+                  instance ? "text-reuse-500" : "text-ink-500",
                 )}
               >
                 {instance ? "◈" : (schema?.icon ?? "?")}
               </span>
               <span className="min-w-0 flex-1 truncate text-[12px]">
-                <span className={cx("font-medium", instance && "text-[#22c7a9]")}>
+                <span className={cx("font-medium", instance && "text-reuse-500")}>
                   {instance
-                    ? (definition?.name ?? "Missing component")
+                    ? (definition?.name ?? "Deleted block")
                     : (schema?.label ?? node.type)}
                 </span>
                 {label && <span className="ml-1.5 text-ink-500">{label}</span>}
-                {instance && <span className="ml-1.5 text-ink-500">shared</span>}
+                {instance && <span className="ml-1.5 text-ink-500">reused</span>}
               </span>
             </button>
             {/* An instance's children live in the component, not on this page. */}
