@@ -12,7 +12,8 @@ import { loadRelease, normalisePath, type LiveSite, type LoadedRelease } from ".
 import { SiteBody } from "@/components/site/SiteBody";
 import { CartBar } from "@/components/site/CartBar";
 import { NotPublished, PageMissing } from "@/components/site/Empty";
-import type { RenderContext } from "@/lib/registry/types";
+import type { RenderContext, ResolvedPost } from "@/lib/registry/types";
+import { postPageNodes, postPath } from "@/lib/post-page";
 
 export interface Resolved {
   site: LiveSite;
@@ -31,6 +32,7 @@ export async function resolveRequest(
   segments: string[] | undefined,
 ): Promise<
   | { kind: "ok"; resolved: Resolved }
+  | { kind: "post"; site: LiveSite; release: LoadedRelease; post: ResolvedPost }
   | { kind: "unpublished"; site: LiveSite }
   | { kind: "missing"; site: LiveSite; release: LoadedRelease; path: string }
   | { kind: "no-site" }
@@ -42,9 +44,26 @@ export async function resolveRequest(
   if (!release) return { kind: "unpublished", site };
 
   const path = normalisePath((segments ?? []).join("/"));
-  if (!release.pages[path]) return { kind: "missing", site, release, path };
+  if (release.pages[path]) return { kind: "ok", resolved: { site, release, path } };
 
-  return { kind: "ok", resolved: { site, release, path } };
+  // No page at this path — it may be a blog post. Posts live at /blog/<slug> and
+  // are resolved from the release's frozen data, same as everything else on the
+  // request path: no live lookup, deterministic, and only what this release
+  // froze. A post that isn't in the frozen set has no page here.
+  const post = findFrozenPost(release, path);
+  if (post) return { kind: "post", site, release, post };
+
+  return { kind: "missing", site, release, path };
+}
+
+/** A published, non-missing post whose slug matches `/blog/<slug>`. */
+function findFrozenPost(release: LoadedRelease, path: string): ResolvedPost | null {
+  const prefix = "/blog/";
+  if (!path.startsWith(prefix)) return null;
+  const slug = path.slice(prefix.length);
+  if (!slug) return null;
+  const posts = release.data.posts ?? {};
+  return Object.values(posts).find((p) => p.slug === slug && !p.missing) ?? null;
 }
 
 export function contextFor(release: LoadedRelease): RenderContext {
@@ -99,6 +118,45 @@ export function SitePage({ resolved }: { resolved: Resolved }) {
   );
 }
 
+/**
+ * A published blog post, rendered as a page.
+ *
+ * It goes through the very same SiteBody and renderer as a page — the post is
+ * turned into a small tree of blocks (postPageNodes) and everything else is
+ * identical. So a post inherits the site's theme and chrome for free, and it is
+ * as deterministic as any other page.
+ */
+export function SitePostPage({
+  release,
+  post,
+}: {
+  release: LoadedRelease;
+  post: ResolvedPost;
+}) {
+  const ctx = contextFor(release);
+  const nodes = postPageNodes(post);
+
+  return (
+    <>
+      <meta name="cms:release-id" content={release.id} />
+      <meta name="cms:release-version" content={`v${release.versionNo}`} />
+      <meta name="cms:site-id" content={release.siteId} />
+      <meta name="cms:path" content={postPath(post.slug)} />
+      <meta name="cms:frozen-at" content={release.data.frozenAt} />
+      <title>{`${post.title} — ${release.siteName}`}</title>
+
+      <SiteBody body={nodes} layout={release.layout} ctx={ctx}>
+        <CartBar
+          siteId={release.siteId}
+          releaseId={release.id}
+          tokens={release.tokens}
+          runtimeApi={ctx.runtimeApi}
+        />
+      </SiteBody>
+    </>
+  );
+}
+
 /** Shared body for both routes. Keeps the two route files identical in shape. */
 export function renderResolved(
   outcome: Awaited<ReturnType<typeof resolveRequest>>,
@@ -106,6 +164,8 @@ export function renderResolved(
   switch (outcome.kind) {
     case "ok":
       return <SitePage resolved={outcome.resolved} />;
+    case "post":
+      return <SitePostPage release={outcome.release} post={outcome.post} />;
     case "unpublished":
       return <NotPublished site={outcome.site} />;
     case "missing":

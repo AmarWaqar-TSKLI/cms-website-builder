@@ -830,6 +830,19 @@ const PostList: RegistryEntry = {
                   {p!.excerpt}
                 </p>
               ) : null}
+              <a
+                href={`/blog/${p!.slug}`}
+                style={{
+                  marginTop: "2px",
+                  fontFamily: t.fontBody,
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: t.colorAccent,
+                  textDecoration: "none",
+                }}
+              >
+                Read more →
+              </a>
             </article>
           ))}
         </div>
