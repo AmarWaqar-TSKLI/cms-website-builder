@@ -31,6 +31,7 @@ const ctx: RenderContext = {
     c1: { id: "c1", title: "Featured", handle: "featured", productIds: ["p1"] },
   },
   media: { m1: { id: "m1", url: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", alt: "" } },
+  posts: {},
   components: {},
 };
 
@@ -48,6 +49,7 @@ describe("registry", () => {
       "Heading",
       "Hero",
       "ImageBlock",
+      "PostList",
       "ProductGrid",
       "Spacer",
       "TextBlock",

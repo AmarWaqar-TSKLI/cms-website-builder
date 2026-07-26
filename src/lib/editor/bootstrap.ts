@@ -18,6 +18,7 @@ import type {
   RenderContext,
   ResolvedCollection,
   ResolvedMedia,
+  ResolvedPost,
   ResolvedProduct,
   ResolvedComponent,
   ThemeLayout,
@@ -57,7 +58,7 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
     ? theme.revisions.find((r) => r.id === theme.currentRevisionId)
     : theme?.revisions.sort((a, b) => b.versionNo - a.versionNo)[0];
 
-  const [productRows, collectionRows, mediaRows, componentRows] = await Promise.all([
+  const [productRows, collectionRows, mediaRows, componentRows, postRows] = await Promise.all([
     prisma.product.findMany({
       where: { siteId: site.id },
       include: { variants: { orderBy: { priceCents: "asc" }, take: 1 } },
@@ -76,6 +77,12 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
       where: { siteId: site.id, deletedAt: null },
       include: { draft: true },
       orderBy: { name: "asc" },
+    }),
+    // Only PUBLISHED posts can be featured on a page — an unpublished one would
+    // freeze as `missing`, so offering it would only invite that surprise.
+    prisma.post.findMany({
+      where: { siteId: site.id, status: "published", deletedAt: null },
+      orderBy: { publishedAt: "desc" },
     }),
   ]);
 
@@ -106,6 +113,18 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
   const media: Record<string, ResolvedMedia> = {};
   for (const m of mediaRows) {
     media[m.id] = { id: m.id, url: m.storageKey, alt: m.alt ?? "", missing: m.deletedAt !== null };
+  }
+
+  const posts: Record<string, ResolvedPost> = {};
+  for (const p of postRows) {
+    posts[p.id] = {
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      excerpt: p.excerpt,
+      publishedAt: p.publishedAt?.toISOString() ?? null,
+      missing: false,
+    };
   }
 
   // Which components more than one page points at. One scan of the drafts, done
@@ -164,7 +183,7 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
       collection: collectionRows.map((c) => ({ value: c.id, label: c.title })),
       product: productRows.map((p) => ({ value: p.id, label: p.title })),
       media: mediaRows.map((m, i) => ({ value: m.id, label: m.filename ?? `Image ${i + 1}` })),
-      post: [],
+      post: postRows.map((p) => ({ value: p.id, label: p.title })),
       component: componentList.map((c) => ({ value: c.id, label: c.name })),
     },
     ctx: {
@@ -176,6 +195,7 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
       products,
       collections,
       media,
+      posts,
       components,
       editing: true,
     },

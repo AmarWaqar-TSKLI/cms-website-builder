@@ -538,6 +538,12 @@ function Field({
             </option>
           ))}
         </select>
+      ) : def.kind === "refList" ? (
+        <RefListField
+          value={Array.isArray(value) ? (value as string[]) : []}
+          options={refOptions[def.ref as RefKind] ?? []}
+          onChange={onChange}
+        />
       ) : isRef ? (
         <select className={inputClass} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
           <option value="">— none —</option>
@@ -585,6 +591,59 @@ function Field({
 
       {def.help && <span className="mt-1.5 block text-[10.5px] leading-snug text-ink-500">{def.help}</span>}
     </label>
+  );
+}
+
+/**
+ * Multi-reference picker — a list where you toggle items in and out, and the
+ * badge shows the order they'll appear. Used by refList props (e.g. which posts
+ * a blog list shows), which a single dropdown can't express.
+ */
+function RefListField({
+  value,
+  options,
+  onChange,
+}: {
+  value: string[];
+  options: { value: string; label: string }[];
+  onChange: (v: unknown) => void;
+}) {
+  if (options.length === 0) {
+    return <p className="text-[11px] leading-relaxed text-ink-500">Nothing to choose yet.</p>;
+  }
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+
+  return (
+    <div className="space-y-1">
+      {options.map((o) => {
+        const idx = value.indexOf(o.value);
+        const on = idx >= 0;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => toggle(o.value)}
+            className={cx(
+              "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-[12px] transition-colors",
+              on
+                ? "border-flux-500/60 bg-flux-500/10 text-ink-100"
+                : "border-ink-700 text-ink-300 hover:border-ink-600",
+            )}
+          >
+            <span
+              className={cx(
+                "grid h-4 w-4 shrink-0 place-items-center rounded-full text-[9px] font-semibold",
+                on ? "bg-flux-500 text-white" : "border border-ink-600 text-transparent",
+              )}
+            >
+              {on ? idx + 1 : ""}
+            </span>
+            <span className="truncate">{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

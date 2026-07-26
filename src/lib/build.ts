@@ -127,7 +127,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
   // build that fails and is retried an hour later cannot quietly publish a
   // different price.
   const frozen = await freezeTierTwo(release.id, bodies);
-  const { products, collections, media } = frozen;
+  const { products, collections, media, posts } = frozen;
 
   const ctx: RenderContext = {
     siteId: release.siteId,
@@ -138,6 +138,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     products,
     collections,
     media,
+    posts,
     components,
   };
 

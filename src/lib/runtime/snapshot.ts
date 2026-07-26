@@ -22,6 +22,7 @@ import type {
   PageBody,
   ResolvedCollection,
   ResolvedMedia,
+  ResolvedPost,
   ResolvedProduct,
 } from "../registry/types";
 
@@ -29,6 +30,7 @@ export interface FrozenTierTwo {
   products: Record<string, ResolvedProduct>;
   collections: Record<string, ResolvedCollection>;
   media: Record<string, ResolvedMedia>;
+  posts: Record<string, ResolvedPost>;
   /** When this snapshot was taken. Stamped into the page for provenance. */
   frozenAt: string;
 }
@@ -114,7 +116,29 @@ export async function resolveTierTwo(bodies: PageBody[]): Promise<FrozenTierTwo>
       : { id, url: "", alt: "", missing: true };
   }
 
-  return { products, collections, media, frozenAt: new Date().toISOString() };
+  // Posts freeze exactly like products: the list shows the title, excerpt and
+  // date that were true at build time. A post that was deleted, or is no longer
+  // published, resolves to `missing` so the list drops it rather than breaking.
+  const postIds = refs.filter((r) => r.refType === "post").map((r) => r.refId);
+  const postRows = postIds.length
+    ? await prisma.post.findMany({ where: { id: { in: postIds } } })
+    : [];
+  const posts: Record<string, ResolvedPost> = {};
+  for (const id of postIds) {
+    const row = postRows.find((p) => p.id === id);
+    posts[id] = row
+      ? {
+          id: row.id,
+          title: row.title,
+          slug: row.slug,
+          excerpt: row.excerpt,
+          publishedAt: row.publishedAt?.toISOString() ?? null,
+          missing: row.deletedAt !== null || row.status !== "published",
+        }
+      : { id, title: "(deleted post)", slug: "", excerpt: "", publishedAt: null, missing: true };
+  }
+
+  return { products, collections, media, posts, frozenAt: new Date().toISOString() };
 }
 
 /**

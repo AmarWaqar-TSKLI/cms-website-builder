@@ -21,6 +21,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   content: "Content",
   layout: "Layout",
   commerce: "Commerce",
+  blog: "Blog",
 };
 
 export function Palette({
@@ -144,7 +145,7 @@ export function Palette({
           )}
         </div>
 
-        {["content", "layout", "commerce"].map((category) => {
+        {["content", "layout", "commerce", "blog"].map((category) => {
           const items = byCategory[category];
           if (!items?.length) return null;
           return (
@@ -186,6 +187,11 @@ export function Palette({
                       Filtered by site_modules — a site without the commerce module never sees these.
                     </span>
                   )}
+                </p>
+              )}
+              {category === "blog" && (
+                <p className="mt-2 px-1 text-[10.5px] leading-relaxed text-ink-500">
+                  Your blog is on. Write posts under “Blog” in the dashboard, then show them here.
                 </p>
               )}
             </div>

@@ -62,7 +62,7 @@ export interface ComponentSchema {
   name: string;
   label: string;
   description: string;
-  category: "layout" | "content" | "commerce";
+  category: "layout" | "content" | "commerce" | "blog";
   /** Palette filtering. Absent = engine component, always available. */
   requiresModule?: ModuleName;
   /** Container components accept dropped children (e.g. Columns). */
@@ -172,6 +172,13 @@ export interface RenderContext {
   collections: Record<string, ResolvedCollection>;
   media: Record<string, ResolvedMedia>;
   /**
+   * Blog posts, frozen at build time like products (Tier-2). A page shows the
+   * posts that were published when it was — the same accepted drift as prices,
+   * made visible by the dependency index. Defaults to empty on releases built
+   * before the blog module existed.
+   */
+  posts: Record<string, ResolvedPost>;
+  /**
    * Shared component trees, keyed by component id.
    *
    * Unlike products and collections, these are NOT live data: the build resolves
@@ -218,6 +225,17 @@ export interface ResolvedMedia {
   id: string;
   url: string;
   alt: string;
+  missing?: boolean;
+}
+
+export interface ResolvedPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  /** ISO string, or null for a post that was never published. */
+  publishedAt: string | null;
+  /** Soft-deleted at build time → the list drops it instead of breaking. */
   missing?: boolean;
 }
 

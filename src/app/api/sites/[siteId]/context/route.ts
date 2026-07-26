@@ -8,7 +8,12 @@ import { NextResponse } from "next/server";
 import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { asLayout, asTokens } from "@/lib/theme";
-import type { ResolvedCollection, ResolvedMedia, ResolvedProduct } from "@/lib/registry/types";
+import type {
+  ResolvedCollection,
+  ResolvedMedia,
+  ResolvedPost,
+  ResolvedProduct,
+} from "@/lib/registry/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
     ? theme.revisions.find((r) => r.id === theme.currentRevisionId)
     : theme?.revisions.sort((a, b) => b.versionNo - a.versionNo)[0];
 
-  const [productRows, collectionRows, mediaRows] = await Promise.all([
+  const [productRows, collectionRows, mediaRows, postRows] = await Promise.all([
     prisma.product.findMany({
       where: { siteId },
       include: { variants: { orderBy: { priceCents: "asc" }, take: 1 } },
@@ -40,6 +45,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
       orderBy: { title: "asc" },
     }),
     prisma.media.findMany({ where: { siteId }, orderBy: { createdAt: "asc" } }),
+    prisma.post.findMany({
+      where: { siteId, status: "published", deletedAt: null },
+      orderBy: { publishedAt: "desc" },
+    }),
   ]);
 
   const products: Record<string, ResolvedProduct> = {};
@@ -71,6 +80,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
     media[m.id] = { id: m.id, url: m.storageKey, alt: m.alt ?? "", missing: m.deletedAt !== null };
   }
 
+  const posts: Record<string, ResolvedPost> = {};
+  for (const p of postRows) {
+    posts[p.id] = {
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      excerpt: p.excerpt,
+      publishedAt: p.publishedAt?.toISOString() ?? null,
+      missing: false,
+    };
+  }
+
   return NextResponse.json({
     siteId: site.id,
     siteName: site.name,
@@ -81,13 +102,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
     products,
     collections,
     media,
+    posts,
     // Reference-picker options, so the properties panel can offer real choices
     // instead of asking someone to paste a UUID.
     refOptions: {
       collection: collectionRows.map((c) => ({ value: c.id, label: c.title })),
       product: productRows.map((p) => ({ value: p.id, label: p.title })),
       media: mediaRows.map((m, i) => ({ value: m.id, label: m.filename ?? `Image ${i + 1}` })),
-      post: [],
+      post: postRows.map((p) => ({ value: p.id, label: p.title })),
     },
   });
 }

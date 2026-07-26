@@ -57,6 +57,8 @@ export function contextFor(release: LoadedRelease): RenderContext {
     products: release.data.products,
     collections: release.data.collections,
     media: release.data.media,
+    // Releases built before the blog module have no frozen posts.
+    posts: release.data.posts ?? {},
     components: release.components,
   };
 }

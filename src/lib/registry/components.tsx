@@ -708,6 +708,156 @@ const ProductGrid: RegistryEntry = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────── PostList ───
+
+/** Fixed, UTC-based date so the build and the runtime render the same bytes. */
+function postDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+const PostList: RegistryEntry = {
+  schema: {
+    name: "PostList",
+    label: "Blog posts",
+    description: "A list of posts you choose, with their dates and summaries.",
+    category: "blog",
+    // Only appears for a site with the blog module. Engine + blog is WordPress;
+    // engine + commerce is Shopify; the difference is a row in site_modules. (D6)
+    requiresModule: "blog",
+    icon: "✎",
+    props: withStyleProps({
+      heading: { label: "Heading", kind: "text", default: "From the blog", inlineEditable: true },
+      posts: {
+        label: "Posts",
+        kind: "refList",
+        ref: "post",
+        default: [],
+        help: "Pick which posts to show, newest choice first.",
+      },
+      columns: {
+        label: "Columns",
+        kind: "segment",
+        default: "2",
+        options: [
+          { value: "1", label: "1" },
+          { value: "2", label: "2" },
+          { value: "3", label: "3" },
+        ],
+      },
+      gap: { label: "Gap", kind: "range", default: 22, min: 8, max: 60, step: 2, unit: "px" },
+      showDate: { label: "Show dates", kind: "boolean", default: true },
+      showExcerpt: { label: "Show summaries", kind: "boolean", default: true },
+    }),
+  },
+  render({ props, ctx }: RenderProps) {
+    const t = ctx.tokens;
+    const ids = Array.isArray(props.posts) ? (props.posts as string[]) : [];
+    // Drop posts that were deleted or unpublished at build time — a blog list
+    // that quietly skips a gone post reads better than one showing a placeholder.
+    const posts = ids.map((id) => ctx.posts?.[id]).filter((p) => p && !p.missing);
+
+    let body: ReactNode;
+    if (ids.length === 0) {
+      body = <MissingRef t={t} label="Choose posts to show in the panel on the right." />;
+    } else if (posts.length === 0) {
+      body = <MissingRef t={t} label="None of the chosen posts are published yet." />;
+    } else {
+      body = (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Number(props.columns ?? 2)}, minmax(0,1fr))`,
+            gap: `${Number(props.gap ?? 22)}px`,
+            textAlign: "left",
+          }}
+        >
+          {posts.map((p) => (
+            <article
+              key={p!.id}
+              data-cms-post={p!.id}
+              style={{
+                border: `1px solid ${t.colorBorder}`,
+                borderRadius: t.radius,
+                background: t.colorSurface,
+                padding: "20px 22px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              {props.showDate && p!.publishedAt ? (
+                <div
+                  style={{
+                    fontFamily: t.fontBody,
+                    fontSize: "12px",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    color: t.colorMuted,
+                  }}
+                >
+                  {postDate(p!.publishedAt)}
+                </div>
+              ) : null}
+              <h3
+                style={{
+                  fontFamily: t.fontHeading,
+                  fontSize: "19px",
+                  margin: 0,
+                  fontWeight: 640,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {p!.title}
+              </h3>
+              {props.showExcerpt && p!.excerpt ? (
+                <p
+                  style={{
+                    fontFamily: t.fontBody,
+                    fontSize: "14.5px",
+                    lineHeight: 1.6,
+                    margin: 0,
+                    opacity: 0.78,
+                  }}
+                >
+                  {p!.excerpt}
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <Section props={props} tokens={t}>
+        {props.heading ? (
+          <h2
+            data-cms-prop="heading"
+            style={{
+              fontFamily: t.fontHeading,
+              fontSize: "clamp(22px,2.6vw,30px)",
+              letterSpacing: "-0.02em",
+              margin: "0 0 24px",
+              fontWeight: 640,
+            }}
+          >
+            {String(props.heading)}
+          </h2>
+        ) : null}
+        {body}
+      </Section>
+    );
+  },
+};
+
 // ───────────────────────────────────────────────────────────── Divider ──────
 
 const Divider: RegistryEntry = {
@@ -779,6 +929,7 @@ export const COMPONENTS: RegistryEntry[] = [
   Card,
   Columns,
   ProductGrid,
+  PostList,
   Divider,
   Spacer,
 ];
