@@ -370,11 +370,24 @@ One seeded user, a cookie that is read but never verified, no login UI, and a
 `password_hash` of the literal string `seeded-no-login-ui`. Out of scope in the
 brief; listed in the README's "what's faked".
 
-### I13 — Media and product images are inline SVG data URIs
+### I13 — Media and product images are inline data URIs
 
-There is no S3, no upload pipeline, no image processing. The upside is not just
-convenience: it is what lets an exported artifact opened from `file://` render
-completely with no network at all.
+There is no S3 and no object storage. The upside is not just convenience: it is
+what lets an exported artifact opened from `file://` render completely with no
+network at all.
+
+*Amended: real uploads were added, and the property held.* Originally this said
+"inline SVG data URIs" because the only images were seeded gradients. Users can
+now upload their own — but the pipeline was built to protect the decision, not
+to overturn it. The browser downscales each picture to a bounded data URI
+(`lib/media-client.ts`), the server validates the type and size
+(`lib/media.ts`), and the result still lands in `media.storage_key` as a
+`data:` URI. So every downstream path — the editor bootstrap, the context API,
+the snapshot that freezes Tier-2 into `release_data`, the renderer and the
+export — was already correct and changed nothing. What moved is the *source* of
+the URI, from a seed script to a real upload; what did not move is that a
+downloaded site still renders with no network. Images are stored, not linked,
+which is the whole point.
 
 ### I14 — Prices are re-read from the database at checkout
 
