@@ -15,6 +15,13 @@ RUN npx prisma generate
 
 COPY . .
 
+# NEXT_PUBLIC_* is inlined into the build, and this one is also baked into every
+# exported artifact (so a downloaded zip's cart knows where to call — D8). In
+# production pass it at build time: `--build-arg NEXT_PUBLIC_RUNTIME_API=https://…`.
+# Unset, it is empty, which is exactly the previous behaviour for local dev.
+ARG NEXT_PUBLIC_RUNTIME_API=""
+ENV NEXT_PUBLIC_RUNTIME_API=$NEXT_PUBLIC_RUNTIME_API
+
 # A PRODUCTION BUILD, baked into the image.
 #
 # This matters more than it looks. Hosting used to be a file read, so it made no
