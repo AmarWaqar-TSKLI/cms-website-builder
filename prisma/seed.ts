@@ -111,6 +111,9 @@ async function main() {
     },
   });
   await prisma.siteModule.create({ data: { siteId: site.id, module: "commerce" } });
+  // Blog on too, so the demo shows engine + commerce + blog in one site. The
+  // "Blog posts" block only appears in the editor because of this row.
+  await prisma.siteModule.create({ data: { siteId: site.id, module: "blog" } });
 
   console.log("→ theme v1");
   const theme = await prisma.theme.create({ data: { siteId: site.id, name: "Acme Default" } });
@@ -204,6 +207,47 @@ async function main() {
   await prisma.customer.create({
     data: { siteId: site.id, email: "buyer@example.test", name: "Sam Buyer" },
   });
+
+  console.log("→ blog posts");
+  // Two published posts, each with a first revision, so the blog is demoable and
+  // the "Blog posts" block has something to list. Posts are Tier-2: they live
+  // outside releases, and a page shows the ones that were published when it was.
+  const postSpecs = [
+    {
+      title: "Why a page is a description, not a document",
+      slug: "page-is-a-description",
+      excerpt: "The one idea the whole system is built on — and what it buys you.",
+      text: "The database never stores HTML. It stores a name and some settings, and a registry turns that into a real component at render time.\n\nBecause a description is tiny, every version of it can be kept forever — which is what makes history and instant rollback nearly free.",
+    },
+    {
+      title: "Publishing is a snapshot, not a render",
+      slug: "publishing-is-a-snapshot",
+      excerpt: "How a publish can return in milliseconds and still be safe.",
+      text: "Publishing is two jobs. The first is a snapshot: one fast transaction that promotes your drafts to immutable revisions and queues a build.\n\nThe second is the build itself, in a separate process. If it fails, nothing breaks — your current site keeps serving until the new one is ready.",
+    },
+  ];
+  for (const spec of postSpecs) {
+    const post = await prisma.post.create({
+      data: {
+        siteId: site.id,
+        title: spec.title,
+        slug: spec.slug,
+        excerpt: spec.excerpt,
+        authorId: user.id,
+        status: "published",
+        publishedAt: new Date(),
+      },
+    });
+    const rev = await prisma.postRevision.create({
+      data: {
+        postId: post.id,
+        versionNo: 1,
+        body: toJson({ version: 1, text: spec.text }),
+        createdBy: user.id,
+      },
+    });
+    await prisma.post.update({ where: { id: post.id }, data: { currentRevisionId: rev.id } });
+  }
 
   // ── A shared component, used by both pages ────────────────────────────────
   // Defined once here. Both page drafts below hold a REFERENCE to it and none of
