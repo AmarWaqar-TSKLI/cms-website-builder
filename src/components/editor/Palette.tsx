@@ -14,6 +14,7 @@ import { paletteFor } from "@/lib/registry";
 import type { ComponentSchema, ModuleName, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { cx } from "../ui";
+import { useTechnical } from "../technical";
 import { DRAG_ADD, DRAG_ADD_COMPONENT } from "./Canvas";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -37,6 +38,7 @@ export function Palette({
   const addNode = useEditor((s) => s.addNode);
   const addComponentRef = useEditor((s) => s.addComponentRef);
   const [query, setQuery] = useState("");
+  const technical = useTechnical();
 
   const available = useMemo(() => paletteFor(modules), [modules]);
 
@@ -82,15 +84,15 @@ export function Palette({
         */}
         <div className="mb-4">
           <div className="mb-1.5 flex items-center justify-between px-1">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#22c7a9]">
-              Components
+            <span className="text-[11px] font-semibold tracking-tight text-reuse-500">
+              Reusable blocks
             </span>
             {onNewComponent && (
               <button
                 type="button"
                 onClick={onNewComponent}
-                title="Create an empty shared component"
-                className="rounded px-1 text-[13px] leading-none text-ink-500 transition-colors hover:text-[#22c7a9]"
+                title="Create a new reusable block from scratch"
+                className="rounded px-1 text-[13px] leading-none text-ink-500 transition-colors hover:text-reuse-500"
               >
                 +
               </button>
@@ -98,17 +100,17 @@ export function Palette({
           </div>
 
           {matchingComponents.length === 0 ? (
-            <p className="px-1 text-[10.5px] leading-relaxed text-ink-500">
+            <p className="px-1 text-[11px] leading-relaxed text-ink-500">
               {components.length === 0
-                ? "None yet. Select a block on the page and choose “Make component” to reuse it across pages."
-                : `No components match “${query}”.`}
+                ? "Nothing here yet. Select any block on the page, then choose “Reuse across pages” to reuse it — a header or footer, say, that stays in sync everywhere it appears."
+                : `No reusable blocks match “${query}”.`}
             </p>
           ) : (
             <div className="grid gap-1.5">
               {matchingComponents.map((component) => (
                 <div
                   key={component.id}
-                  className="group flex items-stretch overflow-hidden rounded-lg border border-ink-800 bg-ink-950 transition-colors hover:border-[#22c7a9]/50"
+                  className="group flex items-stretch overflow-hidden rounded-lg border border-ink-800 bg-ink-950 transition-colors hover:border-reuse-500/50"
                 >
                   <button
                     type="button"
@@ -118,10 +120,10 @@ export function Palette({
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     onClick={() => addComponentRef(component.id)}
-                    title={`Add “${component.name}” — stays linked, so editing it updates every page`}
+                    title={`Add “${component.name}”. It stays linked, so editing it updates every page that uses it.`}
                     className="flex flex-1 cursor-grab items-center gap-2 px-2.5 py-2 text-left active:cursor-grabbing"
                   >
-                    <span className="text-[13px] leading-none text-[#22c7a9]">◈</span>
+                    <span aria-hidden className="text-[13px] leading-none text-reuse-500">◈</span>
                     <span className="truncate text-[11.5px] font-medium text-ink-200">
                       {component.name}
                     </span>
@@ -130,8 +132,8 @@ export function Palette({
                     <button
                       type="button"
                       onClick={() => onEditComponent(component.id)}
-                      title="Edit this component — changes every page using it"
-                      className="grid w-7 place-items-center border-l border-ink-800 text-[11px] text-ink-500 transition-colors hover:bg-ink-850 hover:text-[#22c7a9]"
+                      title="Edit this block everywhere — changes every page that uses it"
+                      className="grid w-7 place-items-center border-l border-ink-800 text-[11px] text-ink-500 transition-colors hover:bg-ink-850 hover:text-reuse-500"
                     >
                       ✎
                     </button>
@@ -147,7 +149,7 @@ export function Palette({
           if (!items?.length) return null;
           return (
             <div key={category} className="mb-4">
-              <div className="mb-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+              <div className="mb-1.5 px-1 text-[11px] font-semibold tracking-tight text-ink-500">
                 {CATEGORY_LABEL[category]}
               </div>
               <div className="grid grid-cols-2 gap-1.5">
@@ -178,7 +180,12 @@ export function Palette({
               </div>
               {category === "commerce" && (
                 <p className="mt-2 px-1 text-[10.5px] leading-relaxed text-ink-500">
-                  Shown because this site has the commerce module enabled.
+                  Your online store is on, so shop blocks show up here.
+                  {technical && (
+                    <span className="mt-1 block font-mono text-ink-600">
+                      Filtered by site_modules — a site without the commerce module never sees these.
+                    </span>
+                  )}
                 </p>
               )}
             </div>
