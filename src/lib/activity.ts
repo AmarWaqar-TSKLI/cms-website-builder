@@ -35,6 +35,9 @@ export type ActivityAction =
   | "product.deleted"
   | "media.uploaded"
   | "media.deleted"
+  | "post.created"
+  | "post.published"
+  | "post.deleted"
   | "user.signed_in"
   | "user.signed_out";
 
@@ -43,7 +46,16 @@ export interface ActivityInput {
   userId?: string | null;
   actorName: string;
   action: ActivityAction;
-  entityType?: "page" | "component" | "release" | "theme" | "product" | "media" | "site" | null;
+  entityType?:
+    | "page"
+    | "component"
+    | "release"
+    | "theme"
+    | "product"
+    | "media"
+    | "post"
+    | "site"
+    | null;
   entityId?: string | null;
   summary: string;
   meta?: Prisma.InputJsonValue;

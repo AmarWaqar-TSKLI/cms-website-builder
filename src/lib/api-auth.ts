@@ -129,3 +129,19 @@ export async function guardMedia(mediaId: string): Promise<Guarded<{ siteId: str
     return deny(err);
   }
 }
+
+/** Guard by POST id — resolve to its site, then check membership. */
+export async function guardPost(postId: string): Promise<Guarded<{ siteId: string }>> {
+  try {
+    const user = await requireUser();
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { siteId: true },
+    });
+    if (!post) throw new AuthError(403, "No access to this post");
+    await requireSiteAccess(user.id, post.siteId);
+    return { ok: true, user, extra: { siteId: post.siteId } };
+  } catch (err) {
+    return deny(err);
+  }
+}
