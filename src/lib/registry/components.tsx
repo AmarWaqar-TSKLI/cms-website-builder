@@ -353,7 +353,7 @@ const ImageBlock: RegistryEntry = {
         kind: "ref",
         ref: "media",
         default: "",
-        help: "Recorded in release_dependencies at publish time.",
+        help: "Choose a picture from your media library.",
       },
       caption: { label: "Caption", kind: "text", default: "", inlineEditable: true },
       imageRadius: { label: "Image corners", kind: "range", default: 12, min: 0, max: 48, step: 2, unit: "px" },
@@ -580,7 +580,7 @@ const ProductGrid: RegistryEntry = {
         kind: "ref",
         ref: "collection",
         default: "",
-        help: "The collection AND every product in it become release dependencies.",
+        help: "Pick which group of products to show. Everything in it appears here.",
       },
       columns: {
         label: "Columns",
