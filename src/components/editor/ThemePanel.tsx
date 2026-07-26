@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ThemeLayout, ThemeTokens } from "@/lib/registry/types";
 import { cx } from "../ui";
+import { useTechnical } from "../technical";
 
 const COLOURS: { key: keyof ThemeTokens; label: string }[] = [
   { key: "colorBg", label: "Page background" },
@@ -67,6 +68,7 @@ export function ThemePanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const technical = useTechnical();
 
   useEffect(() => setDraftTokens(tokens), [tokens]);
   useEffect(() => setDraftLayout(layout), [layout]);
@@ -103,7 +105,7 @@ export function ThemePanel({
     setSaving(false);
     if (data.ok) {
       setDirty(false);
-      setSaved(`Saved as theme v${data.versionNo}`);
+      setSaved(technical ? `Saved as theme v${data.versionNo}` : "Design saved");
       setTimeout(() => setSaved(null), 4000);
     }
   };
@@ -111,10 +113,15 @@ export function ThemePanel({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-4">
-        <p className="text-[13px] font-semibold text-ink-100">Site design</p>
+        <p className="display text-[15px] text-ink-100">Site design</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-ink-400">
-          Applies to every page. Saving appends a new theme version rather than
-          overwriting the old one.
+          Colours, fonts and shape for every page at once. Change the accent here and every button
+          on your site follows.
+          {technical && (
+            <span className="mt-1 block font-mono text-ink-500">
+              Saving appends a new theme revision — versioned on the same terms as pages.
+            </span>
+          )}
         </p>
       </div>
 
@@ -256,7 +263,7 @@ export function ThemePanel({
           {saving ? "Saving…" : dirty ? "Save design" : "No changes"}
         </button>
         <p className="mt-2 text-[10.5px] leading-relaxed text-ink-500">
-          Saved designs still need a publish to reach the live site.
+          Saved design changes still need a publish to reach your live site.
         </p>
       </div>
     </div>
