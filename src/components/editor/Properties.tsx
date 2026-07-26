@@ -26,6 +26,7 @@ import type {
 import { useEditor } from "@/lib/editor/store";
 import { componentIdOf, expandComponents, isComponentRef, overridesOf } from "@/lib/shared-components";
 import { Badge, cx } from "../ui";
+import { useTechnical } from "../technical";
 
 export interface RefOptions {
   collection: { value: string; label: string }[];
@@ -70,14 +71,14 @@ function InstancePanel({
   if (!definition) {
     return (
       <div className="p-5">
-        <p className="text-[13px] font-medium text-ink-200">Component not found</p>
+        <p className="text-[13px] font-medium text-ink-200">This reusable block was deleted</p>
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
-          This instance points at a component that has been deleted. Published releases that pinned
-          one of its revisions are unaffected — they render it from the frozen revision.
+          This spot points at a reusable block that no longer exists. Any version of your site you
+          already published still shows it, because each published version keeps its own copy.
         </p>
         <div className="mt-4">
           <SmallButton onClick={() => removeNode(node.id)} danger>
-            Remove this instance
+            Remove it from this page
           </SmallButton>
         </div>
       </div>
@@ -146,26 +147,29 @@ function InstancePanel({
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-[14px] font-semibold text-ink-100">
-            <span className="text-[#22c7a9]">◈</span>
-            {definition.name}
+          <span className="display flex min-w-0 items-center gap-1.5 text-[15px] text-ink-100">
+            <span aria-hidden className="shrink-0 text-reuse-500">◈</span>
+            <span className="truncate">{definition.name}</span>
           </span>
-          <Badge tone="neutral">shared</Badge>
+          <span className="shrink-0 rounded-full border border-reuse-500/40 bg-reuse-500/10 px-2 py-0.5 text-[10.5px] font-medium text-reuse-500">
+            Reused
+          </span>
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
-          One definition, used in several places. This block is a reference to it, not a copy.
+          This block is reused across pages. Edit it once and every page that uses it changes
+          together.
         </p>
 
         {/*
           The two scopes, side by side and in that order, because the safe one is
-          the one people usually want. Editing the component is deliberately the
-          second option and carries its page count, so nobody reaches it thinking
-          they are changing this page.
+          the one people usually want. Editing the block everywhere is deliberately
+          the second option and carries its page count, so nobody reaches it
+          thinking they are changing only this page.
         */}
         <div className="mt-3 rounded-lg border border-ink-800 bg-ink-950 p-2.5">
           <p className="text-[11.5px] leading-relaxed text-ink-300">
-            <span className="font-medium text-ink-100">Only this page?</span> Edit the text below,
-            or double-click it on the canvas. Other pages keep the component&rsquo;s version.
+            <span className="font-medium text-ink-100">Want to change just this page?</span> Edit the
+            text below, or double-click it on the page. Other pages keep the shared version.
           </p>
         </div>
 
@@ -174,14 +178,19 @@ function InstancePanel({
           onClick={() => router.push(`/editor/component/${definition.id}`)}
           className="mt-2 w-full rounded-lg border border-warn-500/40 px-3 py-2 text-[12px] font-medium text-warn-500 transition-colors hover:border-warn-500 hover:bg-warn-500/10"
         >
-          Edit the component itself → changes every page using it
+          Edit it everywhere → changes every page that uses it
         </button>
 
         <div className="mt-2 flex flex-wrap gap-1">
           <SmallButton onClick={() => nudge(node.id, -1)}>↑ Up</SmallButton>
           <SmallButton onClick={() => nudge(node.id, 1)}>↓ Down</SmallButton>
           <SmallButton onClick={() => duplicateNode(node.id)}>Duplicate</SmallButton>
-          <SmallButton onClick={() => detachComponent(node.id, components)}>Detach</SmallButton>
+          <SmallButton
+            onClick={() => detachComponent(node.id, components)}
+            title="Stop reusing here — turn this into normal blocks only this page has"
+          >
+            Unlink
+          </SmallButton>
           <SmallButton onClick={() => removeNode(node.id)} danger>
             Delete
           </SmallButton>
@@ -190,17 +199,17 @@ function InstancePanel({
 
       <div className="flex-1 overflow-y-auto">
         <Group
-          title={overrideCount ? `This page only (${overrideCount})` : "This page only"}
+          title={overrideCount ? `Just this page (${overrideCount})` : "Just this page"}
           defaultOpen
         >
           <p className="mb-3 text-[11.5px] leading-relaxed text-ink-500">
-            Changes here apply to this instance and nothing else. Leave a field as it is and it keeps
-            following the component.
+            Anything you change here affects only this page. Leave a field alone and it keeps
+            following the reusable block everywhere else.
           </p>
 
           {overridable.length === 0 ? (
             <p className="text-[12px] text-ink-500">
-              This component has no text to override yet.
+              This block has no text you can change yet.
             </p>
           ) : (
             overridable.map(({ key, label, prop, def }) => {
@@ -210,8 +219,8 @@ function InstancePanel({
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <span className="text-[11px] font-medium text-ink-300">{label}</span>
                     {overridden && (
-                      <span className="font-mono text-[9.5px] uppercase tracking-wider text-[#22c7a9]">
-                        overridden
+                      <span className="text-[9.5px] font-semibold uppercase tracking-wider text-reuse-500">
+                        changed
                       </span>
                     )}
                   </div>
@@ -222,7 +231,7 @@ function InstancePanel({
                       onChange={(e) => setOverride(node.id, key, prop, e.target.value)}
                       className={cx(
                         "w-full resize-y rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
-                        overridden ? "border-[#22c7a9]/50" : "border-ink-700",
+                        overridden ? "border-reuse-500/50" : "border-ink-700",
                       )}
                     />
                   ) : (
@@ -232,7 +241,7 @@ function InstancePanel({
                       onChange={(e) => setOverride(node.id, key, prop, e.target.value)}
                       className={cx(
                         "w-full rounded-lg border bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500",
-                        overridden ? "border-[#22c7a9]/50" : "border-ink-700",
+                        overridden ? "border-reuse-500/50" : "border-ink-700",
                       )}
                     />
                   )}
@@ -243,7 +252,7 @@ function InstancePanel({
 
           {overrideCount > 0 && (
             <SmallButton onClick={() => clearOverrides(node.id)}>
-              Reset to the component
+              Reset to the shared version
             </SmallButton>
           )}
         </Group>
@@ -268,6 +277,7 @@ export function Properties({
   const duplicateNode = useEditor((s) => s.duplicateNode);
   const nudge = useEditor((s) => s.nudge);
   const [showJson, setShowJson] = useState(false);
+  const technical = useTechnical();
 
   const node = selectedId ? findNode(body.root, selectedId) : undefined;
 
@@ -276,10 +286,10 @@ export function Properties({
       <div className="p-5">
         <p className="text-[13px] font-medium text-ink-200">Nothing selected</p>
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">
-          Click a block on the canvas to edit it, or drag one in from the left.
+          Click any block on the page to change it, or drag a new one in from the left.
         </p>
         <p className="mt-4 text-[12px] leading-relaxed text-ink-500">
-          Double-click text on the canvas to type directly into it.
+          Double-click text on the page to type straight into it.
         </p>
       </div>
     );
@@ -305,8 +315,8 @@ export function Properties({
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[14px] font-semibold text-ink-100">{schema.label}</span>
-          <Badge tone="neutral">{node.type}</Badge>
+          <span className="display text-[15px] text-ink-100">{schema.label}</span>
+          {technical && <Badge tone="neutral">{node.type}</Badge>}
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-400">{schema.description}</p>
 
@@ -346,22 +356,29 @@ export function Properties({
         })}
       </div>
 
-      <div className="border-t border-ink-800">
-        <button
-          type="button"
-          onClick={() => setShowJson(!showJson)}
-          className="flex w-full items-center justify-between px-4 py-2.5 text-left text-[11px] text-ink-500 transition-colors hover:text-ink-300"
-        >
-          <span>What gets stored</span>
-          <span>{showJson ? "−" : "+"}</span>
-        </button>
-        {showJson && (
-          // Exactly what lands in the JSONB column. No markup anywhere.
-          <pre className="max-h-52 overflow-auto border-t border-ink-800 bg-ink-950 p-3 font-mono text-[10.5px] leading-relaxed text-ink-300">
-            {JSON.stringify({ type: node.type, props: node.props }, null, 2)}
-          </pre>
-        )}
-      </div>
+      {/*
+        The raw record this block saves as — kept because seeing it is part of
+        the point of this project, but shown only with technical details on, so a
+        non-technical person is never handed a wall of JSON.
+      */}
+      {technical && (
+        <div className="border-t border-ink-800">
+          <button
+            type="button"
+            onClick={() => setShowJson(!showJson)}
+            className="flex w-full items-center justify-between px-4 py-2.5 text-left text-[11px] text-ink-500 transition-colors hover:text-ink-300"
+          >
+            <span>What this block saves as</span>
+            <span>{showJson ? "−" : "+"}</span>
+          </button>
+          {showJson && (
+            // Exactly what lands in the JSONB column. No markup anywhere.
+            <pre className="max-h-52 overflow-auto border-t border-ink-800 bg-ink-950 p-3 font-mono text-[10.5px] leading-relaxed text-ink-300">
+              {JSON.stringify({ type: node.type, props: node.props }, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,15 +414,18 @@ function SmallButton({
   children,
   onClick,
   danger,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       className={cx(
         "rounded-md border px-2 py-1 text-[11px] transition-colors",
         danger
@@ -435,13 +455,15 @@ function Field({
   tokens: ThemeTokens;
 }) {
   const isRef = def.kind === "ref" || def.kind === "refList";
+  const technical = useTechnical();
 
   return (
     <label className="block">
       <span className="mb-1.5 flex items-center gap-2">
         <span className="text-[11.5px] font-medium text-ink-200">{def.label}</span>
-        {isRef && (
-          // The visible consequence of one line in the component's schema.
+        {isRef && technical && (
+          // The visible consequence of one line in the component's schema — shown
+          // only with technical details on.
           <span
             className="rounded-full border border-flux-500/40 bg-flux-500/10 px-1.5 text-[9.5px] text-flux-300"
             title="Choosing this records a row in release_dependencies at publish time."
