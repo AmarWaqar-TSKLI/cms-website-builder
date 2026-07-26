@@ -226,6 +226,7 @@ async function main() {
       text: "Publishing is two jobs. The first is a snapshot: one fast transaction that promotes your drafts to immutable revisions and queues a build.\n\nThe second is the build itself, in a separate process. If it fails, nothing breaks — your current site keeps serving until the new one is ready.",
     },
   ];
+  const postIds: string[] = [];
   for (const spec of postSpecs) {
     const post = await prisma.post.create({
       data: {
@@ -247,6 +248,7 @@ async function main() {
       },
     });
     await prisma.post.update({ where: { id: post.id }, data: { currentRevisionId: rev.id } });
+    postIds.push(post.id);
   }
 
   // ── A shared component, used by both pages ────────────────────────────────
@@ -389,6 +391,16 @@ async function main() {
             }),
           ],
         ),
+        // A blog teaser list, each item linking to a real /blog/<slug> page that
+        // renders from the same frozen release.
+        node("PostList", {
+          heading: "From the blog",
+          posts: postIds,
+          columns: "2",
+          gap: 22,
+          paddingTop: 24,
+          paddingBottom: 40,
+        }),
         node("Divider", { width: 100, paddingTop: 0, paddingBottom: 0 }),
         node("Button", {
           label: "Read the architecture",
