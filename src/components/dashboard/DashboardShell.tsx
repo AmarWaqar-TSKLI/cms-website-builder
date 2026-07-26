@@ -22,6 +22,7 @@ import { Ago } from "./Ago";
 import { AccountBar } from "./AccountBar";
 import { ActivityFeed } from "./ActivityFeed";
 import { NextStep } from "./NextStep";
+import { Welcome } from "./Welcome";
 import {
   Btn,
   Card,
@@ -330,6 +331,9 @@ export function DashboardShell({
 
   return (
     <TechnicalDetails enabled={technical}>
+      {/* First-run orientation. Shows itself once per user, then hands off to the
+          "Start here" card below; reopenable from the top bar. */}
+      <Welcome userId={user.id} userName={user.name} siteName={site.name} editHref={editHref} />
       <AccountBar
         user={user}
         sites={sites}
@@ -528,6 +532,14 @@ function TopBar() {
         Dashboard
       </div>
       <nav className="flex items-center gap-1">
+        <Btn
+          size="sm"
+          variant="quiet"
+          onClick={() => window.dispatchEvent(new Event("cms:show-welcome"))}
+          title="Replay the quick intro to how this works"
+        >
+          Show intro
+        </Btn>
         <LinkBtn href="/dashboard/products" size="sm" variant="quiet">
           Store
         </LinkBtn>
