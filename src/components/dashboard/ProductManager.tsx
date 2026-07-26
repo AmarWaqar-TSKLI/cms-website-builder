@@ -9,14 +9,16 @@
  * built with is a soft delete, announced beforehand with the exact list of
  * versions affected.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Dot, cx } from "../ui";
+import { prepareImageForUpload } from "@/lib/media-client";
 import { Btn, Card, CardHead, money } from "./dash-ui";
 
 interface Product {
   id: string;
   title: string;
   description: string;
+  imageUrl: string | null;
   status: string;
   deletedAt: string | null;
   priceCents: number;
@@ -41,6 +43,7 @@ export function ProductManager({
 }) {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [draft, setDraft] = useState({ title: "", price: "20.00", qty: "25" });
+  const [newImage, setNewImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -71,9 +74,11 @@ export function ProductManager({
         title: draft.title.trim(),
         priceCents: Math.round((Number(draft.price) || 0) * 100),
         inventoryQty: Number(draft.qty) || 0,
+        imageUrl: newImage,
       }),
     });
     setDraft({ title: "", price: "20.00", qty: "25" });
+    setNewImage(null);
     setBusy(false);
     setAdding(false);
     setFlash("Product added. Your published pages stay exactly as they are until you publish again.");
@@ -226,6 +231,12 @@ export function ProductManager({
                 {busy ? "Adding…" : "Add"}
               </Btn>
             </div>
+            <div className="mt-3">
+              <span className="mb-1.5 block text-[11.5px] font-medium text-ink-400">
+                Image <span className="font-normal text-ink-500">— optional</span>
+              </span>
+              <ProductImage url={newImage} onPick={(dataUri) => setNewImage(dataUri)} />
+            </div>
             <p className="mt-3 text-[11.5px] leading-relaxed text-ink-500">
               New products appear on your live site the next time you publish.
             </p>
@@ -291,6 +302,82 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+const PRODUCT_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml";
+
+/**
+ * A product's picture, uploaded and downscaled in the browser to a data URI —
+ * the same pipeline as the media library. Stored on the product itself, so a
+ * published page freezes whatever it was at build time.
+ */
+function ProductImage({
+  url,
+  onPick,
+  compact,
+}: {
+  url: string | null;
+  onPick: (dataUri: string) => void | Promise<void>;
+  compact?: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const size = compact ? "h-11 w-11" : "h-14 w-14";
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const prepared = await prepareImageForUpload(file);
+      await onPick(prepared.dataUri);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That image couldn’t be used.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={cx(
+          "grid shrink-0 place-items-center overflow-hidden rounded-lg border border-ink-800 bg-ink-900",
+          size,
+        )}
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- data URI, no loader
+          <img src={url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="text-[9px] text-ink-500">none</span>
+        )}
+      </span>
+      <input
+        ref={input}
+        type="file"
+        accept={PRODUCT_IMAGE_ACCEPT}
+        onChange={onFile}
+        className="hidden"
+        aria-hidden
+        tabIndex={-1}
+      />
+      <div className="flex flex-col items-start gap-0.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+          className="rounded-md border border-ink-700 px-2 py-1 text-[11px] text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100 disabled:opacity-50"
+        >
+          {busy ? "Uploading…" : url ? "Change" : "Add image"}
+        </button>
+        {error && <span className="text-[10px] leading-tight text-fail-500">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 function ProductRow({
   product: p,
   onUpdate,
@@ -309,6 +396,17 @@ function ProductRow({
       )}
     >
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5">
+        <ProductImage
+          url={p.imageUrl}
+          compact
+          onPick={(dataUri) =>
+            onUpdate(
+              p.id,
+              { imageUrl: dataUri },
+              "Image updated. Published pages keep the image they were built with until you publish again.",
+            )
+          }
+        />
         <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
