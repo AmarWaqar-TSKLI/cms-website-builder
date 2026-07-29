@@ -31,7 +31,7 @@ export default function Marketing() {
             Blockwrite
           </span>
           <div className="lp-nav-actions">
-            <Link href="/how-it-works" className="lp-navlink lp-nav-hide">How it works</Link>
+            <a href="#how" className="lp-navlink lp-nav-hide">How it works</a>
             <Link href="/login" className="lp-navlink">Sign in</Link>
             <Link href="/login" className="lp-btn lp-btn--primary lp-btn--sm">Start free</Link>
           </div>
@@ -60,9 +60,9 @@ export default function Marketing() {
                 Start building — it&rsquo;s free
                 <span className="lp-btn-arrow" aria-hidden>→</span>
               </Link>
-              <Link href="/how-it-works" className="lp-btn lp-btn--ghost">
+              <a href="#how" className="lp-btn lp-btn--ghost">
                 See how it works
-              </Link>
+              </a>
             </div>
             <p className="lp-trust lp-fade" style={{ animationDelay: "480ms" }}>
               Free to try · No card needed · Online in minutes
@@ -104,7 +104,7 @@ export default function Marketing() {
       </header>
 
       {/* ── Play ────────────────────────────────────────────────────────── */}
-      <section className="lp-section">
+      <section className="lp-section" id="how">
         <div className="lp-wrap lp-split">
           <Reveal className="lp-split-copy">
             <p className="lp-kick">Building</p>
@@ -227,7 +227,7 @@ export default function Marketing() {
             <span className="lp-brand-mark" aria-hidden>◈</span> Blockwrite
           </span>
           <div className="lp-footer-links">
-            <Link href="/how-it-works" className="lp-navlink">How it works</Link>
+            <a href="#how" className="lp-navlink">How it works</a>
             <Link href="/login" className="lp-navlink">Sign in</Link>
           </div>
         </div>
@@ -312,7 +312,9 @@ const LP_CSS = `
 .lp-chip--3{width:44px; height:44px; bottom:-22px; right:22%; transform:translate3d(calc(var(--mx)*20px), calc(var(--my)*30px), 0) rotate(6deg);}
 
 /* ── sections ── */
+html:has(.lp){scroll-behavior:smooth;}
 .lp-section{padding-block:clamp(60px,9vw,128px);}
+#how{scroll-margin-top:84px;}
 .lp-section--tint{background:linear-gradient(var(--sink),var(--sink));}
 .lp-kick{font-size:14px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--blue); margin:0 0 14px;}
 .lp-h2{font-family:var(--font-display); font-weight:600; font-size:clamp(2rem,4.6vw,3.4rem); line-height:1.05; letter-spacing:-0.02em; margin:0; color:var(--ink); text-wrap:balance;}
