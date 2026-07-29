@@ -244,7 +244,15 @@ export const useEditor = create<EditorState>((set, get) => {
         return commit(
           state,
           insertIntoTree(state.body.root, expanded, null, index ?? state.body.root.length),
-          { selectedId: expanded.id },
+          // Select the CONTENT node inside the new component, not the @component
+          // wrapper. A single-use component IS this page's block, and the whole
+          // editor treats it that way: a canvas click resolves to this inner node
+          // and shows its normal, editable properties. Selecting the wrapper
+          // instead routed to the shared-instance panel, which — because a
+          // just-made component isn't in the server-loaded map — read "this
+          // reusable block was deleted". Selecting the content is what a click
+          // would do, so the panel is right the instant the block lands.
+          { selectedId: expanded.children?.[0]?.id ?? expanded.id },
         );
       }),
 
@@ -293,7 +301,11 @@ export const useEditor = create<EditorState>((set, get) => {
             [componentId]: { id: componentId, name: block.type, root: [block] },
           })[0];
           root = insertIntoTree(root, expanded, null, root.length);
-          if (!firstId) firstId = expanded.id;
+          // Select the first block's CONTENT node, not its @component wrapper —
+          // see addNode for why. The section lands with the properties panel
+          // already showing its first block, editable, instead of the
+          // shared-instance "this block was deleted" message.
+          if (!firstId) firstId = expanded.children?.[0]?.id ?? expanded.id;
         }
         return commit(state, root, { selectedId: firstId });
       }),
