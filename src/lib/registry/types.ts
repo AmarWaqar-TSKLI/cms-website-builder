@@ -146,8 +146,10 @@ export interface NavLink {
 /**
  * Site chrome wrapping every page. Stored in theme_revisions.layout, so it is
  * versioned and rolls back along with the pages — change the brand name, publish,
- * roll back, and the old brand returns. Kept as structured data rather than
- * components so the palette stays at exactly the six specified blocks.
+ * roll back, and the old brand returns. Kept as structured data rather than a
+ * palette block because chrome is versioned page-frame, not page content (I5) —
+ * not because the palette is kept small. The palette itself is now a full block
+ * library; see I16.
  */
 export interface ThemeLayout {
   nav: { brand: string; links: NavLink[] };

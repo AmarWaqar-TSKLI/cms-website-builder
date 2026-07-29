@@ -293,6 +293,12 @@ small. Adding `SiteHeader`/`SiteFooter` would have grown the palette for
 something that is not page content. As a bonus the chrome is versioned, so
 changing the brand name and rolling back visibly restores the old one.
 
+*Amended by I16.* The "keep the set small" clause was overtaken when the goal
+moved from proving the architecture to being a production builder — the palette
+is now a full block library. The load-bearing half of this decision is
+untouched: chrome is versioned theme data, not page content, which is why it
+lives here regardless of how big the palette gets.
+
 ### I6 — `release_items.revision_id` carries no foreign key
 
 It is polymorphic: it points at `page_revisions` when `entity_type='page'` and
@@ -395,6 +401,43 @@ The artifact's baked-in price is a display value that may be weeks stale. What
 someone is charged is decided server-side, now. `price_at_purchase_cents` then
 snapshots it onto the line item, so a later price change cannot rewrite what a
 customer paid.
+
+### I16 — The palette is a production block library, not six demo blocks
+
+*Amends the "keep the palette small" spirit of D6 and I5.*
+
+The brief specified six components and said to keep the set small, and the early
+decisions honoured that — I5 keeps site chrome out of the palette, and the
+`ThemeLayout` note in `registry/types.ts` said the palette "stays at exactly the
+six specified blocks." That constraint was right while the system was *proving an
+architecture*: six blocks are enough to demonstrate description-over-HTML, reuse
+and the tier split, and every extra block is surface area those proofs do not
+need.
+
+It stops being right the moment the goal changes from "prove it" to "people
+build real sites with this." A production builder competes with Wix and
+Squarespace on precisely the thing a six-block palette cannot do — hand someone
+the block they were already reaching for. So the palette is deliberately
+expanded: **marketing** (CTA band, testimonial, stat, logo strip), **content**
+(feature split, FAQ, quote, callout), **media** (gallery, video), **commerce**
+(featured product, pricing plan) and **forms** (contact, newsletter).
+
+*What did NOT change, and this is the whole point:* every new block is the same
+kind of thing the first six were — a pure render function, inline-styled from
+theme tokens, wrapped in the shared `Section` so the style and layout controls
+are universal, resolving live references through the same prop schemas. The
+storage format, the freezing into `release_data`, the dependency index and the
+determinism guarantee did not move. The palette grew; the architecture it renders
+through did not. Adding depth cost new files, not new concepts — the same test I5
+applied to the chrome, answered the other way because the requirement is now
+different.
+
+*Accepted cost:* a larger palette needs more guidance, not less — an empty
+canvas with forty blocks is more intimidating than one with six. That is why the
+palette expansion and the guided-experience work (setup checklist, empty states,
+in-editor coaching) are treated as one push rather than two, and why the palette
+keeps its search box and category grouping so the set stays navigable as it
+grows.
 
 ---
 
