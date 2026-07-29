@@ -395,6 +395,23 @@ the URI, from a seed script to a real upload; what did not move is that a
 downloaded site still renders with no network. Images are stored, not linked,
 which is the whole point.
 
+*Amended again: object storage is now optional, and the property STILL held.* A
+very large media library eventually wants real object storage, and the escape
+hatch was left open in the original wording ("`media.storage_key` becomes a URL
+and the resolve points read from there"). That is now built (`lib/storage.ts`),
+and the interesting part is what it did NOT cost. `storage_key` stays a `data:`
+URI by default, so the demo, the tests and a single-instance deploy are unchanged.
+When `STORAGE_S3_*` is set, a fresh upload is PUT to any S3-compatible bucket
+(SigV4-signed with Node crypto — still no SDK) and `storage_key` holds the
+object's URL. The one thing that would break — an exported page fetching an image
+over the network — is prevented at the source: the snapshot's `inlineForFreeze`
+pulls any `http(s)` image back into a `data:` URI *before* it is frozen into
+`release_data`. So the hosted runtime serves fast URLs while every export still
+carries its bytes. The default path is a pure no-op (a `data:` URI passes
+straight through), which is why `make verify`'s determinism check is untouched.
+The property — "a downloaded site renders with no network" — is now defended by
+code rather than by the mere absence of an alternative.
+
 ### I14 — Prices are re-read from the database at checkout
 
 The artifact's baked-in price is a display value that may be weeks stale. What

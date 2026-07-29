@@ -8,11 +8,13 @@
  *        it really is an image within the size cap, then store it. No object
  *        storage, no image processing on the server.
  */
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { cleanLabel, validateImageDataUri } from "@/lib/media";
+import { storeUpload } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -71,10 +73,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   const width = Number.isFinite(Number(payload.width)) ? Math.round(Number(payload.width)) : null;
   const height = Number.isFinite(Number(payload.height)) ? Math.round(Number(payload.height)) : null;
 
+  // The id is generated up front so object storage (when configured) has a stable
+  // key to PUT under. By default storeUpload just hands the data URI straight
+  // back, so storage_key stays inline exactly as before (I13).
+  const mediaId = randomUUID();
+  const storageKey = await storeUpload(valid.value.dataUri, {
+    mime: valid.value.mime,
+    siteId,
+    id: mediaId,
+  });
+
   const created = await prisma.media.create({
     data: {
+      id: mediaId,
       siteId,
-      storageKey: valid.value.dataUri,
+      storageKey,
       mime: valid.value.mime,
       sizeBytes: valid.value.sizeBytes,
       filename,

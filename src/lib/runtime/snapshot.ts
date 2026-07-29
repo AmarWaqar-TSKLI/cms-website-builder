@@ -19,6 +19,7 @@
 import { prisma } from "../db";
 import { extractRefsFromBody, mergeRefs } from "../refs";
 import { bodyTextOf } from "../posts";
+import { inlineForFreeze } from "../storage";
 import type {
   PageBody,
   ResolvedCollection,
@@ -90,7 +91,9 @@ export async function resolveTierTwo(bodies: PageBody[]): Promise<FrozenTierTwo>
           id: row.id,
           title: row.title,
           description: row.description,
-          imageUrl: row.imageUrl,
+          // Same inlining as media — a product photo kept in object storage is
+          // pulled back into the release so exports stay self-contained.
+          imageUrl: row.imageUrl ? await inlineForFreeze(row.imageUrl) : null,
           priceCents: row.variants[0]?.priceCents ?? 0,
           variantId: row.variants[0]?.id ?? null,
           missing: row.deletedAt !== null || row.status === "archived",
@@ -113,7 +116,15 @@ export async function resolveTierTwo(bodies: PageBody[]): Promise<FrozenTierTwo>
   for (const id of mediaIds) {
     const row = mediaRows.find((m) => m.id === id);
     media[id] = row
-      ? { id: row.id, url: row.storageKey, alt: row.alt ?? "", missing: row.deletedAt !== null }
+      ? {
+          id: row.id,
+          // Object-stored images are pulled back inline here so the frozen
+          // release, and any export of it, still render with no network (I13).
+          // A data URI passes straight through — the default path, no cost.
+          url: await inlineForFreeze(row.storageKey),
+          alt: row.alt ?? "",
+          missing: row.deletedAt !== null,
+        }
       : { id, url: "", alt: "", missing: true };
   }
 
