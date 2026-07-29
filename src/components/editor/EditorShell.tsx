@@ -20,6 +20,7 @@ import type {
 import { Canvas } from "./Canvas";
 import { EditorCoach } from "./EditorCoach";
 import { Palette } from "./Palette";
+import { usePromptDialog, type PromptOptions } from "./PromptDialog";
 import { Properties, type RefOptions } from "./Properties";
 import { PublishPanel } from "./PublishPanel";
 import { SaveIndicator } from "./SaveIndicator";
@@ -83,6 +84,7 @@ export function EditorShell(boot: EditorBootstrap) {
   const [rightTab, setRightTab] = useState<RightTab>("design");
   const [device, setDevice] = useState<(typeof DEVICES)[number]["id"]>("desktop");
   const [busy, setBusy] = useState(false);
+  const { ask, dialog } = usePromptDialog();
 
   // The same "Technical details" switch the dashboard has, remembered under the
   // same key so flipping it in either place changes both. Read in an effect (not
@@ -204,95 +206,128 @@ export function EditorShell(boot: EditorBootstrap) {
     if (!node) return;
 
     const suggested = defaultComponentName(node.type, boot.components.length);
-    const name = window.prompt("Name this reusable block", suggested)?.trim();
-    if (!name) return;
-
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/sites/${boot.site.id}/components`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          // A single block becomes a one-block component. `stripExpansion`
-          // guards the invariant that only storable nodes are ever sent.
-          body: { version: 1, root: stripExpansion([node]) },
-        }),
+    let error: string | undefined;
+    // Loop so a rejected name (already taken) is corrected in the same dialog.
+    for (;;) {
+      const name = await ask({
+        title: "Reuse this block across pages",
+        helpText: "Give it a name. Editing it later changes every page that uses it.",
+        label: "Block name",
+        defaultValue: suggested,
+        confirmLabel: "Reuse across pages",
+        error,
       });
+      if (!name) return;
 
-      if (res.status === 409) {
-        const data = await res.json();
-        window.alert(data.message ?? "A reusable block with that name already exists.");
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/sites/${boot.site.id}/components`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            // A single block becomes a one-block component. `stripExpansion`
+            // guards the invariant that only storable nodes are ever sent.
+            body: { version: 1, root: stripExpansion([node]) },
+          }),
+        });
+
+        if (res.status === 409) {
+          const data = await res.json().catch(() => ({}));
+          error = data.message ?? "A reusable block with that name already exists.";
+          continue;
+        }
+        if (!res.ok) {
+          error = `Could not create the reusable block (${res.status}).`;
+          continue;
+        }
+
+        const created = (await res.json()) as { id: string };
+
+        // Swap the block for a reference to it, then persist and reload so the
+        // palette and the expansion map both pick the new symbol up.
+        useEditor.getState().replaceWithComponentRef(selected, created.id);
+        await flushDraft();
+        router.refresh();
         return;
+      } finally {
+        setBusy(false);
       }
-      if (!res.ok) {
-        window.alert(`Could not create the reusable block (${res.status}).`);
-        return;
-      }
-
-      const created = (await res.json()) as { id: string };
-
-      // Swap the block for a reference to it, then persist and reload so the
-      // palette and the expansion map both pick the new symbol up.
-      useEditor.getState().replaceWithComponentRef(selected, created.id);
-      await flushDraft();
-      router.refresh();
-    } finally {
-      setBusy(false);
     }
-  }, [boot.site.id, boot.components.length, busy, router]);
+  }, [boot.site.id, boot.components.length, busy, router, ask]);
 
   /** Create an empty reusable block and go straight to editing it. */
   const newComponent = useCallback(async () => {
     if (busy) return;
-    const name = window.prompt("Name the new reusable block")?.trim();
-    if (!name) return;
-
-    setBusy(true);
-    try {
-      await flushDraft(); // don't lose the current page's edits on navigate
-      const res = await fetch(`/api/sites/${boot.site.id}/components`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, body: { version: 1, root: [] } }),
+    let error: string | undefined;
+    for (;;) {
+      const name = await ask({
+        title: "New reusable block",
+        helpText: "A block you can drop onto any page and keep in sync everywhere.",
+        label: "Name",
+        placeholder: "e.g. Header, Footer, Sign-up",
+        confirmLabel: "Create block",
+        error,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        window.alert(data.message ?? `Could not create the reusable block (${res.status}).`);
+      if (!name) return;
+
+      setBusy(true);
+      try {
+        await flushDraft(); // don't lose the current page's edits on navigate
+        const res = await fetch(`/api/sites/${boot.site.id}/components`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, body: { version: 1, root: [] } }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          error = data.message ?? `Could not create the reusable block (${res.status}).`;
+          continue;
+        }
+        const created = (await res.json()) as { id: string };
+        router.push(`/editor/component/${created.id}`);
         return;
+      } finally {
+        setBusy(false);
       }
-      const created = (await res.json()) as { id: string };
-      router.push(`/editor/component/${created.id}`);
-    } finally {
-      setBusy(false);
     }
-  }, [boot.site.id, busy, router]);
+  }, [boot.site.id, busy, router, ask]);
 
   /** Create a new page and jump straight into building it. */
   const newPage = useCallback(async () => {
     if (busy) return;
-    const name = window.prompt("Name your new page — e.g. Contact, Pricing, About")?.trim();
-    if (!name) return;
-
-    setBusy(true);
-    try {
-      await flushDraft(); // save the current page before navigating away
-      const res = await fetch(`/api/sites/${boot.site.id}/pages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: name }),
+    let error: string | undefined;
+    for (;;) {
+      const name = await ask({
+        title: "New page",
+        label: "Page name",
+        placeholder: "e.g. Contact, Pricing, About",
+        confirmLabel: "Create page",
+        error,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        window.alert(data.error ?? `Could not create the page (${res.status}).`);
+      if (!name) return;
+
+      setBusy(true);
+      try {
+        await flushDraft(); // save the current page before navigating away
+        const res = await fetch(`/api/sites/${boot.site.id}/pages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: name }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          error = data.error ?? `Could not create the page (${res.status}).`;
+          continue;
+        }
+        const created = (await res.json()) as { id: string };
+        router.push(`/editor/${created.id}`);
         return;
+      } finally {
+        setBusy(false);
       }
-      const created = (await res.json()) as { id: string };
-      router.push(`/editor/${created.id}`);
-    } finally {
-      setBusy(false);
     }
-  }, [boot.site.id, busy, router]);
+  }, [boot.site.id, busy, router, ask]);
 
   // The block toolbar's "Reuse" button dispatches this — same make-into-a-reusable
   // -block flow as the header button, on whatever block is selected.
@@ -428,7 +463,7 @@ export function EditorShell(boot: EditorBootstrap) {
                 + Page
               </button>
             )}
-            {!readOnly && <PageMenu page={boot.page} siblings={boot.siblings} />}
+            {!readOnly && <PageMenu page={boot.page} siblings={boot.siblings} ask={ask} />}
           </div>
         )}
 
@@ -649,6 +684,7 @@ export function EditorShell(boot: EditorBootstrap) {
       </div>
 
       {!editingComponent && !readOnly && <EditorCoach />}
+      {dialog}
     </div>
     </TechnicalDetails>
   );
@@ -723,38 +759,53 @@ function IconButton({
 function PageMenu({
   page,
   siblings,
+  ask,
 }: {
   page: { id: string; path: string; title: string };
   siblings: { id: string; path: string; title: string }[];
+  ask: (opts: PromptOptions) => Promise<string | null>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
 
   const close = () => {
     setOpen(false);
     setConfirming(false);
+    setDelError(null);
   };
 
   const rename = async () => {
     setOpen(false);
-    const name = window.prompt("Rename this page", page.title)?.trim();
-    if (!name || name === page.title) return;
-    const res = await fetch(`/api/pages/${page.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: name }),
-    });
-    if (res.ok) router.refresh();
-    else {
+    let error: string | undefined;
+    for (;;) {
+      const name = await ask({
+        title: "Rename page",
+        label: "Page name",
+        defaultValue: page.title,
+        confirmLabel: "Rename",
+        error,
+      });
+      if (!name || name === page.title) return;
+      const res = await fetch(`/api/pages/${page.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: name }),
+      });
+      if (res.ok) {
+        router.refresh();
+        return;
+      }
       const data = await res.json().catch(() => ({}));
-      window.alert(data.error ?? "Could not rename the page.");
+      error = data.error ?? "Could not rename the page.";
     }
   };
 
   const remove = async () => {
     setBusy(true);
+    setDelError(null);
     const res = await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
     setBusy(false);
     if (res.ok) {
@@ -762,8 +813,7 @@ function PageMenu({
       router.push(other ? `/editor/${other.id}` : "/dashboard");
     } else {
       const data = await res.json().catch(() => ({}));
-      window.alert(data.error ?? "Could not delete the page.");
-      close();
+      setDelError(data.error ?? "Could not delete the page.");
     }
   };
 
@@ -822,6 +872,11 @@ function PageMenu({
                     Cancel
                   </button>
                 </div>
+                {delError && (
+                  <p role="alert" className="mt-2 text-[11px] text-fail-500">
+                    {delError}
+                  </p>
+                )}
               </div>
             )}
           </div>
