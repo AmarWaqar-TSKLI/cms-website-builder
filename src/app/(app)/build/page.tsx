@@ -25,8 +25,8 @@ export default async function BuildPage() {
         <BuildForm />
 
         <p className="mt-6 text-center text-[13px] text-ink-500">
-          <a href="/dashboard" className="transition-colors hover:text-ink-300">
-            ← Back to your dashboard
+          <a href="/sites" className="transition-colors hover:text-ink-300">
+            ← Back to your websites
           </a>
         </p>
       </div>

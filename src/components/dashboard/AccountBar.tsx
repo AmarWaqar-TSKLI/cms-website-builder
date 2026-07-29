@@ -47,6 +47,13 @@ export function AccountBar({
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-ink-800 bg-ink-900/60 px-5 py-2.5 sm:px-8">
+      <a
+        href="/sites"
+        title="All your websites"
+        className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-100"
+      >
+        <span className="text-ink-500">←</span> All sites
+      </a>
       {sites.length > 1 ? (
         <select
           value={currentSiteId}

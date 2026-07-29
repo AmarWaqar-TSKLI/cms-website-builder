@@ -15,8 +15,8 @@ import { useRouter } from "next/navigation";
  * — otherwise this is an open redirect, and a convincing phishing hop.
  */
 function safeNext(next: string | undefined): string {
-  if (!next) return "/dashboard";
-  if (!next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  if (!next) return "/sites";
+  if (!next.startsWith("/") || next.startsWith("//")) return "/sites";
   return next;
 }
 

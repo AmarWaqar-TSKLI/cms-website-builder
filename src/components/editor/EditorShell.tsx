@@ -388,7 +388,7 @@ export function EditorShell(boot: EditorBootstrap) {
           </Link>
         ) : (
           <Link
-            href="/dashboard"
+            href={`/dashboard?site=${boot.site.id}`}
             className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-100"
           >
             <span className="text-ink-500">←</span>

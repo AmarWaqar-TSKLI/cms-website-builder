@@ -32,7 +32,7 @@ export function SignupForm() {
         setError(data.error ?? "Could not create your account.");
         return;
       }
-      router.push("/dashboard");
+      router.push("/sites");
       router.refresh();
     } catch {
       setError("Network error — is the server running?");
