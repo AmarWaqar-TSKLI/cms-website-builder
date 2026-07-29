@@ -1,0 +1,62 @@
+# Production stack: app + worker + a TLS-terminating Caddy proxy, talking to an
+# EXTERNAL managed Postgres. This is the file DEPLOY.md walks through — it is real
+# and ready; the only things to supply are your .env and your domain in Caddyfile.
+#
+# Put production values in .env (never committed). At minimum:
+#   DATABASE_URL, NEXT_PUBLIC_RUNTIME_API, APP_INTERNAL_URL, ARTIFACTS_DIR
+# The optional hardening (RATE_LIMIT_*, MONITOR_*, STORAGE_S3_*) is read from the
+# same .env when set — see .env.example. Then:
+#
+#   docker compose -f compose.prod.yml up -d --build
+name: cms
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* is inlined at build, so pass the real public origin here or
+        # exported artifacts will call localhost (D8).
+        NEXT_PUBLIC_RUNTIME_API: ${NEXT_PUBLIC_RUNTIME_API}
+    # Migrations run on start; the schema is additive, so this is safe against the
+    # previous release for a zero-downtime deploy.
+    command: sh -c "npx prisma migrate deploy && npm start"
+    env_file: .env
+    restart: unless-stopped
+    expose: ["3000"]
+    healthcheck:
+      # GET /api/health returns 200 when the app is up. Node 22 ships global fetch.
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # A genuinely separate OS process polling build_jobs (I2). Claims jobs with
+    # SKIP LOCKED, so running several replicas is safe.
+    command: npm run worker:once
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - artifacts:/app/artifacts # only needed if you offer exports
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+
+volumes:
+  artifacts:
+  caddy_data:
+  caddy_config:

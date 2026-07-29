@@ -51,6 +51,23 @@ NEXT_PUBLIC_RUNTIME_API="https://your-domain.com"   # the PUBLIC origin
 APP_INTERNAL_URL="http://app:3000"      # how the worker reaches the app to warm a release
 ```
 
+**Optional production hardening** — every one is a no-op unless set, and all are
+listed in `.env.example`:
+
+```bash
+# Login rate limiting shared across app instances (Upstash Redis REST — no SDK).
+# Unset, the limiter still runs, just per-process.
+RATE_LIMIT_REST_URL="https://…"; RATE_LIMIT_REST_TOKEN="…"
+
+# Error monitoring — a generic webhook (Sentry ingest, a Slack webhook, your own).
+MONITOR_WEBHOOK="https://…"
+
+# Object storage for a large media library — any S3-compatible bucket. Exports
+# stay self-contained because the build inlines the bytes back (see I13).
+STORAGE_S3_ENDPOINT="https://…"; STORAGE_S3_BUCKET="…"
+STORAGE_S3_ACCESS_KEY_ID="…"; STORAGE_S3_SECRET_ACCESS_KEY="…"
+```
+
 **The one gotcha worth reading twice — `NEXT_PUBLIC_RUNTIME_API`.** Hosted pages
 read it server‑side per request, so a runtime value is fine there. But it is also
 **baked into every exported artifact at build time** — that is how a downloaded
@@ -62,8 +79,12 @@ image with this set to your real public URL, or exported sites will try to reach
 
 ## Single box with Docker + Caddy (the quickest real deploy)
 
-**[you]** provision the host and a Postgres database, then put three files on the
-host: your `.env` (with the production values above), and these two.
+**[you]** provision the host and a Postgres database. Two of the three files you
+need already live in the repo — **`compose.prod.yml`** and **`Caddyfile`** (edit
+`your-domain.com` in the latter); the third is your **`.env`** with the production
+values above. The blocks below are what those committed files contain, kept here
+for reference — the files themselves are the source of truth, and the real
+`compose.prod.yml` also adds an app health-check and Caddy state volumes.
 
 `compose.prod.yml` — app + worker + a TLS-terminating proxy, talking to an
 **external** managed database:

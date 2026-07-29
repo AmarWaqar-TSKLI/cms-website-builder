@@ -1,0 +1,35 @@
+# Production reverse proxy with automatic HTTPS (Let's Encrypt).
+# Replace your-domain.com with your real domain, then:
+#   docker compose -f compose.prod.yml up -d --build
+#
+# Caddy fetches and renews certificates on its own; there is nothing else to run.
+
+your-domain.com {
+	reverse_proxy app:3000
+}
+
+# ── Custom domains for the sites people build ─────────────────────────────────
+# The mechanism is already real: an incoming Host header is matched against
+# sites.custom_domain and the right site is served (release.ts / I9). What is
+# operational is the TLS for each customer domain. The simplest form — a cert for
+# any host that reaches the box — is one block:
+#
+#   https:// {
+#     reverse_proxy app:3000
+#   }
+#
+# At scale, prefer on-demand TLS with an `ask` endpoint so certificates are only
+# issued for domains that are actually configured, not for anything pointed at
+# your IP:
+#
+#   {
+#     on_demand_tls {
+#       ask http://app:3000/api/health
+#     }
+#   }
+#   https:// {
+#     tls { on_demand }
+#     reverse_proxy app:3000
+#   }
+#
+# See DEPLOY.md and https://caddyserver.com/docs/automatic-https#on-demand-tls
