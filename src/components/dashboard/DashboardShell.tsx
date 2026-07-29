@@ -398,7 +398,7 @@ export function DashboardShell({
         onTechnicalChange={setTechnical}
       />
       <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
-      <TopBar />
+      <TopBar modules={site.modules} />
 
       {/* Who is in the building. Only shown when it is somebody else — telling
           you that you are editing your own page is noise. */}
@@ -582,7 +582,7 @@ export function DashboardShell({
 
 /* ── top bar ──────────────────────────────────────────────────────────────── */
 
-function TopBar() {
+function TopBar({ modules }: { modules: string[] }) {
   return (
     <div className="mb-5 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2 text-[12.5px] font-medium text-ink-300">
@@ -606,6 +606,11 @@ function TopBar() {
         <LinkBtn href="/dashboard/media" size="sm" variant="quiet">
           Images
         </LinkBtn>
+        {modules.includes("forms") && (
+          <LinkBtn href="/dashboard/forms" size="sm" variant="quiet">
+            Forms
+          </LinkBtn>
+        )}
         <LinkBtn href="/dashboard/products" size="sm" variant="quiet">
           Store
         </LinkBtn>
