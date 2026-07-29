@@ -45,13 +45,17 @@ describe("registry", () => {
       "Button",
       "Card",
       "Columns",
+      "CtaBand",
       "Divider",
       "Heading",
       "Hero",
       "ImageBlock",
+      "LogoStrip",
       "PostList",
       "ProductGrid",
       "Spacer",
+      "Stat",
+      "Testimonial",
       "TextBlock",
     ]);
 

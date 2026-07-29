@@ -62,7 +62,7 @@ export interface ComponentSchema {
   name: string;
   label: string;
   description: string;
-  category: "layout" | "content" | "commerce" | "blog";
+  category: "layout" | "content" | "media" | "marketing" | "commerce" | "blog" | "forms";
   /** Palette filtering. Absent = engine component, always available. */
   requiresModule?: ModuleName;
   /** Container components accept dropped children (e.g. Columns). */

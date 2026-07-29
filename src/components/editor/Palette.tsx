@@ -17,11 +17,19 @@ import { cx } from "../ui";
 import { useTechnical } from "../technical";
 import { DRAG_ADD, DRAG_ADD_COMPONENT } from "./Canvas";
 
+// The order blocks appear in the palette, and their friendly names. Ordered the
+// way someone builds a page: the story first (marketing), then the words and
+// pictures, then the store and blog, with structural helpers last.
+const CATEGORY_ORDER = ["marketing", "content", "media", "commerce", "blog", "forms", "layout"] as const;
+
 const CATEGORY_LABEL: Record<string, string> = {
+  marketing: "Marketing",
   content: "Content",
-  layout: "Layout",
+  media: "Media",
   commerce: "Commerce",
   blog: "Blog",
+  forms: "Forms",
+  layout: "Layout",
 };
 
 export function Palette({
@@ -145,7 +153,7 @@ export function Palette({
           )}
         </div>
 
-        {["content", "layout", "commerce", "blog"].map((category) => {
+        {CATEGORY_ORDER.map((category) => {
           const items = byCategory[category];
           if (!items?.length) return null;
           return (
