@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 // Relative, not "@/": this module is also loaded by the build worker and the
 // test runner, which run outside Next's resolver.
 import { AddToCart } from "../../components/site/AddToCart";
+import { COMMERCE_BLOCKS } from "./blocks-commerce";
 import { CONTENT_BLOCKS } from "./blocks-content";
 import { MARKETING_BLOCKS } from "./blocks-marketing";
 import { MEDIA_BLOCKS } from "./blocks-media";
@@ -914,4 +915,5 @@ export const COMPONENTS: RegistryEntry[] = [
   ...MARKETING_BLOCKS,
   ...CONTENT_BLOCKS,
   ...MEDIA_BLOCKS,
+  ...COMMERCE_BLOCKS,
 ];
