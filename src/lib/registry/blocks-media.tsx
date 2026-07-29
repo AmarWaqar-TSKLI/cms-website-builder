@@ -13,7 +13,7 @@
  * frames or their trackers.
  */
 import React from "react";
-import { MissingRef, Section, withStyleProps } from "./style";
+import { MissingRef, Section, autoGrid, withStyleProps } from "./style";
 import type { RegistryEntry, RenderProps, ResolvedMedia } from "./types";
 
 // ─────────────────────────────────────────────────────────────── Gallery ─────
@@ -73,7 +73,7 @@ const Gallery: RegistryEntry = {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${Number(props.columns ?? 3)}, minmax(0,1fr))`,
+              gridTemplateColumns: autoGrid(Number(props.columns ?? 3)),
               gap: `${Number(props.gap ?? 12)}px`,
             }}
           >

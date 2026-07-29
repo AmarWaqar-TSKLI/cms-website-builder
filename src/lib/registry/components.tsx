@@ -30,6 +30,7 @@ import {
   MissingRef,
   Section,
   alignOf,
+  autoGrid,
   buttonStyle,
   justifyFor,
   money,
@@ -423,7 +424,7 @@ const Columns: RegistryEntry = {
           data-cms-slot="children"
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${Number(props.columns ?? 2)}, minmax(0,1fr))`,
+            gridTemplateColumns: autoGrid(Number(props.columns ?? 2)),
             gap: `${Number(props.gap ?? 24)}px`,
             alignItems: String(props.verticalAlign ?? "stretch"),
           }}
@@ -579,7 +580,7 @@ const ProductGrid: RegistryEntry = {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${props.columns ?? 3}, minmax(0,1fr))`,
+            gridTemplateColumns: autoGrid(Number(props.columns ?? 3)),
             gap: `${Number(props.gap ?? 22)}px`,
             textAlign: "left",
           }}
@@ -739,7 +740,7 @@ const PostList: RegistryEntry = {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${Number(props.columns ?? 2)}, minmax(0,1fr))`,
+            gridTemplateColumns: autoGrid(Number(props.columns ?? 2)),
             gap: `${Number(props.gap ?? 22)}px`,
             textAlign: "left",
           }}

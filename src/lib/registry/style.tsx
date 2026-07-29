@@ -173,6 +173,20 @@ export function justifyFor(align: Align): CSSProperties["justifyContent"] {
   return align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start";
 }
 
+/**
+ * A responsive grid track template: about `n` columns on a roomy screen,
+ * collapsing to ONE on a phone — with no media query, so it stays within the
+ * "inline styles only" rule (I4) and an exported page still stacks correctly from
+ * file://. The trick is `min(basis, 100%)`: once the viewport is narrower than a
+ * single track, the track becomes 100% and the grid drops to one column.
+ * `auto-fit` collapses any empty tracks, so a container with two children still
+ * fills the row rather than leaving a gap.
+ */
+export function autoGrid(n: number): string {
+  const basis = n >= 4 ? 190 : n === 3 ? 230 : 300;
+  return `repeat(auto-fit, minmax(min(${basis}px, 100%), 1fr))`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared block primitives.
 //
