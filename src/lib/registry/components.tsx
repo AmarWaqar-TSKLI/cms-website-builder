@@ -23,6 +23,7 @@ import type { ReactNode } from "react";
 import { AddToCart } from "../../components/site/AddToCart";
 import { CONTENT_BLOCKS } from "./blocks-content";
 import { MARKETING_BLOCKS } from "./blocks-marketing";
+import { MEDIA_BLOCKS } from "./blocks-media";
 import {
   MissingRef,
   Section,
@@ -912,4 +913,5 @@ export const COMPONENTS: RegistryEntry[] = [
   // is new, so they append to the same array the registry already indexes.
   ...MARKETING_BLOCKS,
   ...CONTENT_BLOCKS,
+  ...MEDIA_BLOCKS,
 ];

@@ -9,6 +9,7 @@ import {
   paletteFor,
 } from "../../src/lib/registry";
 import type { RenderContext } from "../../src/lib/registry/types";
+import { embedUrl } from "../../src/lib/registry/blocks-media";
 import { DEFAULT_TOKENS } from "../../src/lib/theme";
 
 const ctx: RenderContext = {
@@ -50,6 +51,7 @@ describe("registry", () => {
       "Divider",
       "FaqItem",
       "Feature",
+      "Gallery",
       "Heading",
       "Hero",
       "ImageBlock",
@@ -61,6 +63,7 @@ describe("registry", () => {
       "Stat",
       "Testimonial",
       "TextBlock",
+      "VideoEmbed",
     ]);
 
     expect(paletteFor(["commerce"]).map((s) => s.name)).not.toContain("@component");
@@ -206,5 +209,19 @@ describe("registry", () => {
   it("declares ProductGrid as requiring the commerce module", () => {
     expect(getSchema("ProductGrid")?.requiresModule).toBe("commerce");
     expect(getSchema("Hero")?.requiresModule).toBeUndefined();
+  });
+
+  it("normalises video links and rejects ones it can't embed", () => {
+    expect(embedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe(
+      "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    );
+    expect(embedUrl("https://youtu.be/dQw4w9WgXcQ")).toBe(
+      "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    );
+    expect(embedUrl("https://vimeo.com/76979871")).toBe("https://player.vimeo.com/video/76979871");
+    // Determinism: the same input always yields the same output (check #9 relies on this).
+    expect(embedUrl("https://youtu.be/dQw4w9WgXcQ")).toBe(embedUrl("https://youtu.be/dQw4w9WgXcQ"));
+    expect(embedUrl("")).toBeNull();
+    expect(embedUrl("just some text")).toBeNull();
   });
 });
