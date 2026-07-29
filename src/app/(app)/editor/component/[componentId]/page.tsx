@@ -23,10 +23,13 @@ const EMPTY: ComponentBody = { version: 1, root: [] };
 
 export default async function ComponentEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ componentId: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { componentId } = await params;
+  const { from } = await searchParams;
 
   const component = await prisma.component.findFirst({
     where: { id: componentId, deletedAt: null },
@@ -41,14 +44,17 @@ export default async function ComponentEditorPage({
   // anyone types. A warning that arrives after the edit is not a warning.
   const usage = await usageOf(component.siteId, component.id);
 
-  const home = context.siblings[0];
+  // The page to return to: whichever one you opened this component FROM, falling
+  // back to the first page. This is what makes the header's "← Back to /about"
+  // land you where you actually were.
+  const backPage = context.siblings.find((s) => s.id === from) ?? context.siblings[0];
 
   return (
     <EditorShell
       component={{ id: component.id, name: displayNameOf(component), usage }}
       page={
-        home
-          ? { id: home.id, path: home.path, title: home.title }
+        backPage
+          ? { id: backPage.id, path: backPage.path, title: backPage.title }
           : { id: "", path: "/", title: displayNameOf(component) }
       }
       body={(component.draft?.body as unknown as ComponentBody) ?? EMPTY}

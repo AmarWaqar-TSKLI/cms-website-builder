@@ -267,6 +267,32 @@ export function EditorShell(boot: EditorBootstrap) {
     }
   }, [boot.site.id, busy, router]);
 
+  /** Create a new page and jump straight into building it. */
+  const newPage = useCallback(async () => {
+    if (busy) return;
+    const name = window.prompt("Name your new page — e.g. Contact, Pricing, About")?.trim();
+    if (!name) return;
+
+    setBusy(true);
+    try {
+      await flushDraft(); // save the current page before navigating away
+      const res = await fetch(`/api/sites/${boot.site.id}/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: name }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error ?? `Could not create the page (${res.status}).`);
+        return;
+      }
+      const created = (await res.json()) as { id: string };
+      router.push(`/editor/${created.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [boot.site.id, busy, router]);
+
   const frameWidth = DEVICES.find((d) => d.id === device)!.width;
 
   return (
@@ -303,13 +329,28 @@ export function EditorShell(boot: EditorBootstrap) {
       )}
 
       <header className="flex h-13 shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-900 px-3 py-2.5">
-        <Link
-          href="/dashboard"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-100"
-        >
-          <span className="text-ink-500">←</span>
-          <span className="max-w-32 truncate">{boot.site.name}</span>
-        </Link>
+        {editingComponent ? (
+          // Editing a reusable block: back means back to the page you came from,
+          // not the dashboard. Losing that trail is the "how do I get back?" trap.
+          <Link
+            href={`/editor/${boot.page.id}`}
+            title="Finish here and return to your page"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-2.5 py-1.5 text-[12.5px] font-medium text-ink-200 transition-colors hover:border-ink-600 hover:bg-ink-850"
+          >
+            <span className="text-ink-500">←</span>
+            <span className="max-w-44 truncate">
+              Back to <span className="font-mono text-ink-300">{boot.page.path}</span>
+            </span>
+          </Link>
+        ) : (
+          <Link
+            href="/dashboard"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-100"
+          >
+            <span className="text-ink-500">←</span>
+            <span className="max-w-32 truncate">{boot.site.name}</span>
+          </Link>
+        )}
 
         <div className="h-5 w-px shrink-0 bg-ink-700" />
 
@@ -366,6 +407,17 @@ export function EditorShell(boot: EditorBootstrap) {
                 {p.path}
               </Link>
             ))}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={newPage}
+                disabled={busy}
+                title="Add a new page to your site"
+                className="shrink-0 rounded-lg border border-dashed border-ink-700 px-2.5 py-1.5 text-[11.5px] font-medium text-ink-400 transition-colors hover:border-flux-500/50 hover:text-flux-300 disabled:opacity-50"
+              >
+                + Page
+              </button>
+            )}
           </div>
         )}
 
@@ -470,7 +522,7 @@ export function EditorShell(boot: EditorBootstrap) {
                 // the point of temptation. Deeper loops are caught at publish.
                 components={boot.components.filter((c) => c.id !== editingComponent?.id)}
                 onNewComponent={newComponent}
-                onEditComponent={(id) => router.push(`/editor/component/${id}`)}
+                onEditComponent={(id) => router.push(`/editor/component/${id}?from=${boot.page.id}`)}
               />
             ) : (
               <Layers components={components} />
@@ -564,6 +616,7 @@ export function EditorShell(boot: EditorBootstrap) {
                 components={components}
                 siteId={boot.site.id}
                 media={ctx.media}
+                pageId={boot.page.id}
               />
             )}
             {rightTab === "theme" && (

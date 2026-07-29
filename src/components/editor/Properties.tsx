@@ -54,9 +54,11 @@ const GROUP_LABEL: Record<PropGroup, string> = {
 function InstancePanel({
   node,
   components,
+  pageId,
 }: {
   node: PageNode;
   components: Record<string, ResolvedComponent>;
+  pageId: string;
 }) {
   const router = useRouter();
   const setOverride = useEditor((s) => s.setOverride);
@@ -177,7 +179,7 @@ function InstancePanel({
 
         <button
           type="button"
-          onClick={() => router.push(`/editor/component/${definition.id}`)}
+          onClick={() => router.push(`/editor/component/${definition.id}?from=${pageId}`)}
           className="mt-2 w-full rounded-lg border border-warn-500/40 px-3 py-2 text-[12px] font-medium text-warn-500 transition-colors hover:border-warn-500 hover:bg-warn-500/10"
         >
           Edit it everywhere → changes every page that uses it
@@ -269,12 +271,15 @@ export function Properties({
   components,
   siteId,
   media,
+  pageId,
 }: {
   refOptions: RefOptions;
   tokens: ThemeTokens;
   components: Record<string, ResolvedComponent>;
   siteId: string;
   media: Record<string, ResolvedMedia>;
+  /** The page being edited, so "edit everywhere" can bring you back here. */
+  pageId: string;
 }) {
   const selectedId = useEditor((s) => s.selectedId);
   const body = useEditor((s) => s.body);
@@ -306,7 +311,7 @@ export function Properties({
   // what is actually wanted is: what is this, where do I edit it, and what can I
   // change here without changing it everywhere.
   if (isComponentRef(node)) {
-    return <InstancePanel node={node} components={components} />;
+    return <InstancePanel node={node} components={components} pageId={pageId} />;
   }
 
   const schema = getSchema(node.type);
