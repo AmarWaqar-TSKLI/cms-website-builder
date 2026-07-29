@@ -424,33 +424,53 @@ function NodeFrame({
       )}
 
       {selected && (
+        // A labelled toolbar on the block itself, so "how do I move / copy /
+        // reuse / delete this?" is answered where the eyes already are, in words
+        // rather than mystery glyphs.
         <div
           className={cx(
-            "absolute right-0 top-0 z-20 flex items-center gap-0.5 rounded-bl-md px-1 py-0.5",
+            "absolute right-1.5 top-1.5 z-30 flex items-center gap-0.5 rounded-lg px-1 py-1 shadow-lg",
             instanceShared ? "bg-reuse-500" : "bg-flux-500",
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {instanceShared && definition && (
-            <ToolbarButton
-              title={`Edit “${definition.name}” everywhere — updates every page that uses it`}
-              onClick={() => router.push(`/editor/component/${definition.id}`)}
-            >
-              ✎
-            </ToolbarButton>
+            <>
+              <BarBtn
+                title="Edit this reusable block everywhere it appears"
+                onClick={() => router.push(`/editor/component/${definition.id}`)}
+              >
+                Edit block
+              </BarBtn>
+              <BarBtn
+                title="Stop reusing here — turn this into normal blocks only this page has"
+                onClick={() => detachComponent(node.id, ctx.components ?? {})}
+              >
+                Unlink
+              </BarBtn>
+              <Sep />
+            </>
           )}
-          {instanceShared && definition && (
-            <ToolbarButton
-              title="Stop reusing here — turn this into normal blocks only this page has"
-              onClick={() => detachComponent(node.id, ctx.components ?? {})}
+          <BarBtn title="Move up" icon onClick={() => nudge(node.id, -1)}>↑</BarBtn>
+          <BarBtn title="Move down" icon onClick={() => nudge(node.id, 1)}>↓</BarBtn>
+          <BarBtn title="Make a copy of this block" onClick={() => duplicateNode(node.id)}>
+            Duplicate
+          </BarBtn>
+          {!isInstance && (
+            <BarBtn
+              title="Reuse this block on other pages — edit it once and it updates everywhere"
+              onClick={() => {
+                select(node.id);
+                window.dispatchEvent(new Event("cms:reuse-selected"));
+              }}
             >
-              ⛓
-            </ToolbarButton>
+              Reuse
+            </BarBtn>
           )}
-          <ToolbarButton title="Move up" onClick={() => nudge(node.id, -1)}>↑</ToolbarButton>
-          <ToolbarButton title="Move down" onClick={() => nudge(node.id, 1)}>↓</ToolbarButton>
-          <ToolbarButton title="Duplicate" onClick={() => duplicateNode(node.id)}>⧉</ToolbarButton>
-          <ToolbarButton title="Delete" onClick={() => removeNode(node.id)}>✕</ToolbarButton>
+          <Sep />
+          <BarBtn title="Delete this block" danger onClick={() => removeNode(node.id)}>
+            Delete
+          </BarBtn>
         </div>
       )}
 
@@ -459,23 +479,37 @@ function NodeFrame({
   );
 }
 
-function ToolbarButton({
+function BarBtn({
   children,
   onClick,
   title,
+  icon,
+  danger,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   title: string;
+  /** A single-glyph button (arrows) — squared rather than text-width. */
+  icon?: boolean;
+  /** The destructive one gets a red hover so it reads as "careful". */
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
       title={title}
       onClick={onClick}
-      className="grid h-5 w-5 place-items-center rounded text-[11px] leading-none text-white/90 transition-colors hover:bg-white/25 hover:text-white"
+      className={cx(
+        "rounded-md px-2 py-1 text-[12px] font-medium leading-none text-white/90 transition-colors",
+        icon && "grid h-6 w-6 place-items-center px-0 text-[13px]",
+        danger ? "hover:bg-fail-500 hover:text-white" : "hover:bg-white/25 hover:text-white",
+      )}
     >
       {children}
     </button>
   );
+}
+
+function Sep() {
+  return <span aria-hidden className="mx-0.5 h-4 w-px bg-white/30" />;
 }

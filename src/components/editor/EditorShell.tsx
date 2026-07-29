@@ -18,6 +18,7 @@ import type {
   ThemeTokens,
 } from "@/lib/registry/types";
 import { Canvas } from "./Canvas";
+import { EditorCoach } from "./EditorCoach";
 import { Palette } from "./Palette";
 import { Properties, type RefOptions } from "./Properties";
 import { PublishPanel } from "./PublishPanel";
@@ -293,6 +294,14 @@ export function EditorShell(boot: EditorBootstrap) {
     }
   }, [boot.site.id, busy, router]);
 
+  // The block toolbar's "Reuse" button dispatches this — same make-into-a-reusable
+  // -block flow as the header button, on whatever block is selected.
+  useEffect(() => {
+    const handler = () => void makeComponent();
+    window.addEventListener("cms:reuse-selected", handler);
+    return () => window.removeEventListener("cms:reuse-selected", handler);
+  }, [makeComponent]);
+
   const frameWidth = DEVICES.find((d) => d.id === device)!.width;
 
   return (
@@ -397,14 +406,15 @@ export function EditorShell(boot: EditorBootstrap) {
               <Link
                 key={p.id}
                 href={`/editor/${p.id}`}
+                title={`Edit ${p.title} (${p.path})`}
                 className={cx(
-                  "shrink-0 rounded-lg px-2.5 py-1.5 font-mono text-[11.5px] transition-colors",
+                  "shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] transition-colors",
                   p.id === boot.page.id
-                    ? "bg-ink-800 text-ink-100"
+                    ? "bg-ink-800 font-medium text-ink-100"
                     : "text-ink-400 hover:bg-ink-850 hover:text-ink-200",
                 )}
               >
-                {p.path}
+                {p.title}
               </Link>
             ))}
             {!readOnly && (
@@ -418,6 +428,7 @@ export function EditorShell(boot: EditorBootstrap) {
                 + Page
               </button>
             )}
+            {!readOnly && <PageMenu page={boot.page} siblings={boot.siblings} />}
           </div>
         )}
 
@@ -636,6 +647,8 @@ export function EditorShell(boot: EditorBootstrap) {
           </div>
         </aside>
       </div>
+
+      {!editingComponent && !readOnly && <EditorCoach />}
     </div>
     </TechnicalDetails>
   );
@@ -703,5 +716,117 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+/** Rename or delete the page you're on. Delete is soft and two-step. */
+function PageMenu({
+  page,
+  siblings,
+}: {
+  page: { id: string; path: string; title: string };
+  siblings: { id: string; path: string; title: string }[];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const close = () => {
+    setOpen(false);
+    setConfirming(false);
+  };
+
+  const rename = async () => {
+    setOpen(false);
+    const name = window.prompt("Rename this page", page.title)?.trim();
+    if (!name || name === page.title) return;
+    const res = await fetch(`/api/pages/${page.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: name }),
+    });
+    if (res.ok) router.refresh();
+    else {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error ?? "Could not rename the page.");
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    const res = await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) {
+      const other = siblings.find((s) => s.id !== page.id);
+      router.push(other ? `/editor/${other.id}` : "/dashboard");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error ?? "Could not delete the page.");
+      close();
+    }
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Rename or delete this page"
+        className="grid h-7 w-7 place-items-center rounded-lg text-[15px] text-ink-400 transition-colors hover:bg-ink-850 hover:text-ink-200"
+      >
+        ⋯
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-xl border border-ink-800 bg-ink-900 p-1 shadow-xl">
+            <div className="px-2.5 py-1.5 text-[11px] text-ink-500">
+              {page.title} <span className="font-mono text-ink-600">{page.path}</span>
+            </div>
+            <button
+              type="button"
+              onClick={rename}
+              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-ink-200 transition-colors hover:bg-ink-850"
+            >
+              Rename this page
+            </button>
+            {!confirming ? (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-fail-500 transition-colors hover:bg-fail-500/10"
+              >
+                Delete this page…
+              </button>
+            ) : (
+              <div className="rounded-lg bg-fail-500/[0.06] px-2.5 py-2">
+                <p className="text-[11.5px] leading-relaxed text-ink-300">
+                  Delete <span className="font-medium text-ink-100">{page.title}</span>? Versions
+                  you already published keep it.
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={remove}
+                    disabled={busy}
+                    className="rounded-md bg-fail-500 px-2.5 py-1 text-[11.5px] font-medium text-white transition-colors hover:bg-fail-500/90 disabled:opacity-60"
+                  >
+                    {busy ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="rounded-md border border-ink-700 px-2.5 py-1 text-[11.5px] text-ink-300 transition-colors hover:border-ink-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
