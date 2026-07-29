@@ -15,7 +15,7 @@
  */
 import { prisma } from "./db";
 import { createComponentRef, createNode } from "./registry";
-import type { PageBody, PageNode } from "./registry/types";
+import type { PageBody, PageNode, ThemeTokens } from "./registry/types";
 import { DEFAULT_LAYOUT, DEFAULT_TOKENS } from "./theme";
 import { toJson } from "./json";
 import { slugify } from "./slug";
@@ -162,6 +162,9 @@ export async function createSiteFromPages(
   siteName: string,
   userId: string,
   pages: { path: string; title: string; blocks: PageNode[] }[],
+  /** A template's own look. Merged over the defaults so a template isn't only a
+   *  layout but a whole feel — palette, fonts and shape. Omitted → plain default. */
+  tokens?: Partial<ThemeTokens>,
 ) {
   const slug = await uniqueSlug(slugify(siteName) || "my-site");
   const site = await prisma.site.create({ data: { orgId, name: siteName, slug } });
@@ -171,7 +174,7 @@ export async function createSiteFromPages(
     data: {
       themeId: theme.id,
       versionNo: 1,
-      tokens: toJson(DEFAULT_TOKENS),
+      tokens: toJson({ ...DEFAULT_TOKENS, ...(tokens ?? {}) }),
       layout: toJson({
         ...DEFAULT_LAYOUT,
         nav: { brand: siteName, links: pages.map((p) => ({ label: p.title, href: p.path })) },

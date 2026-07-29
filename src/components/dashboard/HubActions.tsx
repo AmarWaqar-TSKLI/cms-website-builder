@@ -50,6 +50,12 @@ export function HubActions({ user }: { user: { name: string; email: string } }) 
       >
         ✨ New AI site
       </Link>
+      <Link
+        href="/templates"
+        className="rounded-lg border border-ink-700 px-3 py-2 text-[12.5px] font-medium text-ink-200 transition-colors hover:border-ink-600"
+      >
+        🎨 Templates
+      </Link>
       <button
         type="button"
         onClick={newBlankSite}
