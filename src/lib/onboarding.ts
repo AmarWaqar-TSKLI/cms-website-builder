@@ -108,8 +108,18 @@ async function storePage(siteId: string, userId: string, pageId: string, blocks:
   });
 }
 
-/** Build a fresh site (theme + a starter homepage) under an org. Returns it. */
-export async function createStarterSite(orgId: string, siteName: string, userId: string) {
+/**
+ * Build a fresh site (theme + a homepage) under an org. Returns it.
+ *
+ * `blocks` lets the AI builder supply its own generated homepage; omitted, the
+ * page gets the friendly default starter template.
+ */
+export async function createStarterSite(
+  orgId: string,
+  siteName: string,
+  userId: string,
+  blocks?: PageNode[],
+) {
   const slug = await uniqueSlug(slugify(siteName) || "my-site");
 
   const site = await prisma.site.create({ data: { orgId, name: siteName, slug } });
@@ -132,7 +142,12 @@ export async function createStarterSite(orgId: string, siteName: string, userId:
   const home = await prisma.page.create({
     data: { siteId: site.id, path: "/", type: "page", title: "Home" },
   });
-  await storePage(site.id, userId, home.id, starterBlocks(siteName));
+  await storePage(
+    site.id,
+    userId,
+    home.id,
+    blocks && blocks.length ? blocks : starterBlocks(siteName),
+  );
 
   return site;
 }

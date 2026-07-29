@@ -741,6 +741,13 @@ function Hero({
               </LinkBtn>
             </>
           )}
+          <LinkBtn
+            href="/build"
+            variant="secondary"
+            title="Describe a site in a sentence and let AI build it"
+          >
+            ✨ New AI site
+          </LinkBtn>
         </div>
       </div>
 

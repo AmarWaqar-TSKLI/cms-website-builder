@@ -30,6 +30,9 @@ services:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
+      # AI site builder. Left empty unless you set GROQ_API_KEY in a local .env;
+      # without it the builder shows a friendly "not set up" message.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     ports:
       - "3000:3000"
     volumes:
