@@ -17,60 +17,20 @@
  * data-cms-* attributes emitted here. Static page, live cart. (D8)
  */
 import React from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 // Relative, not "@/": this module is also loaded by the build worker and the
 // test runner, which run outside Next's resolver.
 import { AddToCart } from "../../components/site/AddToCart";
-import { Section, alignOf, justifyFor, withStyleProps } from "./style";
-import type { RegistryEntry, RenderProps, ResolvedProduct, ThemeTokens } from "./types";
-
-function money(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-/** Shown wherever live data referenced by a frozen page has since been deleted. */
-function MissingRef({ t, label }: { t: ThemeTokens; label: string }): ReactNode {
-  return (
-    <div
-      data-cms-missing="1"
-      style={{
-        border: `1px dashed ${t.colorBorder}`,
-        borderRadius: t.radius,
-        padding: "20px 24px",
-        color: t.colorMuted,
-        fontSize: "14px",
-        background: t.colorSurface,
-        textAlign: "center",
-      }}
-    >
-      {label}
-    </div>
-  );
-}
-
-function buttonStyle(t: ThemeTokens, variant: string, size: string): CSSProperties {
-  const pad =
-    size === "sm" ? "9px 18px" : size === "lg" ? "16px 34px" : "13px 26px";
-  const font = size === "sm" ? "13px" : size === "lg" ? "16px" : "15px";
-  const base: CSSProperties = {
-    display: "inline-block",
-    padding: pad,
-    borderRadius: t.radius,
-    fontFamily: t.fontBody,
-    fontWeight: 600,
-    fontSize: font,
-    textDecoration: "none",
-    cursor: "pointer",
-    border: "1px solid transparent",
-  };
-  if (variant === "outline") {
-    return { ...base, background: "transparent", color: "inherit", borderColor: "currentColor" };
-  }
-  if (variant === "ghost") {
-    return { ...base, background: "transparent", color: "inherit", padding: `0 0 4px`, borderRadius: 0, borderBottom: "2px solid currentColor" };
-  }
-  return { ...base, background: t.colorAccent, color: t.colorAccentFg };
-}
+import {
+  MissingRef,
+  Section,
+  alignOf,
+  buttonStyle,
+  justifyFor,
+  money,
+  withStyleProps,
+} from "./style";
+import type { RegistryEntry, RenderProps, ResolvedProduct } from "./types";
 
 // ─────────────────────────────────────────────────────────────── Hero ───────
 

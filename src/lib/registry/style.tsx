@@ -172,3 +172,65 @@ export function Section({
 export function justifyFor(align: Align): CSSProperties["justifyContent"] {
   return align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start";
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared block primitives.
+//
+// These used to live inside components.tsx. They moved here so the per-category
+// block files (marketing, content, commerce, forms) can share them without a
+// circular import back through the aggregating module. Pure functions, no state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Cents → "$12.34". The one place price formatting is decided. */
+export function money(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * Shown wherever live data referenced by a frozen page has since been deleted,
+ * or wherever a block needs the user to pick something in the panel. A visible
+ * placeholder, never a thrown error — that is D5's accepted cost made graceful.
+ */
+export function MissingRef({ t, label }: { t: ThemeTokens; label: string }): ReactNode {
+  return (
+    <div
+      data-cms-missing="1"
+      style={{
+        border: `1px dashed ${t.colorBorder}`,
+        borderRadius: t.radius,
+        padding: "20px 24px",
+        color: t.colorMuted,
+        fontSize: "14px",
+        background: t.colorSurface,
+        textAlign: "center",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+/** The button look shared by Hero, Button, CTA band and the form blocks. */
+export function buttonStyle(t: ThemeTokens, variant: string, size: string): CSSProperties {
+  const pad =
+    size === "sm" ? "9px 18px" : size === "lg" ? "16px 34px" : "13px 26px";
+  const font = size === "sm" ? "13px" : size === "lg" ? "16px" : "15px";
+  const base: CSSProperties = {
+    display: "inline-block",
+    padding: pad,
+    borderRadius: t.radius,
+    fontFamily: t.fontBody,
+    fontWeight: 600,
+    fontSize: font,
+    textDecoration: "none",
+    cursor: "pointer",
+    border: "1px solid transparent",
+  };
+  if (variant === "outline") {
+    return { ...base, background: "transparent", color: "inherit", borderColor: "currentColor" };
+  }
+  if (variant === "ghost") {
+    return { ...base, background: "transparent", color: "inherit", padding: `0 0 4px`, borderRadius: 0, borderBottom: "2px solid currentColor" };
+  }
+  return { ...base, background: t.colorAccent, color: t.colorAccentFg };
+}
