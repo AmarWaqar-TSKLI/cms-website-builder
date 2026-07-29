@@ -434,3 +434,34 @@ test.describe("two people, one page", () => {
     }
   });
 });
+
+/**
+ * The forms module.
+ *
+ * A visitor submits through the public runtime endpoint — exactly what a Contact
+ * block's form does — and the message turns up in the dashboard inbox. That is
+ * the whole loop: public write of Tier-2 data, guarded read of it.
+ */
+test.describe("forms", () => {
+  test("a submission reaches the inbox", async ({ page }) => {
+    await signIn(page);
+    const site = await siteInfo(page);
+
+    const marker = `E2E FORM ${Date.now().toString(36).toUpperCase()}`;
+    const res = await page.request.post("/api/runtime/forms", {
+      data: {
+        siteId: site.id,
+        formKey: "contact",
+        formName: "Contact",
+        fields: { name: "E2E Tester", email: "e2e-form@example.test", message: marker },
+      },
+    });
+    expect(res.ok()).toBe(true);
+
+    // It shows up in the dashboard inbox, message and reply address and all.
+    await page.goto("/dashboard/forms");
+    await expect(page.getByRole("heading", { name: "Forms", exact: true })).toBeVisible();
+    await expect(page.getByText("e2e-form@example.test")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(marker)).toBeVisible();
+  });
+});

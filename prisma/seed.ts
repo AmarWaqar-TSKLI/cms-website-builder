@@ -114,6 +114,10 @@ async function main() {
   // Blog on too, so the demo shows engine + commerce + blog in one site. The
   // "Blog posts" block only appears in the editor because of this row.
   await prisma.siteModule.create({ data: { siteId: site.id, module: "blog" } });
+  // Forms on too, so the contact block below has a home and "Contact form" /
+  // "Newsletter signup" appear in the palette. What visitors send is Tier-2 —
+  // never versioned, never pinned by a release, exactly like an order.
+  await prisma.siteModule.create({ data: { siteId: site.id, module: "forms" } });
 
   console.log("→ theme v1");
   const theme = await prisma.theme.create({ data: { siteId: site.id, name: "Acme Default" } });
@@ -446,7 +450,19 @@ async function main() {
           contentWidth: "wide",
           ratio: "16/9",
           paddingTop: 0,
-          paddingBottom: 72,
+          paddingBottom: 48,
+        }),
+        // A real contact form. Submitting it writes a Tier-2 row via the runtime
+        // API — a rollback of this page's design never touches those messages.
+        node("ContactForm", {
+          heading: "Questions? Get in touch.",
+          description:
+            "Send a note and it lands in the Forms inbox — live data a rollback never disturbs.",
+          formKey: "contact",
+          bgColor: "#f4f4f6",
+          align: "center",
+          paddingTop: 16,
+          paddingBottom: 88,
         }),
   ]);
 
