@@ -162,6 +162,7 @@ model Site {
   posts     Post[]
   tags      Tag[]
   activity  ActivityLog[]
+  formSubmissions FormSubmission[]
 
   @@map("sites")
 }
@@ -719,4 +720,40 @@ model PostTag {
 
   @@id([postId, tagId])
   @@map("post_tags")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIER 2 — FORMS (live; submissions are NEVER versioned)
+//
+// A visitor filling in a contact or newsletter form writes one row here. Like an
+// order, a submission is live business reality: rolling back a page's DESIGN must
+// never un-submit somebody's message. So there is no revision table and no
+// release ever pins a submission — exactly why orders and posts sit on this side
+// of the line too (D5). The form BLOCK that produced it is versioned Tier-1
+// content; what a visitor typed into it is not.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FormSubmission {
+  id      String @id @default(uuid())
+  siteId  String @map("site_id")
+  /// Which form block this came from — the block's stable key, so one site can
+  /// have several forms and each keeps its own inbox.
+  formKey String @map("form_key")
+  /// A human label, copied in at submit time so the inbox still reads well after
+  /// the block is renamed or removed. Same denormalisation as the audit log's
+  /// actor name, and for the same reason.
+  formName String @default("") @map("form_name")
+  /// The submitted fields as { name: value }. JSON because a form's shape is the
+  /// author's to decide, not the schema's.
+  data Json
+  /// Lifted out of `data` when present, for a readable inbox and a reply link.
+  email String?
+  /// Set when someone opens it in the dashboard. Not a workflow — just "seen".
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
+  @@map("form_submissions")
 }
