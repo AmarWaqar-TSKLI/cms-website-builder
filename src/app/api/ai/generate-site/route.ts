@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
-import { createStarterSite } from "@/lib/onboarding";
+import { createSiteFromPages } from "@/lib/onboarding";
 import { AiFailedError, AiNotConfiguredError, generateSite } from "@/lib/ai";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Give it a moment, then try again." }, { status: 429 });
   }
 
-  let generated: { siteName: string; blocks: Awaited<ReturnType<typeof generateSite>>["blocks"] };
+  let generated: Awaited<ReturnType<typeof generateSite>>;
   try {
     generated = await generateSite(description);
   } catch (err) {
@@ -70,19 +70,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Something went wrong building your site." }, { status: 500 });
   }
 
-  const site = await createStarterSite(
+  const { site, homePageId } = await createSiteFromPages(
     membership.orgId,
     generated.siteName,
     user.id,
-    generated.blocks,
+    generated.pages,
   );
-  const home = await prisma.page.findFirst({
-    where: { siteId: site.id, path: "/", deletedAt: null },
-    select: { id: true },
-  });
 
   return NextResponse.json(
-    { siteId: site.id, siteName: site.name, pageId: home?.id ?? null },
+    {
+      siteId: site.id,
+      siteName: site.name,
+      pageId: homePageId || null,
+      pageCount: generated.pages.length,
+    },
     { status: 201 },
   );
 }
+

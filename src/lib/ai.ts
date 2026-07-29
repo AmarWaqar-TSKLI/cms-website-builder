@@ -15,6 +15,7 @@
  * services. Swapping providers is a one-function change.
  */
 import { getSchema, paletteFor, type PageNode, type PropDef } from "./registry";
+import { slugify } from "./slug";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
@@ -50,7 +51,7 @@ function catalogue(): string {
 }
 
 function systemPrompt(cat: string): string {
-  return `You are a website builder. Turn the user's one-line description into a homepage for THAT specific business, as JSON.
+  return `You are a website builder. Turn the user's one-line description into a small, coherent MULTI-PAGE website for THAT specific business, as JSON.
 
 Use ONLY these block types and their listed prop keys:
 ${cat}
@@ -58,15 +59,19 @@ ${cat}
 Return a JSON object of exactly this shape:
 {
   "siteName": "<a short brand name, 1-3 words>",
-  "blocks": [ { "type": "<BlockType>", "props": { ... }, "children": [ ... ] } ]
+  "pages": [
+    { "path": "/", "title": "Home", "blocks": [ { "type": "<BlockType>", "props": { ... }, "children": [ ... ] } ] },
+    { "path": "/menu", "title": "Menu", "blocks": [ ... ] }
+  ]
 }
 
 Rules:
-- Write REAL, specific copy for this exact business — a real headline, real benefits, a real call to action. Never lorem ipsum, never placeholders like "[Business Name]" or "Your text here".
-- Compose a coherent homepage: open with a Hero, then 2-4 sections (features, cards, a stat, a testimonial), and end with a call-to-action. 4 to 7 blocks total.
+- Build 2 to 4 pages. The FIRST page MUST be the homepage: "path": "/", "title": "Home". Add 1-3 more pages that genuinely fit this business (for example a café → Menu, About, Visit; a photographer → Portfolio, About, Contact), each with a lowercase path like "/menu" or "/about".
+- Write REAL, specific copy for this exact business on every page — real headlines, real benefits, real calls to action. Never lorem ipsum, never placeholders like "[Business Name]" or "Your text here".
+- Each page has 3 to 6 blocks. Open the homepage with a Hero. End pages with a call-to-action where it fits.
 - Only blocks marked "[accepts child blocks]" may have a "children" array (for example, put Card blocks inside Columns). Every other block is flat with no children.
 - Do NOT set any image, photo, or media prop — leave them out; the owner adds pictures later.
-- For any link or href prop, use "#".
+- For any link or href prop, use "#" or another page's path such as "/menu".
 - Output ONLY the JSON object. No prose, no markdown code fences.`;
 }
 
@@ -76,9 +81,21 @@ interface AiBlock {
   children?: unknown;
 }
 
+interface AiPage {
+  path?: unknown;
+  title?: unknown;
+  blocks?: unknown;
+}
+
+export interface GeneratedPage {
+  path: string;
+  title: string;
+  blocks: PageNode[];
+}
+
 export async function generateSite(
   description: string,
-): Promise<{ siteName: string; blocks: PageNode[] }> {
+): Promise<{ siteName: string; pages: GeneratedPage[] }> {
   const key = process.env.GROQ_API_KEY?.trim();
   if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
 
@@ -112,7 +129,7 @@ export async function generateSite(
     throw new AiFailedError("The AI returned an unreadable response.");
   }
 
-  let parsed: { siteName?: unknown; blocks?: unknown };
+  let parsed: { siteName?: unknown; pages?: unknown };
   try {
     parsed = JSON.parse(content);
   } catch {
@@ -123,7 +140,7 @@ export async function generateSite(
     typeof parsed.siteName === "string" && parsed.siteName.trim()
       ? parsed.siteName.trim().slice(0, 60)
       : "My site";
-  const rawBlocks = Array.isArray(parsed.blocks) ? (parsed.blocks as AiBlock[]) : [];
+  const rawPages = Array.isArray(parsed.pages) ? (parsed.pages as AiPage[]) : [];
 
   let seq = 0;
   const allowed = new Set(allowedSchemas().map((s) => s.name));
@@ -157,9 +174,30 @@ export async function generateSite(
     return out;
   };
 
-  const blocks = build(rawBlocks, 0);
-  if (blocks.length === 0) throw new AiFailedError("The AI produced no usable blocks.");
-  return { siteName, blocks };
+  const pages: GeneratedPage[] = [];
+  const seenPaths = new Set<string>();
+  for (const rp of rawPages) {
+    if (pages.length >= 4) break;
+    const blocks = build(Array.isArray(rp?.blocks) ? (rp.blocks as AiBlock[]) : [], 0);
+    if (blocks.length === 0) continue;
+
+    // The first surviving page is always the homepage; the rest get a slug path.
+    const isHome = pages.length === 0;
+    const title = isHome
+      ? "Home"
+      : typeof rp?.title === "string" && rp.title.trim()
+        ? rp.title.trim().slice(0, 60)
+        : `Page ${pages.length + 1}`;
+    const path = isHome
+      ? "/"
+      : `/${slugify(String(rp?.path ?? title).replace(/^\//, "")) || "page"}`;
+    if (seenPaths.has(path)) continue;
+    seenPaths.add(path);
+    pages.push({ path, title, blocks });
+  }
+
+  if (pages.length === 0) throw new AiFailedError("The AI produced no usable pages.");
+  return { siteName, pages };
 }
 
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */

@@ -151,3 +151,44 @@ export async function createStarterSite(
 
   return site;
 }
+
+/**
+ * Build a fresh MULTI-PAGE site (theme + one page per entry, with the nav bar
+ * wired to those pages). Used by the AI builder. Returns the site and the id of
+ * the "/" page so the caller can drop the person straight into editing it.
+ */
+export async function createSiteFromPages(
+  orgId: string,
+  siteName: string,
+  userId: string,
+  pages: { path: string; title: string; blocks: PageNode[] }[],
+) {
+  const slug = await uniqueSlug(slugify(siteName) || "my-site");
+  const site = await prisma.site.create({ data: { orgId, name: siteName, slug } });
+
+  const theme = await prisma.theme.create({ data: { siteId: site.id, name: "Default" } });
+  const rev = await prisma.themeRevision.create({
+    data: {
+      themeId: theme.id,
+      versionNo: 1,
+      tokens: toJson(DEFAULT_TOKENS),
+      layout: toJson({
+        ...DEFAULT_LAYOUT,
+        nav: { brand: siteName, links: pages.map((p) => ({ label: p.title, href: p.path })) },
+        footer: { text: `© ${siteName}`, links: [] },
+      }),
+    },
+  });
+  await prisma.theme.update({ where: { id: theme.id }, data: { currentRevisionId: rev.id } });
+
+  let homePageId = "";
+  for (const p of pages) {
+    const page = await prisma.page.create({
+      data: { siteId: site.id, path: p.path, type: "page", title: p.title.slice(0, 120) },
+    });
+    if (p.path === "/") homePageId = page.id;
+    await storePage(site.id, userId, page.id, p.blocks);
+  }
+
+  return { site, homePageId };
+}
