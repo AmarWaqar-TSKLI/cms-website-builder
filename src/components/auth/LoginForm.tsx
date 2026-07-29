@@ -105,9 +105,16 @@ export function LoginForm({ next }: { next?: string }) {
         {busy ? "Signing in…" : "Sign in"}
       </button>
 
-      <p className="mt-5 border-t border-ink-800 pt-4 text-[11.5px] leading-relaxed text-ink-500">
-        Demo accounts — <span className="text-ink-300">amar@acme.test</span>,{" "}
-        <span className="text-ink-300">sara@acme.test</span>, both with password{" "}
+      <p className="mt-5 border-t border-ink-800 pt-4 text-center text-[12.5px] text-ink-400">
+        New here?{" "}
+        <a href="/signup" className="font-medium text-flux-300 transition-colors hover:text-flux-400">
+          Create your site — it&rsquo;s free
+        </a>
+      </p>
+
+      <p className="mt-3 text-[11.5px] leading-relaxed text-ink-500">
+        Or try the demo: <span className="text-ink-300">amar@acme.test</span> and{" "}
+        <span className="text-ink-300">sara@acme.test</span>, both password{" "}
         <span className="font-mono text-ink-300">demo1234</span>. Sign in as each in two browsers to
         see the editing lock.
       </p>

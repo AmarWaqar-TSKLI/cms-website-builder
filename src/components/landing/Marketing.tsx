@@ -33,7 +33,7 @@ export default function Marketing() {
           <div className="lp-nav-actions">
             <a href="#how" className="lp-navlink lp-nav-hide">How it works</a>
             <Link href="/login" className="lp-navlink">Sign in</Link>
-            <Link href="/login" className="lp-btn lp-btn--primary lp-btn--sm">Start free</Link>
+            <Link href="/signup" className="lp-btn lp-btn--primary lp-btn--sm">Start free</Link>
           </div>
         </div>
       </nav>
@@ -56,7 +56,7 @@ export default function Marketing() {
               you&rsquo;re online. No code. No stress. No designer needed.
             </p>
             <div className="lp-hero-cta lp-fade" style={{ animationDelay: "360ms" }}>
-              <Link href="/login" className="lp-btn lp-btn--primary">
+              <Link href="/signup" className="lp-btn lp-btn--primary">
                 Start building — it&rsquo;s free
                 <span className="lp-btn-arrow" aria-hidden>→</span>
               </Link>
@@ -213,7 +213,7 @@ export default function Marketing() {
         <Reveal className="lp-wrap lp-cta-in">
           <h2 className="lp-cta-h">Ready to build?</h2>
           <p className="lp-cta-sub">Your first page is a drag away.</p>
-          <Link href="/login" className="lp-btn lp-btn--primary lp-btn--lg">
+          <Link href="/signup" className="lp-btn lp-btn--primary lp-btn--lg">
             Start building — it&rsquo;s free
             <span className="lp-btn-arrow" aria-hidden>→</span>
           </Link>
