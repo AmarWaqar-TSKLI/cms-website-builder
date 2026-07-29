@@ -447,21 +447,27 @@ test.describe("forms", () => {
     await signIn(page);
     const site = await siteInfo(page);
 
-    const marker = `E2E FORM ${Date.now().toString(36).toUpperCase()}`;
+    // Unique per run — both the message and the email — so re-running against a
+    // database that already holds earlier submissions never matches two rows.
+    const stamp = Date.now().toString(36);
+    const marker = `E2E FORM ${stamp.toUpperCase()}`;
+    const email = `e2e-form-${stamp}@example.test`;
     const res = await page.request.post("/api/runtime/forms", {
       data: {
         siteId: site.id,
         formKey: "contact",
         formName: "Contact",
-        fields: { name: "E2E Tester", email: "e2e-form@example.test", message: marker },
+        fields: { name: "E2E Tester", email, message: marker },
       },
     });
     expect(res.ok()).toBe(true);
 
     // It shows up in the dashboard inbox, message and reply address and all.
+    // The address renders twice — as the reply link AND as the "email" field —
+    // so target the reply link specifically; the message body is unique.
     await page.goto("/dashboard/forms");
     await expect(page.getByRole("heading", { name: "Forms", exact: true })).toBeVisible();
-    await expect(page.getByText("e2e-form@example.test")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: email })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(marker)).toBeVisible();
   });
 });
