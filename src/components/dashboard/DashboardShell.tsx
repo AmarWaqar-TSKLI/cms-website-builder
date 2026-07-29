@@ -22,6 +22,7 @@ import { Ago } from "./Ago";
 import { AccountBar } from "./AccountBar";
 import { ActivityFeed } from "./ActivityFeed";
 import { NextStep } from "./NextStep";
+import { SetupChecklist, type SetupStep } from "./SetupChecklist";
 import { Welcome } from "./Welcome";
 import {
   Btn,
@@ -294,6 +295,17 @@ export function DashboardShell({
     window.localStorage.setItem("cms.technical", technical ? "1" : "0");
   }, [technical]);
 
+  /* The setup guide can be dismissed early and stays dismissed per site. Read in
+     an effect for the same reason as `technical` — no reading storage in render. */
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  useEffect(() => {
+    setSetupDismissed(window.localStorage.getItem(`cms.setup-dismissed:${site.id}`) === "1");
+  }, [site.id]);
+  const dismissSetup = useCallback(() => {
+    window.localStorage.setItem(`cms.setup-dismissed:${site.id}`, "1");
+    setSetupDismissed(true);
+  }, [site.id]);
+
   /* derived facts, in plain terms */
   const live = useMemo(
     () => (releases ?? []).find((r) => r.id === liveId) ?? null,
@@ -328,6 +340,50 @@ export function DashboardShell({
       : pagesWithEdits > 0
         ? "has-changes"
         : "up-to-date";
+
+  /**
+   * The onboarding checklist. Every step's `done` is READ from state we already
+   * have — no separate "onboarding progress" table to drift out of sync. The
+   * store step only appears when the site actually sells things; a blog-only site
+   * never sees it. When every applicable step is done the checklist retires and
+   * NextStep takes over.
+   */
+  const hasCommerce = site.modules.includes("commerce");
+  const homepageEdited = pages.some((p) => p.draftUpdatedAt !== null || p.revisionCount > 0);
+  const setupSteps: SetupStep[] = [
+    {
+      id: "edit",
+      title: "Make your homepage yours",
+      blurb: "Open the editor and change the words, pictures and blocks to match you.",
+      done: homepageEdited,
+      cta: "Open the editor",
+      href: editHref,
+    },
+    ...(hasCommerce
+      ? [
+          {
+            id: "product",
+            title: "Add your first product",
+            blurb: "List something to sell — it shows up in your store blocks straight away.",
+            done: commerce.productCount > 0,
+            cta: "Add a product",
+            href: "/dashboard/products",
+          } satisfies SetupStep,
+        ]
+      : []),
+    {
+      id: "publish",
+      title: "Publish your website",
+      blurb: "Give it a real web address. This saves the exact version, so you can always come back.",
+      done: live !== null,
+      cta: "Publish now",
+      onClick: publish,
+    },
+  ];
+  const setupComplete = setupSteps.every((s) => s.done);
+  // Show the guide only once we know the real release state, so a first paint
+  // never flashes "not published" before the poll has answered.
+  const showSetup = loaded && !setupComplete && !setupDismissed;
 
   return (
     <TechnicalDetails enabled={technical}>
@@ -373,14 +429,18 @@ export function DashboardShell({
       />
 
       <div className="mb-6">
-        <NextStep
-          state={nextStep}
-          pageCount={pages.length}
-          pendingCount={pagesWithEdits}
-          editHref={editHref}
-          onPublish={publish}
-          publishing={busy === "publish"}
-        />
+        {showSetup ? (
+          <SetupChecklist steps={setupSteps} onDismiss={dismissSetup} publishing={busy === "publish"} />
+        ) : (
+          <NextStep
+            state={nextStep}
+            pageCount={pages.length}
+            pendingCount={pagesWithEdits}
+            editHref={editHref}
+            onPublish={publish}
+            publishing={busy === "publish"}
+          />
+        )}
       </div>
 
       {flash && (
