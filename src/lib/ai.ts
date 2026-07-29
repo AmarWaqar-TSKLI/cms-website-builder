@@ -20,6 +20,14 @@ import { slugify } from "./slug";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
 
+/**
+ * The only prop kinds the model may set: words, links, and safe multiple-choice.
+ * NEVER raw numbers — a mis-scaled size or line-height (the block treats it as a
+ * percentage, the model writes "1.5") collapses the layout. Everything numeric,
+ * every colour, keeps the block's professionally-tuned default.
+ */
+const SAFE_KINDS = new Set(["text", "textarea", "url", "select", "segment"]);
+
 /** Thrown when no GROQ_API_KEY is configured — the UI turns this into guidance. */
 export class AiNotConfiguredError extends Error {}
 /** Thrown when the model call or its output failed — the UI offers a retry. */
@@ -35,7 +43,7 @@ function catalogue(): string {
   return allowedSchemas()
     .map((s) => {
       const props = Object.entries(s.props)
-        .filter(([, p]) => (p.group ?? "content") === "content")
+        .filter(([, p]) => (p.group ?? "content") === "content" && SAFE_KINDS.has(p.kind))
         .map(([key, p]) => {
           const opts =
             (p.kind === "select" || p.kind === "segment") && p.options
@@ -66,12 +74,12 @@ Return a JSON object of exactly this shape:
 }
 
 Rules:
-- Build 2 to 4 pages. The FIRST page MUST be the homepage: "path": "/", "title": "Home". Add 1-3 more pages that genuinely fit this business (for example a café → Menu, About, Visit; a photographer → Portfolio, About, Contact), each with a lowercase path like "/menu" or "/about".
-- Write REAL, specific copy for this exact business on every page — real headlines, real benefits, real calls to action. Never lorem ipsum, never placeholders like "[Business Name]" or "Your text here".
-- Each page has 3 to 6 blocks. Open the homepage with a Hero. End pages with a call-to-action where it fits.
-- Only blocks marked "[accepts child blocks]" may have a "children" array (for example, put Card blocks inside Columns). Every other block is flat with no children.
-- Do NOT set any image, photo, or media prop — leave them out; the owner adds pictures later.
-- For any link or href prop, use "#" or another page's path such as "/menu".
+- Build 2 to 4 pages. The FIRST page MUST be the homepage: "path": "/", "title": "Home". Add 1-3 more pages that genuinely fit this business (a café → Menu, About, Visit; a photographer → Portfolio, About, Contact), each with a lowercase path like "/menu" or "/about".
+- Make each page RICH: 5 to 7 blocks, and VARY them. Open with a Hero, then mix blocks such as a Feature, a Columns block holding 2-3 Cards, a Stat, a Testimonial, one or two FAQ items, and a Call to action to close. Do not repeat the same block type twice in a row.
+- Write REAL, specific, generous copy for this exact business — real headlines, and 1 to 3 full sentences for every body or description. Never lorem ipsum, never placeholders like "[Business Name]" or "Your text here".
+- Set ONLY the props listed for each block above — they are the words and the choices. Do NOT invent other props, and never set sizes, spacing, line-height, widths, or colours: those are styled automatically for you.
+- Only blocks marked "[accepts child blocks]" may have a "children" array (put Card blocks inside Columns). Every other block is flat with no children.
+- Do NOT set any image, photo, or media prop. For any link or href prop, use "#" or another page's path such as "/menu".
 - Output ONLY the JSON object. No prose, no markdown code fences.`;
 }
 
@@ -93,32 +101,45 @@ export interface GeneratedPage {
   blocks: PageNode[];
 }
 
+/** Call Groq with a 30s timeout, retrying once on a transient network failure. */
+async function callGroqWithRetry(key: string, body: string): Promise<Response> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      return await fetch(GROQ_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body,
+        signal: controller.signal,
+      });
+    } catch {
+      // A blip or a timeout — fall through and try once more, then give up.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new AiFailedError("Could not reach the AI service.");
+}
+
 export async function generateSite(
   description: string,
 ): Promise<{ siteName: string; pages: GeneratedPage[] }> {
   const key = process.env.GROQ_API_KEY?.trim();
   if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
 
-  let res: Response;
-  try {
-    res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.7,
-        max_tokens: 2000,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt(catalogue()) },
-          { role: "user", content: description.slice(0, 400) },
-        ],
-      }),
-    });
-  } catch {
-    throw new AiFailedError("Could not reach the AI service.");
-  }
+  const requestBody = JSON.stringify({
+    model: MODEL,
+    temperature: 0.7,
+    max_tokens: 6000, // multi-page JSON with generous copy — room so it never truncates
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt(catalogue()) },
+      { role: "user", content: description.slice(0, 400) },
+    ],
+  });
 
+  const res = await callGroqWithRetry(key, requestBody);
   if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
 
   let content: string;
@@ -203,24 +224,19 @@ export async function generateSite(
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
 function coerce(value: unknown, def: PropDef): unknown {
   switch (def.kind) {
-    case "number":
-    case "range": {
-      const n = typeof value === "number" ? value : Number(value);
-      return Number.isFinite(n) ? n : undefined;
-    }
-    case "boolean":
-      return typeof value === "boolean" ? value : value === "true";
     case "select":
     case "segment": {
       const s = String(value);
       return def.options?.some((o) => o.value === s) ? s : undefined;
     }
-    case "ref":
-    case "refList":
-      // Never let the model invent a reference to live data (a product, a post).
-      return undefined;
-    default:
-      // text / textarea / url / color
+    case "text":
+    case "textarea":
+    case "url":
       return typeof value === "string" ? value.slice(0, 2000) : undefined;
+    default:
+      // number, range, boolean, color, ref, refList — always keep the block's
+      // default. A model-supplied number in the wrong scale is what collapses
+      // line-height and breaks the layout; a colour would fight the theme.
+      return undefined;
   }
 }
