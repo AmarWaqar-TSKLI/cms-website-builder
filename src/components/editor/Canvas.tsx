@@ -115,14 +115,33 @@ function EmptyDropZone({ parentId, inline }: { parentId: string | null; inline?:
         active ? "bg-flux-500/10" : "bg-neutral-50",
       )}
       style={{
-        minHeight: inline ? 120 : 140,
+        // A whole blank page gets room to breathe and a proper welcome; an empty
+        // Columns cell just needs a small, obvious target.
+        minHeight: inline ? 120 : parentId === null ? 300 : 140,
         outline: active ? "2px dashed var(--color-flux-500)" : "1px dashed #d4d4d8",
         outlineOffset: -2,
       }}
     >
-      <span className="pointer-events-none text-[12px] font-medium text-neutral-400">
-        {active ? "Drop here" : "Drag a block here"}
-      </span>
+      {parentId === null && !inline ? (
+        // The blank-page moment — the single most disorienting one for someone
+        // new — so it coaches rather than just labels. Only ever shows on a page
+        // with zero blocks, so it is contextual, never furniture.
+        <div className="pointer-events-none flex max-w-xs flex-col items-center gap-1.5 px-6 text-center">
+          <span aria-hidden className="text-[22px] text-neutral-300">＋</span>
+          <span className="text-[14px] font-semibold text-neutral-500">
+            {active ? "Drop it here" : "Your page is empty"}
+          </span>
+          <span className="text-[12px] leading-relaxed text-neutral-400">
+            Drag a block from the left onto the page, or just click one to add it. A{" "}
+            <span className="font-medium text-neutral-500">Hero</span> or{" "}
+            <span className="font-medium text-neutral-500">Heading</span> is a good place to start.
+          </span>
+        </div>
+      ) : (
+        <span className="pointer-events-none text-[12px] font-medium text-neutral-400">
+          {active ? "Drop here" : "Drag a block here"}
+        </span>
+      )}
     </div>
   );
 }
