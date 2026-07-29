@@ -13,17 +13,19 @@ export default async function LoginPage({
   if (await currentUser()) redirect("/dashboard");
 
   return (
-    <main className="grid min-h-screen place-items-center bg-ink-950 px-6">
+    <main className="grid min-h-screen place-items-center bg-ink-950 px-6 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-xl bg-flux-500 text-[18px] font-semibold text-white">
+          <a
+            href="/"
+            className="mx-auto mb-6 inline-grid h-12 w-12 place-items-center rounded-2xl bg-flux-500 text-[20px] font-semibold text-white transition-transform hover:scale-105"
+            aria-label="Back to home"
+          >
             ◈
-          </div>
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink-100">
-            Sign in
-          </h1>
-          <p className="mt-1.5 text-[13px] text-ink-400">
-            Pages, components and releases are scoped to your organisation.
+          </a>
+          <h1 className="display text-[30px] text-ink-100">Welcome back</h1>
+          <p className="mx-auto mt-2.5 max-w-xs text-[15px] leading-relaxed text-ink-400">
+            Sign in to pick up where you left off and keep building your site.
           </p>
         </div>
 
