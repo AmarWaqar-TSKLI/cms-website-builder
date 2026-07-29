@@ -101,6 +101,8 @@ interface EditorState {
 
   addNode: (type: string, parentId?: string | null, index?: number) => void;
   addComponentRef: (componentId: string, parentId?: string | null, index?: number) => void;
+  /** Drop a whole pre-composed section (several top-level blocks) at the end. */
+  insertSection: (blocks: PageNode[]) => void;
   replaceWithComponentRef: (nodeId: string, componentId: string) => void;
   setOverride: (instanceId: string, innerId: string, key: string, value: unknown) => void;
   clearOverrides: (instanceId: string) => void;
@@ -263,6 +265,37 @@ export const useEditor = create<EditorState>((set, get) => {
         return commit(state, insertIntoTree(state.body.root, node, parentId, at), {
           selectedId: node.id,
         });
+      }),
+
+    /**
+     * Drop a whole section — several top-level blocks — at the end of the page.
+     *
+     * This is the top-level branch of addNode run once per block, so every block
+     * becomes its own component exactly as if it had been clicked in one at a
+     * time. Two details matter: the whole insert is ONE commit, so undo removes
+     * the section in a single step rather than block by block; and each block is
+     * cloned with fresh ids first, so dropping the same section twice can never
+     * collide. Selecting the first block scrolls it into view — the section lands
+     * somewhere you can see, not silently off the bottom.
+     */
+    insertSection: (blocks) =>
+      set((state) => {
+        if (!blocks.length) return state;
+        let root = state.body.root;
+        let firstId: string | null = null;
+        for (const raw of blocks) {
+          const block = cloneWithNewIds(raw, nextId);
+          const componentId = newComponentId();
+          const ref = createComponentRef(componentId, nextId());
+          // expandComponents so each entry is byte-identical to a reload — the
+          // same construction addNode uses for a single top-level block.
+          const expanded = expandComponents([ref], {
+            [componentId]: { id: componentId, name: block.type, root: [block] },
+          })[0];
+          root = insertIntoTree(root, expanded, null, root.length);
+          if (!firstId) firstId = expanded.id;
+        }
+        return commit(state, root, { selectedId: firstId });
       }),
 
     /**

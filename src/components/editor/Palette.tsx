@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { paletteFor } from "@/lib/registry";
 import type { ComponentSchema, ModuleName, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
+import { SECTION_TEMPLATES } from "@/lib/editor/sections";
 import { cx } from "../ui";
 import { useTechnical } from "../technical";
 import { DRAG_ADD, DRAG_ADD_COMPONENT } from "./Canvas";
@@ -46,10 +47,19 @@ export function Palette({
 }) {
   const addNode = useEditor((s) => s.addNode);
   const addComponentRef = useEditor((s) => s.addComponentRef);
+  const insertSection = useEditor((s) => s.insertSection);
   const [query, setQuery] = useState("");
   const technical = useTechnical();
 
   const available = useMemo(() => paletteFor(modules), [modules]);
+
+  const matchingSections = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return SECTION_TEMPLATES;
+    return SECTION_TEMPLATES.filter(
+      (s) => s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
+    );
+  }, [query]);
 
   const matchingComponents = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -153,6 +163,47 @@ export function Palette({
           )}
         </div>
 
+        {/*
+          Sections: a whole designed part (pricing, testimonials, FAQ…) in one
+          click. Above the individual blocks on purpose — reach for a ready-made
+          section first, and drop to single blocks when you want to build by hand.
+          Each one lands as ordinary editable blocks, so there is nothing special
+          to learn once it is on the page.
+        */}
+        {matchingSections.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-1 px-1 text-[11px] font-semibold tracking-tight text-flux-300">
+              Sections
+            </div>
+            <p className="mb-1.5 px-1 text-[10.5px] leading-relaxed text-ink-500">
+              A whole designed part in one click. Lands at the end of the page — then edit anything.
+            </p>
+            <div className="grid gap-1.5">
+              {matchingSections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => insertSection(section.blocks)}
+                  title={`Add a ${section.label.toLowerCase()} section to the end of the page`}
+                  className="group flex items-start gap-2.5 rounded-lg border border-ink-800 bg-ink-950 px-2.5 py-2 text-left transition-colors hover:border-flux-500/50 hover:bg-ink-850"
+                >
+                  <span aria-hidden className="mt-0.5 text-[13px] leading-none text-flux-300">
+                    ▦
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11.5px] font-medium text-ink-200">
+                      {section.label}
+                    </span>
+                    <span className="block text-[10.5px] leading-snug text-ink-500">
+                      {section.description}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {CATEGORY_ORDER.map((category) => {
           const items = byCategory[category];
           if (!items?.length) return null;
@@ -211,7 +262,7 @@ export function Palette({
           );
         })}
 
-        {matching.length === 0 && matchingComponents.length === 0 && (
+        {matching.length === 0 && matchingComponents.length === 0 && matchingSections.length === 0 && (
           <p className="px-1 py-6 text-center text-[12px] text-ink-500">
             No blocks match “{query}”.
           </p>
