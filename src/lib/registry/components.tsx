@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 // Relative, not "@/": this module is also loaded by the build worker and the
 // test runner, which run outside Next's resolver.
 import { AddToCart } from "../../components/site/AddToCart";
+import { CONTENT_BLOCKS } from "./blocks-content";
 import { MARKETING_BLOCKS } from "./blocks-marketing";
 import {
   MissingRef,
@@ -910,4 +911,5 @@ export const COMPONENTS: RegistryEntry[] = [
   // now). They are the same kind of entry as the ones above; only the file split
   // is new, so they append to the same array the registry already indexes.
   ...MARKETING_BLOCKS,
+  ...CONTENT_BLOCKS,
 ];
