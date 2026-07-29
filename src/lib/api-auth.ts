@@ -145,3 +145,20 @@ export async function guardPost(postId: string): Promise<Guarded<{ siteId: strin
     return deny(err);
   }
 }
+
+/** Guard by FORM SUBMISSION id — resolve to its site, then check membership. */
+export async function guardFormSubmission(id: string): Promise<Guarded<{ siteId: string }>> {
+  try {
+    const user = await requireUser();
+    const submission = await prisma.formSubmission.findUnique({
+      where: { id },
+      select: { siteId: true },
+    });
+    // Same 403 for "missing" and "not yours" — see the note on guardRelease.
+    if (!submission) throw new AuthError(403, "No access to this submission");
+    await requireSiteAccess(user.id, submission.siteId);
+    return { ok: true, user, extra: { siteId: submission.siteId } };
+  } catch (err) {
+    return deny(err);
+  }
+}

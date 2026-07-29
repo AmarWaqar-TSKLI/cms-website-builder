@@ -38,6 +38,8 @@ export type ActivityAction =
   | "post.created"
   | "post.published"
   | "post.deleted"
+  | "form.submitted"
+  | "form.deleted"
   | "user.signed_in"
   | "user.signed_out";
 
@@ -54,6 +56,7 @@ export interface ActivityInput {
     | "product"
     | "media"
     | "post"
+    | "form"
     | "site"
     | null;
   entityId?: string | null;
