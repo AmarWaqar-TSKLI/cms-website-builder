@@ -18,9 +18,16 @@ async function signIn(page: Page, email = "amar@acme.test") {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("demo1234");
   await page.getByRole("button", { name: "Sign in" }).click();
-  // Login lands on the sites hub or the dashboard depending on state — just wait
-  // until we're off the login page rather than pinning one destination.
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+  // Wait until we're off the login page. If a burst of logins across the suite
+  // trips the in-process limiter (8/min), wait out a slice of the window and
+  // retry once — it's a brake on abuse, not a gate this suite should fail on.
+  try {
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
+  } catch {
+    await page.waitForTimeout(12_000);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 25_000 });
+  }
   const skip = page.getByRole("button", { name: "Skip" });
   if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
 }

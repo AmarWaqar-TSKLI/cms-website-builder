@@ -12,7 +12,14 @@ async function signIn(page: Page, email = "amar@acme.test") {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("demo1234");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+  // Retry once if the in-process login limiter (8/min) braked a suite-wide burst.
+  try {
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
+  } catch {
+    await page.waitForTimeout(12_000);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 25_000 });
+  }
   const skip = page.getByRole("button", { name: "Skip" });
   if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
 }

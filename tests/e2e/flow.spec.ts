@@ -23,14 +23,27 @@ async function signIn(
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("demo1234");
   await page.getByRole("button", { name: "Sign in" }).click();
-  // Generous: under a full-suite run the app can be mid-build when this fires.
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-  // A brand-new session meets the first-run welcome. Dismiss it so it isn't
-  // sitting over the dashboard for journeys that go on to use it. The onboarding
-  // test below opts out, to check the welcome on its own terms.
+  // Login lands on the sites hub now, not the dashboard — wait for leaving the
+  // login page rather than a fixed destination, then go where the test needs.
+  // A full-suite run signs in many times as one user; the in-process limiter
+  // (8/min per email+IP) can brake the last few. That's a guard against abuse,
+  // not a gate this suite should fail on, so wait out a slice of the window and
+  // retry once rather than dying on it.
+  try {
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
+  } catch {
+    await page.waitForTimeout(12_000);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 25_000 });
+  }
+  // The first-run welcome greets you on the DASHBOARD, but login lands on the
+  // hub. Go dismiss it there so it's cleared for the rest of the journey and
+  // never pops up mid-test to intercept a click. The onboarding test opts out,
+  // to check the welcome on its own terms.
   if (dismissWelcome) {
+    await page.goto("/dashboard");
     const skip = page.getByRole("button", { name: "Skip" });
-    if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
+    if (await skip.isVisible({ timeout: 8000 }).catch(() => false)) await skip.click();
   }
 }
 
@@ -264,6 +277,8 @@ test.describe("first-run onboarding", () => {
   test("a new user is welcomed once, then never pestered", async ({ page }) => {
     // Opt out of the auto-dismiss so we can see the welcome itself.
     await signIn(page, "amar@acme.test", { dismissWelcome: false });
+    // The welcome greets you on the dashboard; login lands on the hub first.
+    await page.goto("/dashboard");
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
@@ -316,8 +331,10 @@ test.describe("media uploads", () => {
       buffer: Buffer.from(TINY_PNG, "base64"),
     });
 
-    // It appears in the grid, named after the file that produced it.
-    await expect(page.getByText("e2e-upload.png")).toBeVisible({ timeout: 20_000 });
+    // It appears in the grid, named after the file that produced it. `.first()`
+    // because re-running this suite uploads the same name more than once — the
+    // library keeps them all, so the name legitimately matches several tiles.
+    await expect(page.getByText("e2e-upload.png").first()).toBeVisible({ timeout: 20_000 });
   });
 });
 
