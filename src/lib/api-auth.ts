@@ -17,6 +17,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "./db";
+import { captureError } from "./monitor";
 import {
   AuthError,
   requireComponentAccess,
@@ -32,8 +33,9 @@ function deny(err: unknown): { ok: false; response: NextResponse } {
   if (err instanceof AuthError) {
     return { ok: false, response: NextResponse.json({ error: err.message }, { status: err.status }) };
   }
-  // Never leak an internal message to the caller; the detail goes to the log.
-  console.error("[api-auth]", err);
+  // Never leak an internal message to the caller; the detail goes to the log and,
+  // if a webhook is configured, to monitoring.
+  captureError(err, { scope: "api-auth" });
   return { ok: false, response: NextResponse.json({ error: "Request failed" }, { status: 500 }) };
 }
 

@@ -23,6 +23,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE, createSession, hashPassword, verifyPassword } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,28 +35,16 @@ async function burnTime(password: string) {
 }
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
-// In-process on purpose, and honest about it: with several app servers each gets
-// its own counter. Real deployments put this in Redis or at the edge. What it
-// does buy, even here, is that a single attacker on a single connection cannot
-// grind through a password list.
+// The limiter now lives in lib/rate-limit.ts: still in-process by default, but a
+// shared cross-instance backend when RATE_LIMIT_REST_* is set — which is what a
+// real multi-server deploy wants. Either way, one attacker on one connection
+// cannot grind through a password list.
 const ATTEMPT_WINDOW_MS = 60_000;
 const MAX_ATTEMPTS = 8;
-const attempts = new Map<string, { count: number; first: number }>();
-
-function tooManyAttempts(key: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(key);
-  if (!entry || now - entry.first > ATTEMPT_WINDOW_MS) {
-    attempts.set(key, { count: 1, first: now });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > MAX_ATTEMPTS;
-}
 
 function clientKey(req: Request, email: string): string {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return `${email}|${forwarded || "local"}`;
+  return `login:${email}|${forwarded || "local"}`;
 }
 
 export async function POST(req: Request) {
@@ -75,7 +64,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
   }
 
-  if (tooManyAttempts(clientKey(req, email))) {
+  const rate = await checkRateLimit(clientKey(req, email), {
+    windowMs: ATTEMPT_WINDOW_MS,
+    max: MAX_ATTEMPTS,
+  });
+  if (rate.limited) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a minute and try again." },
       { status: 429 },
