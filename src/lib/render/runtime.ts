@@ -91,6 +91,46 @@ export function runtimeScript(opts: { runtimeApi: string; siteId: string; releas
     }
   });
 
+  // Forms — the same D8 story as the cart, for messages. A <form data-cms-form>
+  // in the frozen HTML posts to the runtime API; a row appears in
+  // form_submissions and the file is not touched. The React island does this on
+  // the hosted runtime; here, in an export, this vanilla handler does.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.getAttribute || form.getAttribute("data-cms-form") == null) return;
+    e.preventDefault();
+    var formKey = form.getAttribute("data-cms-form");
+    var formName = form.getAttribute("data-cms-form-name") || "";
+    var fd = new FormData(form);
+    var fields = {};
+    fd.forEach(function (v, k) { fields[k] = typeof v === "string" ? v : ""; });
+    var btn = form.querySelector('[type="submit"]');
+    var note = form.querySelector('[data-cms-form-note]');
+    var label = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+    fetch(CFG.api + "/api/runtime/forms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: CFG.siteId, formKey: formKey, formName: formName, fields: fields })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (btn) { btn.disabled = false; btn.textContent = label; }
+        if (res && res.ok) {
+          form.reset();
+          if (note) note.style.display = "block";
+        } else if (note) {
+          note.textContent = "Something went wrong. Please try again.";
+          note.style.color = "#b91c1c";
+          note.style.display = "block";
+        }
+      })
+      .catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = label; }
+        if (note) { note.textContent = "Something went wrong. Please try again."; note.style.color = "#b91c1c"; note.style.display = "block"; }
+      });
+  });
+
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { paint(); });
   else paint();
 })();

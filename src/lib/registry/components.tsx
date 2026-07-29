@@ -23,6 +23,7 @@ import type { ReactNode } from "react";
 import { AddToCart } from "../../components/site/AddToCart";
 import { COMMERCE_BLOCKS } from "./blocks-commerce";
 import { CONTENT_BLOCKS } from "./blocks-content";
+import { FORM_BLOCKS } from "./blocks-forms";
 import { MARKETING_BLOCKS } from "./blocks-marketing";
 import { MEDIA_BLOCKS } from "./blocks-media";
 import {
@@ -916,4 +917,5 @@ export const COMPONENTS: RegistryEntry[] = [
   ...CONTENT_BLOCKS,
   ...MEDIA_BLOCKS,
   ...COMMERCE_BLOCKS,
+  ...FORM_BLOCKS,
 ];

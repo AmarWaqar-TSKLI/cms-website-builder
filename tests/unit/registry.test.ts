@@ -47,6 +47,7 @@ describe("registry", () => {
       "Callout",
       "Card",
       "Columns",
+      "ContactForm",
       "CtaBand",
       "Divider",
       "FaqItem",
@@ -57,6 +58,7 @@ describe("registry", () => {
       "Hero",
       "ImageBlock",
       "LogoStrip",
+      "Newsletter",
       "PostList",
       "PricingTier",
       "ProductGrid",
@@ -166,6 +168,10 @@ describe("registry", () => {
 
     const withCommerce = paletteFor(["commerce"]).map((s) => s.name);
     expect(withCommerce).toContain("ProductGrid");
+
+    // Form blocks require the forms module, exactly the same way.
+    expect(engineOnly).not.toContain("ContactForm");
+    expect(paletteFor(["forms"]).map((s) => s.name)).toContain("ContactForm");
 
     // Engine components are always available regardless of modules.
     expect(engineOnly).toContain("Hero");

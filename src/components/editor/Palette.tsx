@@ -202,6 +202,11 @@ export function Palette({
                   Your blog is on. Write posts under “Blog” in the dashboard, then show them here.
                 </p>
               )}
+              {category === "forms" && (
+                <p className="mt-2 px-1 text-[10.5px] leading-relaxed text-ink-500">
+                  What visitors send lands in your Forms inbox in the dashboard.
+                </p>
+              )}
             </div>
           );
         })}
