@@ -1,39 +1,11 @@
-import BoundaryScene from "@/components/landing/BoundaryScene";
-import Closing from "@/components/landing/Closing";
-import CompileScene from "@/components/landing/CompileScene";
-import DescriptionScene from "@/components/landing/DescriptionScene";
-import DestinationsScene from "@/components/landing/DestinationsScene";
-import Hero from "@/components/landing/Hero";
-import PackagingScene from "@/components/landing/PackagingScene";
-import PremiseScene from "@/components/landing/PremiseScene";
-import ReleaseStack from "@/components/landing/ReleaseStack";
+import Marketing from "@/components/landing/Marketing";
 
 /**
- * The landing page is the argument, in order, and it is scrubbed rather than
- * read: every beat owns a scroll range and something on screen changes across
- * all of it. The "therefore" that links each beat to the last is the opening
- * line of the next scene, not a paragraph of dead scroll between them.
+ * The homepage. Warm, light, and written for the person who wants a website —
+ * not the engineer reviewing how it's built. The old architecture film (the 3D
+ * scroll narrative) still lives at /how-it-works for anyone curious about the
+ * machinery underneath.
  */
 export default function LandingPage() {
-  return (
-    <main
-      /*
-        The landing film keeps the dark world it was designed for — a 3D canvas
-        and a scroll narrative are a different job from a tool somebody works in
-        all day. `theme-dark` re-declares the palette variables for this subtree
-        only, so the product around it stays light.
-      */
-      className="theme-dark relative w-full overflow-x-clip"
-    >
-      <Hero />
-      <PremiseScene />
-      <PackagingScene />
-      <CompileScene />
-      <DescriptionScene />
-      <ReleaseStack />
-      <BoundaryScene />
-      <DestinationsScene />
-      <Closing />
-    </main>
-  );
+  return <Marketing />;
 }
