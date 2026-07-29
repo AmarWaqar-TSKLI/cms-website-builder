@@ -25,29 +25,86 @@ const COLOURS: { key: keyof ThemeTokens; label: string }[] = [
   { key: "colorMuted", label: "Muted text" },
 ];
 
+/*
+ * Font stacks that render the SAME in the editor, on the live site, and in an
+ * offline export — the last one is the constraint that shapes this list.
+ * SiteStyles inlines every byte of CSS with no network (an exported site has to
+ * open from file:// with zero requests), so a theme can only name fonts the
+ * browser already has. Each stack below resolves to a system font on every OS:
+ * no webfont to load, so nothing can silently fall back to something else and
+ * make the editor lie about what a visitor will see.
+ */
+const FONT = {
+  sans: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  inter: "'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  trebuchet: "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif",
+  verdana: "Verdana, Geneva, 'Segoe UI', sans-serif",
+  tahoma: "Tahoma, 'Segoe UI', Geneva, sans-serif",
+  georgia: "Georgia, Cambria, 'Times New Roman', serif",
+  palatino: "'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif",
+  cambria: "Cambria, Georgia, 'Times New Roman', serif",
+  mono: "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Courier New', monospace",
+} as const;
+
 const FONTS = [
-  { label: "Inter (sans)", value: "'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" },
-  { label: "Georgia (serif)", value: "Georgia, 'Times New Roman', serif" },
-  { label: "System mono", value: "ui-monospace, 'SF Mono', Menlo, monospace" },
-  { label: "Trebuchet", value: "'Trebuchet MS', 'Segoe UI', sans-serif" },
+  { label: "System sans", value: FONT.sans },
+  { label: "Inter", value: FONT.inter },
+  { label: "Trebuchet", value: FONT.trebuchet },
+  { label: "Verdana", value: FONT.verdana },
+  { label: "Tahoma", value: FONT.tahoma },
+  { label: "Georgia", value: FONT.georgia },
+  { label: "Palatino", value: FONT.palatino },
+  { label: "Cambria", value: FONT.cambria },
+  { label: "Mono", value: FONT.mono },
 ];
 
-const PRESETS: { name: string; tokens: Partial<ThemeTokens> }[] = [
+/*
+ * A "Look" is a whole visual identity in one click: colours, a font pairing and
+ * a corner radius together. That is the difference between this and a colour
+ * swatch — picking "Bloom" restyles the entire site the way a designer would,
+ * not just its accent. Each is a Partial<ThemeTokens>, so applying one is the
+ * same patch a person makes by hand and stays fully editable afterwards.
+ *
+ * The set is deliberately spread: light and dark, serif and sans and mono,
+ * sharp corners and soft — so "Surprise me" always lands somewhere different.
+ */
+type Look = { name: string; tokens: Partial<ThemeTokens> };
+const LOOKS: Look[] = [
   {
-    name: "Studio",
-    tokens: { colorBg: "#ffffff", colorFg: "#0b0b0f", colorSurface: "#f4f4f6", colorBorder: "#e4e4e7", colorAccent: "#1b1b6f", colorAccentFg: "#ffffff", colorMuted: "#6b6b76" },
+    name: "Studio", // editorial: white page, ink-blue accent, serif headlines
+    tokens: { colorBg: "#ffffff", colorFg: "#14141a", colorSurface: "#f5f5f7", colorBorder: "#e5e5ea", colorAccent: "#1b1b6f", colorAccentFg: "#ffffff", colorMuted: "#6b6b76", fontHeading: FONT.georgia, fontBody: FONT.sans, radius: "10px" },
   },
   {
-    name: "Ink",
-    tokens: { colorBg: "#0c0c10", colorFg: "#f2f2f5", colorSurface: "#16161c", colorBorder: "#2a2a33", colorAccent: "#6d5cff", colorAccentFg: "#ffffff", colorMuted: "#9a9aad" },
+    name: "Slate", // clean corporate SaaS: cool greys, confident blue
+    tokens: { colorBg: "#ffffff", colorFg: "#0f172a", colorSurface: "#f1f5f9", colorBorder: "#e2e8f0", colorAccent: "#2563eb", colorAccentFg: "#ffffff", colorMuted: "#64748b", fontHeading: FONT.sans, fontBody: FONT.sans, radius: "10px" },
   },
   {
-    name: "Sand",
-    tokens: { colorBg: "#faf7f2", colorFg: "#221d16", colorSurface: "#f1ebe1", colorBorder: "#e0d6c7", colorAccent: "#9a5b2c", colorAccentFg: "#ffffff", colorMuted: "#7a6a58" },
+    name: "Sand", // warm, classic, unhurried
+    tokens: { colorBg: "#faf7f2", colorFg: "#221d16", colorSurface: "#f1ebe1", colorBorder: "#e0d6c7", colorAccent: "#9a5b2c", colorAccentFg: "#ffffff", colorMuted: "#7a6a58", fontHeading: FONT.palatino, fontBody: FONT.georgia, radius: "8px" },
   },
   {
-    name: "Forest",
-    tokens: { colorBg: "#ffffff", colorFg: "#10201a", colorSurface: "#eef4f1", colorBorder: "#d6e3dc", colorAccent: "#12734f", colorAccentFg: "#ffffff", colorMuted: "#5d7169" },
+    name: "Forest", // calm, natural, trustworthy green
+    tokens: { colorBg: "#ffffff", colorFg: "#10201a", colorSurface: "#eef4f1", colorBorder: "#d6e3dc", colorAccent: "#12734f", colorAccentFg: "#ffffff", colorMuted: "#5d7169", fontHeading: FONT.sans, fontBody: FONT.sans, radius: "12px" },
+  },
+  {
+    name: "Bloom", // friendly and soft: rounded corners, rose accent
+    tokens: { colorBg: "#fffafc", colorFg: "#2a1a24", colorSurface: "#fdeef4", colorBorder: "#f6d8e4", colorAccent: "#d6336c", colorAccentFg: "#ffffff", colorMuted: "#8a6b78", fontHeading: FONT.trebuchet, fontBody: FONT.verdana, radius: "22px" },
+  },
+  {
+    name: "Coral", // warm and lively without shouting
+    tokens: { colorBg: "#fffdfb", colorFg: "#201812", colorSurface: "#fff2ea", colorBorder: "#ffddc9", colorAccent: "#f2542d", colorAccentFg: "#ffffff", colorMuted: "#7c6a5f", fontHeading: FONT.cambria, fontBody: FONT.sans, radius: "14px" },
+  },
+  {
+    name: "Mono", // brutalist: hard black borders, monospace, no rounding
+    tokens: { colorBg: "#ffffff", colorFg: "#0a0a0a", colorSurface: "#f4f4f4", colorBorder: "#111111", colorAccent: "#0a0a0a", colorAccentFg: "#ffffff", colorMuted: "#555555", fontHeading: FONT.mono, fontBody: FONT.mono, radius: "0px" },
+  },
+  {
+    name: "Ink", // dark, modern, violet accent
+    tokens: { colorBg: "#0c0c10", colorFg: "#f2f2f5", colorSurface: "#16161c", colorBorder: "#2a2a33", colorAccent: "#6d5cff", colorAccentFg: "#ffffff", colorMuted: "#9a9aad", fontHeading: FONT.inter, fontBody: FONT.inter, radius: "12px" },
+  },
+  {
+    name: "Midnight", // dark and luxe: gold on navy, serif headlines
+    tokens: { colorBg: "#0b1220", colorFg: "#eef2f8", colorSurface: "#121a2b", colorBorder: "#24304a", colorAccent: "#d4af37", colorAccentFg: "#10151f", colorMuted: "#8b97ad", fontHeading: FONT.georgia, fontBody: FONT.sans, radius: "6px" },
   },
 ];
 
@@ -68,6 +125,7 @@ export function ThemePanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [lastLook, setLastLook] = useState(-1);
   const technical = useTechnical();
 
   useEffect(() => setDraftTokens(tokens), [tokens]);
@@ -92,6 +150,22 @@ export function ThemePanel({
     },
     [draftTokens, draftLayout, onChange],
   );
+
+  const applyLook = useCallback(
+    (i: number) => {
+      setLastLook(i);
+      patchTokens(LOOKS[i].tokens);
+    },
+    [patchTokens],
+  );
+
+  // "Surprise me": jump to a random look, but never the one already showing —
+  // a restyle that visibly changes nothing reads as broken.
+  const surprise = useCallback(() => {
+    let i = Math.floor(Math.random() * LOOKS.length);
+    if (LOOKS.length > 1 && i === lastLook) i = (i + 1) % LOOKS.length;
+    applyLook(i);
+  }, [applyLook, lastLook]);
 
   const save = async () => {
     setSaving(true);
@@ -127,27 +201,53 @@ export function ThemePanel({
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         <div>
-          <SectionTitle>Presets</SectionTitle>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+              Looks
+            </span>
+            <button
+              type="button"
+              onClick={surprise}
+              title="Restyle the whole site to a random look"
+              className="rounded-md border border-ink-800 bg-ink-950 px-2 py-0.5 text-[10.5px] text-ink-300 transition-colors hover:border-flux-500/50 hover:text-flux-300"
+            >
+              ✨ Surprise me
+            </button>
+          </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-ink-500">
+            One click restyles the whole site — colours, fonts and shape together.
+          </p>
           <div className="grid grid-cols-2 gap-1.5">
-            {PRESETS.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                onClick={() => patchTokens(p.tokens)}
-                className="flex items-center gap-2 rounded-lg border border-ink-800 bg-ink-950 px-2.5 py-2 transition-colors hover:border-flux-500/50"
-              >
-                <span className="flex -space-x-1">
-                  {[p.tokens.colorBg, p.tokens.colorAccent, p.tokens.colorFg].map((c, i) => (
+            {LOOKS.map((look, i) => {
+              const t = look.tokens;
+              return (
+                <button
+                  key={look.name}
+                  type="button"
+                  onClick={() => applyLook(i)}
+                  title={`Restyle everything to “${look.name}”`}
+                  className="group overflow-hidden rounded-lg border border-ink-800 bg-ink-950 text-left transition-colors hover:border-flux-500/50"
+                >
+                  <div className="flex items-center justify-between px-2.5 pt-2">
+                    <span className="text-[11.5px] font-medium text-ink-200">{look.name}</span>
+                    {/* "Aa" in the look's own heading font + accent — the font pairing,
+                        not just the colours, is part of what a click changes. */}
                     <span
-                      key={i}
-                      className="h-3.5 w-3.5 rounded-full border border-ink-700"
-                      style={{ background: c }}
-                    />
-                  ))}
-                </span>
-                <span className="text-[11.5px] text-ink-200">{p.name}</span>
-              </button>
-            ))}
+                      aria-hidden
+                      className="text-[13px] leading-none"
+                      style={{ fontFamily: t.fontHeading, color: t.colorAccent }}
+                    >
+                      Aa
+                    </span>
+                  </div>
+                  <div className="mt-2 flex h-5">
+                    {[t.colorBg, t.colorSurface, t.colorAccent, t.colorFg].map((c, j) => (
+                      <span key={j} className="flex-1" style={{ background: c }} />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
