@@ -19,9 +19,10 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getComponent, getSchema } from "@/lib/registry";
-import type { PageNode, RenderContext } from "@/lib/registry/types";
+import type { PageNode, RenderContext, ThemeLayout } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { componentIdOf, isComponentRef } from "@/lib/shared-components";
+import { SiteFooter, SiteNav } from "../site/chrome";
 import { cx } from "../ui";
 
 export const DRAG_ADD = "application/x-cms-add";
@@ -31,7 +32,22 @@ export const DRAG_ADD_COMPONENT = "application/x-cms-add-component";
 
 type Edge = "before" | "after" | null;
 
-export function Canvas({ ctx }: { ctx: RenderContext }) {
+export function Canvas({
+  ctx,
+  layout,
+  onEditChrome,
+}: {
+  ctx: RenderContext;
+  /**
+   * The site's nav + footer. When present (editing a page), they're drawn around
+   * the page just like the live site — so the navbar is VISIBLE and obviously
+   * yours, instead of silently living in the theme where nobody finds it. Omitted
+   * when editing a reusable block, where site chrome would be a lie.
+   */
+  layout?: ThemeLayout;
+  /** Click the nav or footer → jump to where they're edited (the Design tab). */
+  onEditChrome?: () => void;
+}) {
   const body = useEditor((s) => s.body);
   const select = useEditor((s) => s.select);
 
@@ -44,7 +60,48 @@ export function Canvas({ ctx }: { ctx: RenderContext }) {
       style={{ colorScheme: "light" }}
       onClick={() => select(null)}
     >
+      {layout && (
+        <EditableChrome part="nav" onEdit={onEditChrome}>
+          <SiteNav layout={layout} tokens={ctx.tokens} />
+        </EditableChrome>
+      )}
       <NodeList nodes={body.root} parentId={null} ctx={ctx} />
+      {layout && (
+        <EditableChrome part="footer" onEdit={onEditChrome}>
+          <SiteFooter layout={layout} tokens={ctx.tokens} />
+        </EditableChrome>
+      )}
+    </div>
+  );
+}
+
+/** Wraps the nav/footer so hovering shows it's editable and a click opens Design. */
+function EditableChrome({
+  children,
+  onEdit,
+  part,
+}: {
+  children: React.ReactNode;
+  onEdit?: () => void;
+  part: "nav" | "footer";
+}) {
+  return (
+    <div
+      className="group relative cursor-pointer"
+      title={part === "nav" ? "Your navigation bar — click to edit it" : "Your footer — click to edit it"}
+      onClick={(e) => {
+        e.stopPropagation();
+        onEdit?.();
+      }}
+    >
+      {/* The chrome itself is inert; clicks belong to the wrapper. */}
+      <div className="pointer-events-none">{children}</div>
+      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute inset-0 bg-flux-500/[0.06] shadow-[inset_0_0_0_1.5px_var(--color-flux-500)]" />
+        <span className="absolute right-2 top-2 rounded-md bg-flux-500 px-2 py-0.5 text-[10px] font-medium text-white">
+          {part === "nav" ? "Navigation bar — click to edit" : "Footer — click to edit"}
+        </span>
+      </div>
     </div>
   );
 }

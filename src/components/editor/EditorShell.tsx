@@ -609,7 +609,11 @@ export function EditorShell(boot: EditorBootstrap) {
                 {editingComponent ? "Reusable block" : "Preview"}
               </span>
             </div>
-            <Canvas ctx={ctx} />
+            <Canvas
+              ctx={ctx}
+              layout={editingComponent ? undefined : layout}
+              onEditChrome={() => setRightTab("theme")}
+            />
           </div>
 
           <p className="mx-auto mt-4 max-w-3xl text-center text-[11px] leading-relaxed text-ink-500">
