@@ -159,14 +159,24 @@ obtains certificates on the first HTTPS request. That's a live deployment.
 The quickest real deploy that still runs the worker. Two Railway services from
 this one repo (both build the `Dockerfile`), a Supabase Postgres, done.
 
-**Supabase (the database).** Create a project. From *Project Settings → Database*
-copy **two** connection strings:
+**Supabase (the database).** Create a project **in the region closest to where
+the app runs** — a cross-region app↔DB hop is the single biggest source of
+slowness (measured ~1.4s per query US↔Singapore vs ~5ms co-located). Then from
+*Project Settings → Database* → **Connect** → **ORMs → Prisma**, copy the two
+connection strings and use the **session pooler (port `5432`)** for BOTH:
 
-- **Pooled** (Transaction pooler, port `6543`) → `DATABASE_URL`, with
-  `?pgbouncer=true&connection_limit=1` appended. This is what the app uses at runtime.
-- **Direct** (port `5432`) → `DIRECT_URL`. Prisma uses it to run migrations, which
-  a pooler can't do. (`schema.prisma` gets a `directUrl = env("DIRECT_URL")` line —
-  wired at deploy time so local dev, which has no pooler, is unaffected.)
+- `DATABASE_URL` = session pooler (`5432`), e.g. `…?connection_limit=5`. The
+  session pooler keeps one stable connection, which is what a long-running server
+  wants. **Avoid the transaction pooler (`6543`) here** — it's built for
+  serverless and reconnects per query, ~4–5× slower for a persistent server.
+- `DIRECT_URL` = the same session pooler string (Prisma uses it for migrations,
+  which a transaction pooler can't run). `schema.prisma` has a
+  `directUrl = env("DIRECT_URL")` line; locally the two are identical.
+
+**Region.** Put the Railway `app` and `worker` in the same region as Supabase:
+`railway service scale --service app <region>=1 <old-region>=0` (regions:
+`us-west`, `us-east`, `eu-west`, `southeast-asia`). Co-locating cut a page from
+~1.7s to ~0.4s in testing.
 
 **Railway service 1 — `app`.** Deploy from the repo (it auto-detects the
 Dockerfile). Then:
