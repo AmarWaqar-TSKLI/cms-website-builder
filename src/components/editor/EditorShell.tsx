@@ -103,6 +103,11 @@ export function EditorShell(boot: EditorBootstrap) {
   const [tokens, setTokens] = useState<ThemeTokens>(boot.ctx.tokens);
   const [layout, setLayout] = useState<ThemeLayout>(boot.layout);
 
+  // Blocks just made reusable, shown in the palette and outline immediately so
+  // the UI never waits on the background refresh that fetches them back from the
+  // server. The authoritative boot data overwrites these by id once it lands.
+  const [extraComponents, setExtraComponents] = useState<ResolvedComponent[]>([]);
+
   /**
    * While editing a symbol, its own live tree replaces the saved copy in the
    * expansion map. Without this, a symbol that contained another instance of
@@ -111,6 +116,8 @@ export function EditorShell(boot: EditorBootstrap) {
    */
   const components = useMemo(() => {
     const map: Record<string, ResolvedComponent> = {};
+    // Optimistic entries first; boot data overwrites them by id once it arrives.
+    for (const c of extraComponents) map[c.id] = c;
     for (const c of boot.allComponents) map[c.id] = c;
     if (editingComponent) {
       map[editingComponent.id] = {
@@ -120,7 +127,15 @@ export function EditorShell(boot: EditorBootstrap) {
       };
     }
     return map;
-  }, [boot.allComponents, editingComponent, body.root]);
+  }, [boot.allComponents, editingComponent, body.root, extraComponents]);
+
+  // What the palette lists: the server's reusable blocks plus any just created,
+  // deduped so a block doesn't appear twice once the refresh brings it back.
+  const paletteComponents = useMemo(() => {
+    const known = new Set(boot.components.map((c) => c.id));
+    const merged = [...boot.components, ...extraComponents.filter((c) => !known.has(c.id))];
+    return merged.filter((c) => c.id !== editingComponent?.id);
+  }, [boot.components, extraComponents, editingComponent]);
 
   const ctx: RenderContext = { ...boot.ctx, tokens, components };
 
@@ -243,6 +258,14 @@ export function EditorShell(boot: EditorBootstrap) {
         }
 
         const created = (await res.json()) as { id: string };
+
+        // Show it everywhere immediately — palette, outline, canvas — so it feels
+        // instant instead of waiting on the refresh below. `router.refresh()` then
+        // brings the authoritative copy, which overwrites this by id.
+        setExtraComponents((prev) => [
+          ...prev.filter((c) => c.id !== created.id),
+          { id: created.id, name, root: [node] },
+        ]);
 
         // Swap the block for a reference to it, then persist and reload so the
         // palette and the expansion map both pick the new symbol up.
@@ -566,7 +589,9 @@ export function EditorShell(boot: EditorBootstrap) {
                 modules={boot.modules}
                 // A symbol cannot list itself: the most obvious loop, refused at
                 // the point of temptation. Deeper loops are caught at publish.
-                components={boot.components.filter((c) => c.id !== editingComponent?.id)}
+                // `paletteComponents` already excludes the one being edited, and
+                // includes any just-created block optimistically.
+                components={paletteComponents}
                 onNewComponent={newComponent}
                 onEditComponent={(id) => router.push(`/editor/component/${id}?from=${boot.page.id}`)}
               />
