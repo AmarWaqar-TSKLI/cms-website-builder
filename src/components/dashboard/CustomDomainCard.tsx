@@ -19,11 +19,21 @@ import type { DomainTarget } from "@/lib/domains";
 
 type Status = "none" | "connected" | "pending" | "unconfigured";
 
+interface RailwayDnsRecord {
+  type: string;
+  name: string;
+  value: string;
+  ok: boolean;
+}
+
 interface DomainState {
   domain: string | null;
   status: Status;
   detail: string;
   target: DomainTarget;
+  // Present when the host integration is wired up: the exact DNS record(s) to
+  // add, straight from the platform, so the owner never leaves this app.
+  railway?: { dnsRecords: RailwayDnsRecord[]; certificateStatus: string | null; connected: boolean } | null;
 }
 
 const INPUT =
@@ -185,7 +195,12 @@ export function CustomDomainCard({
             </p>
           )}
 
-          {state?.status !== "connected" && <DnsInstructions domain={domain} target={state?.target} />}
+          {state?.status !== "connected" &&
+            (state?.railway?.dnsRecords?.length ? (
+              <RailwayRecords records={state.railway.dnsRecords} />
+            ) : (
+              <DnsInstructions domain={domain} target={state?.target} />
+            ))}
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Btn variant="secondary" size="sm" onClick={() => void recheck()} disabled={busy === "check"}>
@@ -226,6 +241,38 @@ function StatusBadge({ status, busy }: { status: Status; busy: boolean }) {
       <Dot tone="warn" pulse />
       Waiting for DNS
     </Badge>
+  );
+}
+
+/** The exact DNS record(s) the host handed back — the self-serve path. */
+function RailwayRecords({ records }: { records: RailwayDnsRecord[] }) {
+  return (
+    <div className="rounded-xl border border-ink-800 bg-ink-950/50 p-3">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-[12px]">
+          <thead>
+            <tr className="text-ink-500">
+              <th className="pb-1.5 pr-4 font-medium">Type</th>
+              <th className="pb-1.5 pr-4 font-medium">Name / Host</th>
+              <th className="pb-1.5 font-medium">Value</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono text-ink-200">
+            {records.map((r, i) => (
+              <tr key={i}>
+                <td className="pr-4">{r.type}</td>
+                <td className="pr-4 break-all">{r.name}</td>
+                <td className="break-all">{r.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">
+        Add this at your domain provider (GoDaddy, Namecheap, Cloudflare…). The certificate is
+        issued automatically — it usually goes live within an hour.
+      </p>
+    </div>
   );
 }
 

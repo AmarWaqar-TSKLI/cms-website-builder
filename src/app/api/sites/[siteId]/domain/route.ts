@@ -19,9 +19,45 @@ import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { captureError } from "@/lib/monitor";
 import { checkDomainStatus, domainTarget, normalizeDomain } from "@/lib/domains";
+import { railwayConfigured, registerRailwayDomain, railwayDomainStatus } from "@/lib/railway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Build the response for a domain. When the Railway integration is wired up it
+ * is the authority — it hands back the exact DNS record to add and whether the
+ * domain is live — so the owner registers a domain entirely from this app and
+ * never touches the host. Without it, we fall back to a plain DNS-resolution
+ * check against the configured target.
+ */
+async function domainResponse(siteId: string, domain: string | null, register: boolean) {
+  if (!domain) {
+    return { domain: null, target: domainTarget(), status: "none" as const, detail: "", railway: null };
+  }
+  if (railwayConfigured()) {
+    try {
+      const info = register ? await registerRailwayDomain(domain) : await railwayDomainStatus(domain);
+      if (info) {
+        return {
+          domain,
+          target: domainTarget(),
+          status: info.connected ? ("connected" as const) : ("pending" as const),
+          detail: info.connected
+            ? "Your domain points here and its certificate is issued — it's live."
+            : "Add the DNS record below at your domain provider. It usually goes live within an hour.",
+          railway: info,
+        };
+      }
+    } catch (err) {
+      // A hosting-API hiccup must not fail the whole request — the domain is
+      // saved either way; fall back to the DNS check.
+      captureError(err, { scope: "domain.railway", siteId });
+    }
+  }
+  const status = await checkDomainStatus(domain);
+  return { domain, target: domainTarget(), ...status, railway: null };
+}
 
 /** Current domain, where to point it, and whether it's live yet. */
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
@@ -35,11 +71,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
   });
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
-  const status = site.customDomain
-    ? await checkDomainStatus(site.customDomain)
-    : { status: "none" as const, detail: "" };
-
-  return NextResponse.json({ domain: site.customDomain, target: domainTarget(), ...status });
+  return NextResponse.json(await domainResponse(siteId, site.customDomain, false));
 }
 
 /** Connect (or replace) the domain for this site. */
@@ -81,8 +113,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ siteId: 
     summary: `${auth.user.name} connected the domain ${norm.domain}`,
   });
 
-  const status = await checkDomainStatus(norm.domain);
-  return NextResponse.json({ domain: norm.domain, target: domainTarget(), ...status });
+  return NextResponse.json(await domainResponse(siteId, norm.domain, true));
 }
 
 /** Disconnect the domain — the site keeps serving at /s/<slug> as before. */
