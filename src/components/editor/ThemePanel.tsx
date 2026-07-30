@@ -11,7 +11,7 @@
  * versioned on exactly the same terms as the pages.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { ThemeLayout, ThemeTokens } from "@/lib/registry/types";
+import type { NavLink, ThemeLayout, ThemeTokens } from "@/lib/registry/types";
 import { cx } from "../ui";
 import { useTechnical } from "../technical";
 
@@ -334,7 +334,16 @@ export function ThemePanel({
               className="w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500"
             />
           </label>
-          <label className="block">
+
+          <div className="mb-3">
+            <span className="mb-1.5 block text-[11.5px] text-ink-300">Menu links</span>
+            <LinksEditor
+              links={draftLayout.nav?.links ?? []}
+              onChange={(links) => patchLayout({ nav: { ...draftLayout.nav, links } })}
+            />
+          </div>
+
+          <label className="mb-2 block">
             <span className="mb-1 block text-[11.5px] text-ink-300">Footer text</span>
             <input
               value={draftLayout.footer?.text ?? ""}
@@ -344,6 +353,14 @@ export function ThemePanel({
               className="w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none focus:border-flux-500"
             />
           </label>
+
+          <div>
+            <span className="mb-1.5 block text-[11.5px] text-ink-300">Footer links</span>
+            <LinksEditor
+              links={draftLayout.footer?.links ?? []}
+              onChange={(links) => patchLayout({ footer: { ...draftLayout.footer, links } })}
+            />
+          </div>
         </div>
       </div>
 
@@ -366,6 +383,61 @@ export function ThemePanel({
           Saved design changes still need a publish to reach your live site.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Add, edit, reorder-by-hand and remove the links in the nav (or footer). The
+ * data model always allowed a list of links; this is the missing UI for it.
+ * `href` is free text so it can point at a page ("/about"), an anchor ("#pricing")
+ * or an external site ("https://…") — a page picker would need the page list here.
+ */
+function LinksEditor({
+  links,
+  onChange,
+}: {
+  links: NavLink[];
+  onChange: (links: NavLink[]) => void;
+}) {
+  const set = (i: number, patch: Partial<NavLink>) =>
+    onChange(links.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  return (
+    <div className="space-y-1.5">
+      {links.map((l, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={l.label}
+            placeholder="Label"
+            onChange={(e) => set(i, { label: e.target.value })}
+            className="w-[38%] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2 py-1.5 text-[12px] text-ink-100 outline-none focus:border-flux-500"
+          />
+          <input
+            value={l.href}
+            placeholder="/page or https://…"
+            spellCheck={false}
+            onChange={(e) => set(i, { href: e.target.value })}
+            className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-2 py-1.5 font-mono text-[11.5px] text-ink-100 outline-none focus:border-flux-500"
+          />
+          <button
+            type="button"
+            onClick={() => onChange(links.filter((_, j) => j !== i))}
+            title="Remove link"
+            aria-label="Remove link"
+            className="shrink-0 rounded-md px-1.5 py-1 text-[13px] text-ink-500 transition-colors hover:bg-ink-800 hover:text-fail-500"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...links, { label: "", href: "/" }])}
+        className="mt-0.5 w-full rounded-lg border border-dashed border-ink-700 py-1.5 text-[11.5px] text-ink-400 transition-colors hover:border-flux-500/50 hover:text-flux-300"
+      >
+        + Add link
+      </button>
     </div>
   );
 }
