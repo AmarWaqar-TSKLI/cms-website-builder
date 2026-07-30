@@ -27,6 +27,11 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * Published sites are not gated. They are public web pages.
  */
+// The app's OWN hostnames. Any OTHER Host header is treated as a customer's
+// custom domain and routed to their site. Localhost covers dev; the deployed
+// public host is derived from NEXT_PUBLIC_RUNTIME_API (inlined at build) so the
+// app recognises its own domain instead of mistaking it for a custom domain and
+// 404ing every page. NEXT_PUBLIC_APP_HOSTS (comma-separated) adds any extras.
 const APP_HOSTS = new Set([
   "localhost",
   "localhost:3000",
@@ -35,6 +40,19 @@ const APP_HOSTS = new Set([
   "0.0.0.0:3000",
   "app:3000",
 ]);
+for (const raw of [
+  process.env.NEXT_PUBLIC_RUNTIME_API,
+  ...(process.env.NEXT_PUBLIC_APP_HOSTS ?? "").split(","),
+]) {
+  const value = raw?.trim();
+  if (!value) continue;
+  try {
+    // Accept a full origin ("https://x") or a bare host ("x").
+    APP_HOSTS.add(new URL(value.includes("://") ? value : `https://${value}`).host.toLowerCase());
+  } catch {
+    /* ignore a malformed entry rather than break routing */
+  }
+}
 
 const SESSION_COOKIE = "cms_session";
 
