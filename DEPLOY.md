@@ -154,21 +154,74 @@ obtains certificates on the first HTTPS request. That's a live deployment.
 
 ---
 
+## Railway + Supabase (managed — no server to run yourself)
+
+The quickest real deploy that still runs the worker. Two Railway services from
+this one repo (both build the `Dockerfile`), a Supabase Postgres, done.
+
+**Supabase (the database).** Create a project. From *Project Settings → Database*
+copy **two** connection strings:
+
+- **Pooled** (Transaction pooler, port `6543`) → `DATABASE_URL`, with
+  `?pgbouncer=true&connection_limit=1` appended. This is what the app uses at runtime.
+- **Direct** (port `5432`) → `DIRECT_URL`. Prisma uses it to run migrations, which
+  a pooler can't do. (`schema.prisma` gets a `directUrl = env("DIRECT_URL")` line —
+  wired at deploy time so local dev, which has no pooler, is unaffected.)
+
+**Railway service 1 — `app`.** Deploy from the repo (it auto-detects the
+Dockerfile). Then:
+
+- **Start command:** `sh -c "npx prisma migrate deploy && npm start"` (migrate, then serve).
+- **Build arg** `NEXT_PUBLIC_RUNTIME_API` = the app's public URL (its
+  `*.up.railway.app`, or the custom domain) — it's inlined at build, so set it and redeploy.
+- **Variables:** `DATABASE_URL`, `DIRECT_URL`, `ARTIFACTS_DIR=/app/artifacts`,
+  `APP_INTERNAL_URL` = the app's own internal URL, and the `CUSTOM_DOMAIN_CNAME`
+  (point customers at the app's Railway domain) once known.
+
+**Railway service 2 — `worker`.** Same repo/image, one override:
+
+- **Start command:** `npm run worker:once` (the persistent poll loop).
+- **Variables:** the same `DATABASE_URL`/`DIRECT_URL`/`ARTIFACTS_DIR`/`APP_INTERNAL_URL`.
+
+**First run:** once `app` is up, run the seed once to create an admin +
+demo data — Railway's shell: `npx tsx prisma/seed.ts` — or skip it and use `/signup`.
+
+**Note on the app listening port:** Railway injects `$PORT`; the app's start is
+plain `next start`, which honours `PORT` (and defaults to 3000), so it works
+locally on 3000 and on Railway on whatever port it's given. Health check:
+`GET /api/health`.
+
+Custom domains work exactly as below, except the customer CNAMEs to the app's
+Railway domain and Railway/our on-demand-TLS issues the certificate.
+
 ## Custom domains for the sites people build
 
-The mechanism is already real: an incoming `Host` header is matched against
-`sites.custom_domain`, and middleware rewrites to the per-host route (I9). What's
-out of scope in the demo — and becomes your operational job in production — is the
-DNS and TLS for each customer domain:
+This is a real, self-serve feature now, not just a mechanism. A site owner opens
+their dashboard, types a domain into **"Use your own domain"**, and gets the exact
+DNS record to add plus a live "connected / waiting" check. Under it: the request
+path matches the incoming `Host` header against `sites.custom_domain` and serves
+the site (release.ts / I9), and apex/`www` are treated as the same site.
 
-1. The customer points their domain at your server (a `CNAME` to `your-domain.com`
-   or an `A` record to your IP). **[customer]**
-2. Your proxy obtains a certificate for it. With the wildcard/on‑demand Caddy
-   config above this is automatic; at scale you'd use Caddy's
-   [on‑demand TLS](https://caddyserver.com/docs/automatic-https#on-demand-tls) with
-   an `ask` endpoint so you only issue certs for domains that are actually
-   configured. **[you]**
-3. Set `sites.custom_domain` for that site (already editable in the model).
+Two env vars decide what the panel tells customers to point at (set one):
+
+```bash
+CUSTOM_DOMAIN_CNAME="sites.your-domain.com"   # best — survives an IP change
+# or
+CUSTOM_DOMAIN_IP="203.0.113.10"               # the server's public IP
+```
+
+What's yours to operate is the DNS and TLS for each customer domain:
+
+1. The customer points their domain at your server — a `CNAME` to your
+   `CUSTOM_DOMAIN_CNAME` host, or an `A` record to `CUSTOM_DOMAIN_IP`. They do this
+   at their own registrar. **[customer]**
+2. Your proxy obtains a certificate for it **automatically** — the committed
+   `Caddyfile` uses [on‑demand TLS](https://caddyserver.com/docs/automatic-https#on-demand-tls)
+   gated by `ask http://app:3000/api/domains/check`, so a cert is only ever fetched
+   for a domain a site has actually connected (never for a random hostname aimed at
+   your IP). **[you — already wired]**
+3. The owner connects the domain in the dashboard, which writes
+   `sites.custom_domain`. No manual DB editing.
 
 ---
 
