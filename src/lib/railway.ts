@@ -90,18 +90,22 @@ function shape(d: RawDomain): RailwayDomainInfo {
   const records: RailwayDnsRecord[] = list
     .map((r) => {
       const value = r.requiredValue ?? "";
-      const valid =
-        (r.status ?? "").toUpperCase().includes("VALID") ||
-        (!!value && r.currentValue === value);
-      return { type: r.recordType ?? "CNAME", name: r.fqdn || r.hostlabel || d.domain || "", value, ok: valid };
+      return {
+        // Railway returns verbose enums ("DNS_RECORD_TYPE_CNAME"); show "CNAME".
+        type: (r.recordType ?? "").replace(/^DNS_RECORD_TYPE_/, "") || "CNAME",
+        name: r.fqdn || r.hostlabel || d.domain || "",
+        value,
+        // Reliable: the name already resolves to the value we asked for.
+        ok: !!value && r.currentValue === value,
+      };
     })
     .filter((r) => r.value);
   const cert = d.status?.certificateStatus ?? null;
-  const certOk = !!cert && /issued|valid|ready|active/i.test(cert);
+  const certIssued = (cert ?? "").toUpperCase().includes("ISSUED");
   return {
     dnsRecords: records,
     certificateStatus: cert,
-    connected: certOk && records.length > 0 && records.every((r) => r.ok),
+    connected: certIssued && records.length > 0 && records.every((r) => r.ok),
   };
 }
 
@@ -156,4 +160,41 @@ export async function railwayDomainStatus(domain: string): Promise<RailwayDomain
   const c = cfg();
   if (!c) return null;
   return lookup(c, domain);
+}
+
+/** The Railway id of a custom domain by name — needed to delete it. */
+async function domainId(c: Cfg, domain: string): Promise<string | null> {
+  const query = `query($projectId: String!, $environmentId: String!, $serviceId: String!) {
+    domains(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId) {
+      customDomains { id domain }
+    }
+  }`;
+  const data = await call<{ domains: { customDomains: { id: string; domain: string }[] } }>(c, query, {
+    projectId: c.projectId,
+    environmentId: c.environmentId,
+    serviceId: c.serviceId,
+  });
+  const bare = domain.toLowerCase();
+  return data.domains.customDomains.find((d) => d.domain.toLowerCase() === bare)?.id ?? null;
+}
+
+/**
+ * Remove a domain from the Railway service, so disconnecting it here cleans it
+ * up there too rather than leaving it registered. Best-effort and never throws —
+ * a failed cleanup must not fail the user's disconnect.
+ */
+export async function deleteRailwayDomain(domain: string): Promise<void> {
+  const c = cfg();
+  if (!c) return;
+  try {
+    const id = await domainId(c, domain);
+    if (!id) return;
+    await call<{ customDomainDelete: boolean }>(
+      c,
+      `mutation($id: String!) { customDomainDelete(id: $id) }`,
+      { id },
+    );
+  } catch {
+    /* best-effort */
+  }
 }

@@ -19,7 +19,12 @@ import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { captureError } from "@/lib/monitor";
 import { checkDomainStatus, domainTarget, normalizeDomain } from "@/lib/domains";
-import { railwayConfigured, registerRailwayDomain, railwayDomainStatus } from "@/lib/railway";
+import {
+  deleteRailwayDomain,
+  railwayConfigured,
+  registerRailwayDomain,
+  railwayDomainStatus,
+} from "@/lib/railway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,6 +134,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ site
   await prisma.site.update({ where: { id: siteId }, data: { customDomain: null } });
 
   if (site?.customDomain) {
+    // Also unregister it from the host, so disconnecting here fully undoes the
+    // connect (best-effort — a leftover on Railway won't fail the disconnect).
+    await deleteRailwayDomain(site.customDomain);
     await logActivity({
       siteId,
       userId: auth.user.id,
