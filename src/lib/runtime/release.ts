@@ -22,6 +22,7 @@
  */
 import { prisma } from "../db";
 import { asLayout, asTokens } from "../theme";
+import { domainMatchCandidates } from "../domains";
 import { displayNameOf } from "../shared-components";
 import type {
   ComponentBody,
@@ -217,13 +218,12 @@ export async function siteBySlug(slug: string): Promise<LiveSite | null> {
 /**
  * Custom domain routing. The mechanism is real: an incoming Host header matched
  * against sites.custom_domain. Only DNS and TLS are out of scope — the port is
- * stripped so "acme.test:3000" matches "acme.test".
+ * stripped so "acme.test:3000" matches "acme.test", and apex/www are treated as
+ * the same site (registering golotto.com also serves www.golotto.com).
  */
 export async function siteByHost(host: string): Promise<LiveSite | null> {
-  const lower = host.toLowerCase();
-  const bare = lower.split(":")[0];
   return prisma.site.findFirst({
-    where: { customDomain: { in: [lower, bare] } },
+    where: { customDomain: { in: domainMatchCandidates(host) } },
     select: SITE_FIELDS,
   });
 }

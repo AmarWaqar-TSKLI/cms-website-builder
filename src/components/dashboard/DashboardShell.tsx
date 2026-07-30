@@ -21,6 +21,7 @@ import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
 import { AccountBar } from "./AccountBar";
 import { ActivityFeed } from "./ActivityFeed";
+import { CustomDomainCard } from "./CustomDomainCard";
 import { NextStep } from "./NextStep";
 import { SetupChecklist, type SetupStep } from "./SetupChecklist";
 import { Welcome } from "./Welcome";
@@ -509,6 +510,9 @@ export function DashboardShell({
         publishing={busy === "publish"}
         building={building}
       />
+
+      {/* ── 4b. your own domain ──────────────────────────────────────────── */}
+      <CustomDomainCard className="mt-5" siteId={site.id} initialDomain={site.customDomain} />
 
       {/* ── 5. the store ─────────────────────────────────────────────────── */}
       <CommercePanel className="mt-5" commerce={commerce} modules={site.modules} />
