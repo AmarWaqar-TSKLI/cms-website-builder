@@ -28,6 +28,9 @@ services:
     command: sh -c "npx prisma migrate deploy && npm start"
     environment:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
+      # Local Postgres runs migrations directly, so DIRECT_URL == DATABASE_URL.
+      # On a pooled host (Supabase) these differ — see DEPLOY.md.
+      DIRECT_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
       # AI site builder. Left empty unless you set GROQ_API_KEY in a local .env;
@@ -56,6 +59,7 @@ services:
     command: npm run worker:once
     environment:
       DATABASE_URL: postgresql://cms:cms@db:5432/cms?schema=public
+      DIRECT_URL: postgresql://cms:cms@db:5432/cms?schema=public
       ARTIFACTS_DIR: /app/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
       # Where the worker reaches the app to warm the new release after a build.

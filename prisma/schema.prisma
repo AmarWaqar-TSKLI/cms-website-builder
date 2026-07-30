@@ -13,7 +13,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Runtime connection. Against a pooled provider (e.g. Supabase's transaction
+  // pooler) this is the pgbouncer endpoint; locally it's the plain database.
   url      = env("DATABASE_URL")
+  // Migrations need a real session (a transaction pooler can't run them), so
+  // they use a direct connection. Locally this is the same URL as above; on a
+  // pooled host it's the session-mode endpoint. See DEPLOY.md.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
