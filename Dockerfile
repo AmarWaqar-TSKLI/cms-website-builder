@@ -36,4 +36,9 @@ ENV NEXT_PUBLIC_RUNTIME_API=$NEXT_PUBLIC_RUNTIME_API
 RUN npm run build
 
 EXPOSE 3000
-CMD ["npm", "start"]
+
+# One image, two roles, chosen by an env var so a managed host (Railway) can run
+# the same build as either the web app or the build worker — no per-service start
+# command needed. RUN_WORKER=1 → the poller; otherwise migrate then serve.
+# (docker-compose overrides `command:` for each service, so local is unaffected.)
+CMD ["sh", "-c", "if [ \"$RUN_WORKER\" = \"1\" ]; then exec npm run worker:once; else npx prisma migrate deploy && exec npm start; fi"]
