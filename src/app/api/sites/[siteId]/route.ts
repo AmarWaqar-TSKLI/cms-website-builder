@@ -59,3 +59,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ siteId
     return NextResponse.json({ error: "Couldn't rename the site." }, { status: 500 });
   }
 }
+
+/**
+ * Delete a site and everything in it — pages, components, theme, releases, media.
+ * Every child cascades at the database level; the one thing that isn't a child is
+ * the site's own live-release pointer, so we null it first to drop the self-
+ * reference, then delete. Irreversible, which is why the UI confirms in place.
+ */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
+  const { siteId } = await params;
+  const auth = await guardSite(siteId);
+  if (!auth.ok) return auth.response;
+
+  try {
+    await prisma.$transaction([
+      prisma.site.update({ where: { id: siteId }, data: { liveReleaseId: null } }),
+      prisma.site.delete({ where: { id: siteId } }),
+    ]);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    captureError(err, { scope: "site.delete", siteId });
+    return NextResponse.json({ error: "Couldn't delete the site." }, { status: 500 });
+  }
+}

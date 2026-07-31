@@ -14,13 +14,26 @@ import { mergeBranch } from "@/lib/branch";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   const auth = await guardSite(siteId);
   if (!auth.ok) return auth.response;
 
+  // Optional cherry-pick: {nodeIds?: string[], includeTheme?: boolean}. Omitted
+  // (or empty) merges everything, so the simple "merge all" call still works.
+  let body: { nodeIds?: unknown; includeTheme?: unknown } = {};
   try {
-    const result = await mergeBranch(siteId, auth.user.id);
+    body = await req.json();
+  } catch {
+    /* no body → merge all */
+  }
+  const nodeIds = Array.isArray(body.nodeIds)
+    ? body.nodeIds.filter((x): x is string => typeof x === "string")
+    : null;
+  const includeTheme = typeof body.includeTheme === "boolean" ? body.includeTheme : true;
+
+  try {
+    const result = await mergeBranch(siteId, auth.user.id, true, { nodeIds, includeTheme });
     if (result.versionNo !== null) {
       await logActivity({
         siteId: result.parentId,

@@ -287,8 +287,15 @@ export async function mergeBranch(
   branchId: string,
   userId: string,
   publish = true,
+  selection?: { nodeIds?: string[] | null; includeTheme?: boolean },
 ): Promise<MergeResult> {
   const diff = await diffBranch(branchId);
+
+  // Cherry-pick: merge only the selected blocks (null → all), and the theme only
+  // if asked. The selection comes from the diff the user just reviewed.
+  const nodeSet = selection?.nodeIds?.length ? new Set(selection.nodeIds) : null;
+  const includeTheme = selection?.includeTheme ?? true;
+  const changedToMerge = nodeSet ? diff.changed.filter((c) => nodeSet.has(c.nodeId)) : diff.changed;
 
   // 1. Changed block copy → parent component drafts, matched by node id.
   const parentComponents = await prisma.component.findMany({
@@ -305,7 +312,7 @@ export async function mergeBranch(
   }
 
   const editsByComponent = new Map<string, Map<string, Record<string, string>>>();
-  for (const ch of diff.changed) {
+  for (const ch of changedToMerge) {
     const compId = nodeToComponent.get(ch.nodeId);
     if (!compId) continue;
     let m = editsByComponent.get(compId);
@@ -330,9 +337,9 @@ export async function mergeBranch(
     blocksMerged += edits.size;
   }
 
-  // 2. Theme: take the branch's palette if it diverged.
+  // 2. Theme: take the branch's palette if it diverged and was selected.
   let themeMerged = false;
-  if (diff.theme.length) {
+  if (includeTheme && diff.theme.length) {
     const branchTokens = (await loadForDiff(branchId)).tokens;
     const parentTheme = await prisma.theme.findFirst({ where: { siteId: diff.parentId } });
     if (parentTheme) {

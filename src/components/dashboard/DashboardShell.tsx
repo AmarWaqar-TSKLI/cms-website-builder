@@ -279,6 +279,9 @@ export function DashboardShell({
   const [rebrandVibe, setRebrandVibe] = useState("");
   const [directions, setDirections] = useState<BrandDirection[] | null>(null);
   const [diff, setDiff] = useState<BranchDiff | null>(null);
+  const [mergeSel, setMergeSel] = useState<Set<string>>(new Set());
+  const [mergeTheme, setMergeTheme] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const router = useRouter();
 
@@ -423,7 +426,10 @@ export function DashboardShell({
         setFlash({ kind: "error", text: data.error ?? "Couldn't compute the diff." });
         return;
       }
-      setDiff(data as BranchDiff);
+      const d = data as BranchDiff;
+      setDiff(d);
+      setMergeSel(new Set(d.changed.map((c) => c.nodeId)));
+      setMergeTheme(d.theme.length > 0);
     } catch {
       setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
     } finally {
@@ -435,7 +441,11 @@ export function DashboardShell({
     setBusy("merge");
     setFlash(null);
     try {
-      const res = await fetch(`/api/sites/${site.id}/branch-merge`, { method: "POST" });
+      const res = await fetch(`/api/sites/${site.id}/branch-merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeIds: [...mergeSel], includeTheme: mergeTheme }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setFlash({ kind: "error", text: data.error ?? "Couldn't merge the branch." });
@@ -455,7 +465,25 @@ export function DashboardShell({
     } finally {
       setBusy(null);
     }
-  }, [site.id, site.parentName]);
+  }, [site.id, site.parentName, mergeSel, mergeTheme]);
+
+  const deleteSite = useCallback(async () => {
+    setBusy("delete");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setFlash({ kind: "error", text: data.error ?? "Couldn't delete the site." });
+        return;
+      }
+      router.push("/sites");
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, router]);
 
   useEffect(() => {
     if (!watching) return;
@@ -797,10 +825,20 @@ export function DashboardShell({
               <button
                 type="button"
                 onClick={() => void mergeToParent()}
-                disabled={busy === "merge" || busy === "diff"}
+                disabled={
+                  busy === "merge" ||
+                  busy === "diff" ||
+                  (!!diff && mergeSel.size === 0 && !(mergeTheme && diff.theme.length > 0))
+                }
                 className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
               >
-                {busy === "merge" ? "Merging…" : `Merge into ${site.parentName ?? "parent"} & publish`}
+                {busy === "merge"
+                  ? "Merging…"
+                  : diff
+                    ? `Merge ${mergeSel.size + (mergeTheme && diff.theme.length > 0 ? 1 : 0)} change${
+                        mergeSel.size + (mergeTheme && diff.theme.length > 0 ? 1 : 0) === 1 ? "" : "s"
+                      } & publish`
+                    : `Merge into ${site.parentName ?? "parent"} & publish`}
               </button>
             </div>
 
@@ -821,7 +859,14 @@ export function DashboardShell({
                 </div>
 
                 {diff.theme.length ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <label className="mt-3 flex cursor-pointer flex-wrap items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={mergeTheme}
+                      onChange={(e) => setMergeTheme(e.target.checked)}
+                      className="accent-flux-500"
+                    />
+                    <span className="mr-1 text-[11px] font-medium text-ink-300">New theme</span>
                     {diff.theme
                       .filter((t) => t.after.startsWith("#") || t.after.startsWith("rgb"))
                       .slice(0, 7)
@@ -830,7 +875,6 @@ export function DashboardShell({
                           key={t.key}
                           className="inline-flex items-center gap-1 rounded-md border border-ink-800 px-1.5 py-1 text-[10.5px] text-ink-400"
                         >
-                          {t.label}
                           <span
                             className="h-3 w-3 rounded-full border border-ink-700"
                             style={{ background: t.before }}
@@ -842,21 +886,61 @@ export function DashboardShell({
                           />
                         </span>
                       ))}
-                  </div>
+                  </label>
                 ) : null}
 
-                <div className="mt-3 space-y-2.5">
-                  {diff.changed.slice(0, 6).map((c) => (
-                    <div key={c.nodeId} className="text-[12px] leading-snug">
-                      <div className="text-[10px] uppercase tracking-wide text-ink-600">{c.type}</div>
-                      <div className="text-red-400/80 line-through">{c.fields[0].before}</div>
-                      <div className="text-emerald-400">{c.fields[0].after}</div>
+                {diff.changed.length ? (
+                  <>
+                    <div className="mt-3 flex items-center gap-3 text-[11px] text-ink-500">
+                      <button
+                        type="button"
+                        onClick={() => setMergeSel(new Set(diff.changed.map((c) => c.nodeId)))}
+                        className="hover:text-ink-200"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMergeSel(new Set())}
+                        className="hover:text-ink-200"
+                      >
+                        None
+                      </button>
+                      <span>· tick the blocks to bring over</span>
                     </div>
-                  ))}
-                  {diff.changed.length > 6 ? (
-                    <div className="text-[11px] text-ink-500">+ {diff.changed.length - 6} more…</div>
-                  ) : null}
-                </div>
+                    <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {diff.changed.map((c) => (
+                        <label
+                          key={c.nodeId}
+                          className="flex cursor-pointer gap-2 text-[12px] leading-snug"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={mergeSel.has(c.nodeId)}
+                            onChange={(e) =>
+                              setMergeSel((s) => {
+                                const next = new Set(s);
+                                if (e.target.checked) next.add(c.nodeId);
+                                else next.delete(c.nodeId);
+                                return next;
+                              })
+                            }
+                            className="mt-0.5 accent-flux-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-[10px] uppercase tracking-wide text-ink-600">
+                              {c.type}
+                            </span>
+                            <span className="block text-red-400/80 line-through">
+                              {c.fields[0].before}
+                            </span>
+                            <span className="block text-emerald-400">{c.fields[0].after}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -1027,6 +1111,47 @@ export function DashboardShell({
           <ActivityFeed activity={activity} />
         </div>
       </Card>
+
+      {/* ── Danger zone: delete this site ────────────────────────────────── */}
+      <section className="mt-6 rounded-2xl border border-red-500/25 bg-red-500/[0.03] p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink-100">Delete this site</h2>
+            <p className="mt-1 max-w-prose text-[12.5px] leading-relaxed text-ink-400">
+              Permanently removes <span className="font-medium text-ink-200">{site.name}</span> and
+              everything in it — pages, versions, media. This can't be undone.
+            </p>
+          </div>
+          {confirmDelete ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void deleteSite()}
+                disabled={busy === "delete"}
+                className="rounded-lg bg-red-600 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+              >
+                {busy === "delete" ? "Deleting…" : "Delete forever"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                disabled={busy === "delete"}
+                className="rounded-lg border border-ink-700 px-3 py-2 text-[13px] font-semibold text-ink-200 transition-colors hover:border-ink-500 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="shrink-0 rounded-lg border border-red-500/40 px-4 py-2 text-[13px] font-semibold text-red-400 transition-colors hover:bg-red-500/10"
+            >
+              Delete site
+            </button>
+          )}
+        </div>
+      </section>
     </main>
     </TechnicalDetails>
   );
