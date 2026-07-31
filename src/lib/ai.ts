@@ -323,6 +323,99 @@ export async function generateSection(instruction: string, siteName?: string): P
   return blocks;
 }
 
+/** One block's editable text, as sent to the model for an in-place rewrite. */
+export interface CopyField {
+  id: string;
+  type: string;
+  props: Record<string, string>;
+}
+
+/**
+ * Rewrite the WORDS on a page in place, changing nothing structural.
+ *
+ * The page's text fields go to the model as {id, type, {field: currentText}};
+ * it returns new text for the SAME ids and field names. It cannot add, remove
+ * or reorder blocks, and the caller only accepts edits whose id and field were
+ * in what we sent — so the worst a bad completion can do is reword some fields
+ * oddly (one undo fixes it), never restructure or break the page. The editor
+ * applies the result with updateProps, so a rewrite is just a batch of the same
+ * prop edits a person makes by hand.
+ */
+export async function rewriteCopy(
+  fields: CopyField[],
+  instruction: string,
+  siteName?: string,
+): Promise<{ id: string; props: Record<string, string> }[]> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+  if (!fields.length) return [];
+
+  const system = `You rewrite the words on an existing web page, in place.${
+    siteName ? ` The site is called "${siteName}".` : ""
+  } You are given the page's text fields as a JSON array; each item has an "id", a block "type", and one or more named fields holding the CURRENT text. Apply the user's instruction to the WORDING only.
+
+Return a JSON object of exactly this shape:
+{ "edits": [ { "id": "<the same id>", "props": { "<fieldName>": "<new text>" } } ] }
+
+Rules:
+- Keep the SAME ids and the SAME field names — only change the text values.
+- Rewrite every field the instruction implies; simply omit a field that should stay unchanged.
+- Keep each field's PURPOSE and roughly its length: a headline stays a short headline, a paragraph stays a paragraph. Never return empty text.
+- Write real, specific, natural copy for this exact business. No placeholders, no lorem ipsum, no markdown.
+- Output ONLY the JSON object. No prose, no code fences.`;
+
+  const user = `Instruction: ${instruction.slice(0, 400)}\n\nText fields:\n${JSON.stringify(fields).slice(0, 12000)}`;
+
+  const requestBody = JSON.stringify({
+    model: MODEL,
+    temperature: 0.6,
+    max_tokens: 4000,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
+
+  const res = await callGroqWithRetry(key, requestBody);
+  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
+
+  let content: string;
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    content = data.choices?.[0]?.message?.content ?? "";
+  } catch {
+    throw new AiFailedError("The AI returned an unreadable response.");
+  }
+
+  let parsed: { edits?: unknown };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new AiFailedError("The AI returned invalid JSON.");
+  }
+
+  // Only accept edits whose id AND field names were in what we sent — the model
+  // can supply new TEXT for an existing field, never a new node or a new prop.
+  const allowed = new Map(fields.map((f) => [f.id, new Set(Object.keys(f.props))]));
+  const rawEdits = Array.isArray(parsed.edits) ? parsed.edits : [];
+  const edits: { id: string; props: Record<string, string> }[] = [];
+  for (const e of rawEdits) {
+    const id = typeof (e as { id?: unknown })?.id === "string" ? (e as { id: string }).id : "";
+    const keys = allowed.get(id);
+    if (!keys) continue;
+    const given = (e as { props?: unknown })?.props;
+    if (!given || typeof given !== "object") continue;
+    const props: Record<string, string> = {};
+    for (const [k, v] of Object.entries(given as Record<string, unknown>)) {
+      if (keys.has(k) && typeof v === "string" && v.trim()) props[k] = v.slice(0, 2000);
+    }
+    if (Object.keys(props).length) edits.push({ id, props });
+  }
+  if (!edits.length) throw new AiFailedError("The AI didn't return any usable changes.");
+  return edits;
+}
+
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
 function coerce(value: unknown, def: PropDef): unknown {
   switch (def.kind) {

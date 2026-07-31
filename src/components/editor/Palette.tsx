@@ -10,7 +10,7 @@
  * Blocks can be dragged onto the canvas or clicked to append.
  */
 import { useMemo, useState } from "react";
-import { paletteFor } from "@/lib/registry";
+import { getSchema, paletteFor, walk } from "@/lib/registry";
 import type { ComponentSchema, ModuleName, PageNode, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { SECTION_TEMPLATES } from "@/lib/editor/sections";
@@ -48,6 +48,8 @@ export function Palette({
   const addNode = useEditor((s) => s.addNode);
   const addComponentRef = useEditor((s) => s.addComponentRef);
   const insertSection = useEditor((s) => s.insertSection);
+  const body = useEditor((s) => s.body);
+  const updateProps = useEditor((s) => s.updateProps);
   const [query, setQuery] = useState("");
   const technical = useTechnical();
 
@@ -74,6 +76,59 @@ export function Palette({
       const blocks = Array.isArray(data.blocks) ? (data.blocks as PageNode[]) : [];
       if (!blocks.length) throw new Error("The AI returned nothing usable — try rewording it.");
       insertSection(blocks);
+      setAiPrompt("");
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  // "Rewrite page" — send every editable text field on the page to /api/ai/rewrite
+  // and apply the returned copy in place with updateProps. Structure is untouched;
+  // one undo reverts the whole rewrite.
+  async function aiRewrite() {
+    const instruction = aiPrompt.trim();
+    if (instruction.length < 3 || aiBusy) return;
+
+    const fields: { id: string; type: string; props: Record<string, string> }[] = [];
+    walk(body.root, (n) => {
+      const schema = getSchema(n.type);
+      if (!schema) return;
+      const props: Record<string, string> = {};
+      for (const [k, def] of Object.entries(schema.props)) {
+        if (def.kind === "text" || def.kind === "textarea") {
+          const v = n.props?.[k];
+          if (typeof v === "string" && v.trim()) props[k] = v;
+        }
+      }
+      if (Object.keys(props).length) fields.push({ id: n.id, type: n.type, props });
+    });
+    if (!fields.length) {
+      setAiError("There's no text on this page to rewrite yet.");
+      return;
+    }
+
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai/rewrite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instruction, fields }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        edits?: { id?: unknown; props?: unknown }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "The AI couldn't rewrite that.");
+      const edits = Array.isArray(data.edits) ? data.edits : [];
+      if (!edits.length) throw new Error("The AI returned no changes — try rewording it.");
+      for (const edit of edits) {
+        if (typeof edit?.id === "string" && edit.props && typeof edit.props === "object") {
+          updateProps(edit.id, edit.props as Record<string, unknown>);
+        }
+      }
       setAiPrompt("");
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Something went wrong.");
@@ -114,38 +169,49 @@ export function Palette({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-3">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void askAi();
-          }}
-          className="mb-3"
-        >
+        <div className="mb-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-tight text-flux-400">
-            <span aria-hidden>✨</span> Ask AI to add a section
+            <span aria-hidden>✨</span> Ask AI
           </div>
-          <div className="flex gap-1.5">
-            <input
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              disabled={aiBusy}
-              placeholder="e.g. a pricing section with 3 tiers"
-              className="w-full rounded-lg border border-flux-500/40 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500 disabled:opacity-60"
-            />
+          <input
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            disabled={aiBusy}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void askAi();
+              }
+            }}
+            placeholder="e.g. a pricing section — or “make it warmer”"
+            className="w-full rounded-lg border border-flux-500/40 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500 disabled:opacity-60"
+          />
+          <div className="mt-1.5 flex gap-1.5">
             <button
-              type="submit"
+              type="button"
+              onClick={() => void askAi()}
               disabled={aiBusy || aiPrompt.trim().length < 3}
-              className="shrink-0 rounded-lg bg-flux-500 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+              title="Compose a new section from your description and add it to the page"
+              className="flex-1 rounded-lg bg-flux-500 px-2 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
             >
-              {aiBusy ? "…" : "Add"}
+              {aiBusy ? "…" : "＋ Add section"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void aiRewrite()}
+              disabled={aiBusy || aiPrompt.trim().length < 3}
+              title="Rewrite the words already on this page in the tone you describe"
+              className="flex-1 rounded-lg border border-flux-500/50 px-2 py-1.5 text-[12px] font-semibold text-flux-400 transition-colors hover:bg-flux-500/10 disabled:opacity-40"
+            >
+              {aiBusy ? "…" : "↻ Rewrite page"}
             </button>
           </div>
           {aiBusy ? (
-            <p className="mt-1.5 text-[11px] text-ink-500">Composing your section…</p>
+            <p className="mt-1.5 text-[11px] text-ink-500">Working on it…</p>
           ) : aiError ? (
             <p className="mt-1.5 text-[11px] text-red-400">{aiError}</p>
           ) : null}
-        </form>
+        </div>
 
         <input
           value={query}
