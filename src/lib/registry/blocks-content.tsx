@@ -21,6 +21,7 @@ import {
   Section,
   alignOf,
   buttonStyle,
+  resolveHref,
   withStyleProps,
 } from "./style";
 import type { RegistryEntry, RenderProps } from "./types";
@@ -122,7 +123,7 @@ const Feature: RegistryEntry = {
         ) : null}
         {props.ctaLabel ? (
           <div style={{ marginTop: "4px" }}>
-            <a href={String(props.ctaHref || "#")} style={buttonStyle(t, "solid", "md")}>
+            <a href={resolveHref(ctx.basePath, String(props.ctaHref || "#"))} style={buttonStyle(t, "solid", "md")}>
               {String(props.ctaLabel)}
             </a>
           </div>

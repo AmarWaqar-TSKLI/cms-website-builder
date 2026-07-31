@@ -189,6 +189,12 @@ export interface RenderContext {
    * between Tier-1 and Tier-2 arriving in the same context object.
    */
   components: Record<string, ResolvedComponent>;
+  /**
+   * Prefix every same-site link carries so it works wherever the site is served.
+   * Empty on a custom domain (the site is the root) and in the editor/export;
+   * "/s/<slug>" on the hosted address. See resolveHref in registry/style.
+   */
+  basePath?: string;
   /** True when rendering the editor canvas — lets components show placeholders. */
   editing?: boolean;
 }

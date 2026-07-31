@@ -18,6 +18,7 @@ import {
   Section,
   alignOf,
   buttonStyle,
+  resolveHref,
   withStyleProps,
 } from "./style";
 import type { RegistryEntry, RenderProps, ResolvedMedia } from "./types";
@@ -100,7 +101,7 @@ const CtaBand: RegistryEntry = {
           ) : null}
           {props.ctaLabel ? (
             <div style={{ marginTop: "6px" }}>
-              <a href={String(props.ctaHref || "#")} style={buttonStyle(t, String(props.ctaVariant ?? "solid"), "lg")}>
+              <a href={resolveHref(ctx.basePath, String(props.ctaHref || "#"))} style={buttonStyle(t, String(props.ctaVariant ?? "solid"), "lg")}>
                 {String(props.ctaLabel)}
               </a>
             </div>

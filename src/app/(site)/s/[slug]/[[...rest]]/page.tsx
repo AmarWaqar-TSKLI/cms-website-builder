@@ -31,5 +31,7 @@ type Params = Promise<{ slug: string; rest?: string[] }>;
 
 export default async function HostedSitePage({ params }: { params: Params }) {
   const { slug, rest } = await params;
-  return renderResolved(await resolveRequest(await siteBySlug(slug), rest));
+  // Served under /s/<slug>, so every same-site link must carry that prefix.
+  // (On a custom domain the site is the root and the prefix is empty.)
+  return renderResolved(await resolveRequest(await siteBySlug(slug), rest), `/s/${slug}`);
 }

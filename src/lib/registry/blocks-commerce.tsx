@@ -14,7 +14,7 @@
  */
 import React from "react";
 import { AddToCart } from "../../components/site/AddToCart";
-import { MissingRef, Section, buttonStyle, money, withStyleProps } from "./style";
+import { MissingRef, Section, buttonStyle, money, resolveHref, withStyleProps } from "./style";
 import type { RegistryEntry, RenderProps } from "./types";
 
 // ──────────────────────────────────────────────────────── FeaturedProduct ────
@@ -235,7 +235,7 @@ const PricingTier: RegistryEntry = {
           )}
           {props.ctaLabel ? (
             <a
-              href={String(props.ctaHref || "#")}
+              href={resolveHref(ctx.basePath, String(props.ctaHref || "#"))}
               style={{ ...buttonStyle(t, highlighted ? "solid" : "outline", "md"), display: "block", textAlign: "center" }}
             >
               {String(props.ctaLabel)}

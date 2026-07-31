@@ -34,6 +34,7 @@ import {
   buttonStyle,
   justifyFor,
   money,
+  resolveHref,
   withStyleProps,
 } from "./style";
 import type { RegistryEntry, RenderProps, ResolvedProduct } from "./types";
@@ -122,7 +123,7 @@ const Hero: RegistryEntry = {
         ) : null}
         {props.ctaLabel ? (
           <div style={{ marginTop: "34px", display: "flex", justifyContent: justifyFor(align) }}>
-            <a href={String(props.ctaHref || "#")} style={buttonStyle(t, String(props.ctaVariant ?? "solid"), "lg")}>
+            <a href={resolveHref(ctx.basePath, String(props.ctaHref || "#"))} style={buttonStyle(t, String(props.ctaVariant ?? "solid"), "lg")}>
               {String(props.ctaLabel)}
             </a>
           </div>
@@ -293,7 +294,7 @@ const Button: RegistryEntry = {
         <div style={{ display: "flex", justifyContent: justifyFor(alignOf(props)) }}>
           <a
             data-cms-prop="label"
-            href={String(props.href || "#")}
+            href={resolveHref(ctx.basePath, String(props.href || "#"))}
             style={buttonStyle(t, String(props.variant ?? "solid"), String(props.size ?? "md"))}
           >
             {String(props.label ?? "")}
@@ -507,7 +508,7 @@ const Card: RegistryEntry = {
             </p>
             {props.linkLabel ? (
               <a
-                href={String(props.linkHref || "#")}
+                href={resolveHref(ctx.basePath, String(props.linkHref || "#"))}
                 style={{
                   marginTop: "6px",
                   fontFamily: t.fontBody,
@@ -797,7 +798,7 @@ const PostList: RegistryEntry = {
                 </p>
               ) : null}
               <a
-                href={`/blog/${p!.slug}`}
+                href={resolveHref(ctx.basePath, `/blog/${p!.slug}`)}
                 style={{
                   marginTop: "2px",
                   fontFamily: t.fontBody,

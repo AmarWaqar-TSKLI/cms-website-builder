@@ -66,7 +66,7 @@ function findFrozenPost(release: LoadedRelease, path: string): ResolvedPost | nu
   return Object.values(posts).find((p) => p.slug === slug && !p.missing) ?? null;
 }
 
-export function contextFor(release: LoadedRelease): RenderContext {
+export function contextFor(release: LoadedRelease, basePath = ""): RenderContext {
   return {
     siteId: release.siteId,
     siteName: release.siteName,
@@ -79,6 +79,8 @@ export function contextFor(release: LoadedRelease): RenderContext {
     // Releases built before the blog module have no frozen posts.
     posts: release.data.posts ?? {},
     components: release.components,
+    // "" on a custom domain / export / editor; "/s/<slug>" on the hosted route.
+    basePath,
   };
 }
 
@@ -89,10 +91,10 @@ export function contextFor(release: LoadedRelease): RenderContext {
  * browser or from curl, that what you are looking at came from one specific
  * immutable release. `make verify` reads them.
  */
-export function SitePage({ resolved }: { resolved: Resolved }) {
+export function SitePage({ resolved, basePath = "" }: { resolved: Resolved; basePath?: string }) {
   const { release, path } = resolved;
   const page = release.pages[path];
-  const ctx = contextFor(release);
+  const ctx = contextFor(release, basePath);
 
   return (
     <>
@@ -129,11 +131,13 @@ export function SitePage({ resolved }: { resolved: Resolved }) {
 export function SitePostPage({
   release,
   post,
+  basePath = "",
 }: {
   release: LoadedRelease;
   post: ResolvedPost;
+  basePath?: string;
 }) {
-  const ctx = contextFor(release);
+  const ctx = contextFor(release, basePath);
   const nodes = postPageNodes(post);
 
   return (
@@ -157,15 +161,21 @@ export function SitePostPage({
   );
 }
 
-/** Shared body for both routes. Keeps the two route files identical in shape. */
+/**
+ * Shared body for both routes. Keeps the two route files identical in shape.
+ *
+ * `basePath` is the prefix same-site links must carry: "" for a custom domain
+ * (the site is the root) and "/s/<slug>" for the hosted address.
+ */
 export function renderResolved(
   outcome: Awaited<ReturnType<typeof resolveRequest>>,
+  basePath = "",
 ): React.ReactElement {
   switch (outcome.kind) {
     case "ok":
-      return <SitePage resolved={outcome.resolved} />;
+      return <SitePage resolved={outcome.resolved} basePath={basePath} />;
     case "post":
-      return <SitePostPage release={outcome.release} post={outcome.post} />;
+      return <SitePostPage release={outcome.release} post={outcome.post} basePath={basePath} />;
     case "unpublished":
       return <NotPublished site={outcome.site} />;
     case "missing":

@@ -31,9 +31,9 @@ export function SiteBody({
   return (
     <>
       <SiteStyles tokens={ctx.tokens} />
-      <SiteNav layout={layout} tokens={ctx.tokens} />
+      <SiteNav layout={layout} tokens={ctx.tokens} basePath={ctx.basePath} />
       <main>{renderBody(body, ctx)}</main>
-      <SiteFooter layout={layout} tokens={ctx.tokens} />
+      <SiteFooter layout={layout} tokens={ctx.tokens} basePath={ctx.basePath} />
       {children}
     </>
   );

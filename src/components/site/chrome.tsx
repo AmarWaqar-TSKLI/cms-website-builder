@@ -11,6 +11,7 @@
  */
 import React from "react";
 import type { ThemeLayout, ThemeTokens } from "../../lib/registry/types";
+import { resolveHref } from "../../lib/registry/style";
 
 export function tokensToCss(t: ThemeTokens): string {
   return `:root{
@@ -53,7 +54,15 @@ export function SiteStyles({ tokens }: { tokens: ThemeTokens }) {
   );
 }
 
-export function SiteNav({ layout, tokens: t }: { layout: ThemeLayout; tokens: ThemeTokens }) {
+export function SiteNav({
+  layout,
+  tokens: t,
+  basePath = "",
+}: {
+  layout: ThemeLayout;
+  tokens: ThemeTokens;
+  basePath?: string;
+}) {
   const nav = layout?.nav ?? { brand: "", links: [] };
   return (
     <div style={{ borderBottom: `1px solid ${t.colorBorder}`, background: t.colorBg }}>
@@ -70,7 +79,7 @@ export function SiteNav({ layout, tokens: t }: { layout: ThemeLayout; tokens: Th
         }}
       >
         <a
-          href="/"
+          href={resolveHref(basePath, "/")}
           style={{
             fontFamily: t.fontHeading,
             fontWeight: 680,
@@ -86,7 +95,7 @@ export function SiteNav({ layout, tokens: t }: { layout: ThemeLayout; tokens: Th
           {(nav.links ?? []).map((l, i) => (
             <a
               key={`${l.href}-${i}`}
-              href={l.href}
+              href={resolveHref(basePath, l.href)}
               style={{ color: "inherit", textDecoration: "none", opacity: 0.72, fontSize: 14 }}
             >
               {l.label}
@@ -98,7 +107,15 @@ export function SiteNav({ layout, tokens: t }: { layout: ThemeLayout; tokens: Th
   );
 }
 
-export function SiteFooter({ layout, tokens: t }: { layout: ThemeLayout; tokens: ThemeTokens }) {
+export function SiteFooter({
+  layout,
+  tokens: t,
+  basePath = "",
+}: {
+  layout: ThemeLayout;
+  tokens: ThemeTokens;
+  basePath?: string;
+}) {
   const f = layout?.footer ?? { text: "", links: [] };
   return (
     <div
@@ -127,7 +144,7 @@ export function SiteFooter({ layout, tokens: t }: { layout: ThemeLayout; tokens:
           {(f.links ?? []).map((l, i) => (
             <a
               key={`${l.href}-${i}`}
-              href={l.href}
+              href={resolveHref(basePath, l.href)}
               style={{ color: "inherit", textDecoration: "none", opacity: 0.6, fontSize: 13 }}
             >
               {l.label}

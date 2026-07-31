@@ -248,3 +248,31 @@ export function buttonStyle(t: ThemeTokens, variant: string, size: string): CSSP
   }
   return { ...base, background: t.colorAccent, color: t.colorAccentFg };
 }
+
+/**
+ * Resolve a link the way the site author meant it.
+ *
+ * Authors type a destination as if their site were at the root — "/about",
+ * "about", "/about/team/x" all mean "the about page of THIS site". That is true
+ * on a custom domain, where the site IS the root. But the same site is also
+ * served at /s/<slug>, and there a bare "/about" would leave the site entirely
+ * and hit the app. So every internal link carries a base prefix: "" on a custom
+ * domain (unchanged), "/s/<slug>" on the hosted address.
+ *
+ * External and non-navigational links — a full URL, mailto:, tel:, a protocol-
+ * relative //host, an in-page #anchor, or the empty "#" — are returned exactly
+ * as authored. Only a same-site path is rewritten.
+ */
+export function resolveHref(basePath: string | undefined, href: string | null | undefined): string {
+  const raw = (href ?? "").trim();
+  if (!raw || raw === "#") return "#";
+  // Anything with a scheme (http:, mailto:, tel:…), protocol-relative, or an
+  // in-page anchor is left untouched — it isn't a same-site path.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//") || raw.startsWith("#")) {
+    return raw;
+  }
+  const base = (basePath ?? "").replace(/\/+$/, "");
+  // Normalise "about" and "/about" to one leading slash, then carry the prefix.
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  return `${base}${path}`;
+}
