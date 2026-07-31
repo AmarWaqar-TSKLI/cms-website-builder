@@ -116,6 +116,14 @@ export interface DashLock {
   isMine: boolean;
 }
 
+/** One AI-proposed brand concept (mirrors BrandDirection in lib/ai). */
+interface BrandDirection {
+  name: string;
+  vibe: string;
+  sampleHeadline: string;
+  tokens: { colorBg: string; colorFg: string; colorAccent: string; colorSurface: string };
+}
+
 /**
  * The site's display name, editable in place. Click the pencil (or the name),
  * type, press Enter — it PATCHes /api/sites/:id and refreshes so the new name
@@ -255,6 +263,7 @@ export function DashboardShell({
   } | null>(null);
   const [watching, setWatching] = useState<{ releaseId: string; versionNo: number } | null>(null);
   const [rebrandVibe, setRebrandVibe] = useState("");
+  const [directions, setDirections] = useState<BrandDirection[] | null>(null);
 
   const router = useRouter();
 
@@ -309,37 +318,66 @@ export function DashboardShell({
 
   // AI rebrand: rewrite all copy + restyle the theme, publish as one release,
   // then watch it build via the same mechanism a normal publish uses.
-  const rebrand = useCallback(async () => {
-    const instruction = rebrandVibe.trim();
-    if (instruction.length < 3) return;
-    setBusy("rebrand");
+  const runRebrand = useCallback(
+    async (instruction: string) => {
+      if (instruction.trim().length < 3) return;
+      setBusy("rebrand");
+      setFlash(null);
+      setDirections(null);
+      try {
+        const res = await fetch(`/api/sites/${site.id}/ai-rebrand`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: instruction.trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setFlash({ kind: "error", text: data.error ?? "The rebrand didn't go through." });
+          return;
+        }
+        setRebrandVibe("");
+        setFlash({
+          kind: "info",
+          text: `Rebranded — rewrote ${data.fieldsRewritten} text field${
+            data.fieldsRewritten === 1 ? "" : "s"
+          }${data.themeChanged ? " and a fresh palette" : ""}. Publishing v${data.versionNo}…`,
+        });
+        setWatching({ releaseId: data.releaseId, versionNo: data.versionNo });
+        await load();
+      } catch {
+        setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [site.id, load],
+  );
+
+  const rebrand = useCallback(() => void runRebrand(rebrandVibe), [runRebrand, rebrandVibe]);
+
+  // "Give me 3 directions" — ask for three brand concepts to pick from before
+  // committing. Picking one runs runRebrand with that concept's vibe.
+  const getDirections = useCallback(async () => {
+    setBusy("directions");
     setFlash(null);
     try {
-      const res = await fetch(`/api/sites/${site.id}/ai-rebrand`, {
+      const res = await fetch(`/api/sites/${site.id}/ai-directions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction }),
+        body: "{}",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setFlash({ kind: "error", text: data.error ?? "The rebrand didn't go through." });
+        setFlash({ kind: "error", text: data.error ?? "Couldn't get directions." });
         return;
       }
-      setRebrandVibe("");
-      setFlash({
-        kind: "info",
-        text: `Rebranded — rewrote ${data.fieldsRewritten} text field${
-          data.fieldsRewritten === 1 ? "" : "s"
-        }${data.themeChanged ? " and a fresh palette" : ""}. Publishing v${data.versionNo}…`,
-      });
-      setWatching({ releaseId: data.releaseId, versionNo: data.versionNo });
-      await load();
+      setDirections(Array.isArray(data.directions) ? data.directions : []);
     } catch {
       setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
     } finally {
       setBusy(null);
     }
-  }, [site.id, rebrandVibe, load]);
+  }, [site.id]);
 
   useEffect(() => {
     if (!watching) return;
@@ -685,10 +723,52 @@ export function DashboardShell({
           >
             {busy === "rebrand" ? "Rebranding…" : watching ? "Publishing…" : "Rebrand & publish"}
           </button>
+          <button
+            type="button"
+            onClick={() => void getDirections()}
+            disabled={busy === "directions" || busy === "rebrand" || !!watching}
+            title="Let the AI propose three brand concepts to choose from"
+            className="shrink-0 rounded-lg border border-flux-500/50 px-4 py-2 text-[13px] font-semibold text-flux-400 transition-colors hover:bg-flux-500/10 disabled:opacity-40"
+          >
+            {busy === "directions" ? "Thinking…" : "Give me 3 directions"}
+          </button>
         </form>
-        <p className="mt-2 text-[11px] text-ink-500">
-          Changes every page at once. It becomes a new version you can roll back with one click.
-        </p>
+
+        {directions && directions.length > 0 ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {directions.map((d, i) => (
+              <div key={i} className="flex flex-col rounded-xl border border-ink-800 bg-ink-950 p-3">
+                <div className="flex gap-1">
+                  {[d.tokens.colorBg, d.tokens.colorSurface, d.tokens.colorAccent, d.tokens.colorFg].map(
+                    (c, j) => (
+                      <span
+                        key={j}
+                        className="h-5 w-5 rounded-full border border-ink-700"
+                        style={{ background: c }}
+                      />
+                    ),
+                  )}
+                </div>
+                <div className="mt-2 text-[13px] font-semibold text-ink-100">{d.name}</div>
+                <div className="mt-1 flex-1 text-[12px] italic leading-snug text-ink-300">
+                  “{d.sampleHeadline}”
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runRebrand(d.vibe)}
+                  disabled={busy === "rebrand" || !!watching}
+                  className="mt-2.5 w-full rounded-lg bg-flux-500 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+                >
+                  Use this
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] text-ink-500">
+            Changes every page at once. It becomes a new version you can roll back with one click.
+          </p>
+        )}
       </section>
 
       {/* ── 4b. your own domain ──────────────────────────────────────────── */}

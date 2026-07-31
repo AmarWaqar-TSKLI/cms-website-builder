@@ -525,6 +525,98 @@ Rules:
   return out;
 }
 
+/** One proposed brand concept: a name, a rebrand instruction, a palette, a sample. */
+export interface BrandDirection {
+  name: string;
+  vibe: string;
+  sampleHeadline: string;
+  tokens: {
+    colorBg: string;
+    colorFg: string;
+    colorAccent: string;
+    colorSurface: string;
+  };
+}
+
+/**
+ * Propose THREE distinct brand directions for a site, each with a palette
+ * preview and a sample headline. It's the pick-one step in front of a full
+ * rebrand: the chosen direction's `vibe` is exactly what /ai-rebrand takes. All
+ * colours are strictly validated (a non-hex value drops the whole direction),
+ * so a preview swatch can never be a broken colour.
+ */
+export async function brandDirections(siteName?: string): Promise<BrandDirection[]> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+
+  const system = `You are a brand director. Propose THREE genuinely different brand directions for a website, as JSON.
+
+Return exactly:
+{ "directions": [
+  { "name": "<2-4 word direction name>", "vibe": "<one sentence describing the look and tone, phrased as an instruction like 'a dark, bold, high-contrast tech brand'>", "sampleHeadline": "<a homepage headline, 4-9 words, written in this direction>", "tokens": { "colorBg":"#rrggbb", "colorFg":"#rrggbb", "colorAccent":"#rrggbb", "colorSurface":"#rrggbb" } }
+] }
+
+Rules:
+- The THREE directions must be clearly DIFFERENT from each other — e.g. one dark and bold, one warm and editorial, one clean and minimal.
+- Colours MUST be 6-digit hex (#rrggbb) with strong, readable contrast between colorFg and colorBg.
+- sampleHeadline and name must be real and specific — no placeholders, no lorem ipsum.
+- Output ONLY the JSON object. No prose, no code fences.`;
+
+  const res = await callGroqWithRetry(
+    key,
+    JSON.stringify({
+      model: MODEL,
+      temperature: 0.85,
+      max_tokens: 1200,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: siteName ? `The site is called "${siteName}".` : "A small business website." },
+      ],
+    }),
+  );
+  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
+
+  let content: string;
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    content = data.choices?.[0]?.message?.content ?? "";
+  } catch {
+    throw new AiFailedError("The AI returned an unreadable response.");
+  }
+
+  let parsed: { directions?: unknown };
+  try {
+    parsed = JSON.parse(content) as { directions?: unknown };
+  } catch {
+    throw new AiFailedError("The AI returned invalid JSON.");
+  }
+
+  const raw = Array.isArray(parsed.directions) ? parsed.directions : [];
+  const directions: BrandDirection[] = [];
+  for (const d of raw) {
+    const name = typeof (d as { name?: unknown })?.name === "string" ? (d as { name: string }).name.trim().slice(0, 40) : "";
+    const vibe = typeof (d as { vibe?: unknown })?.vibe === "string" ? (d as { vibe: string }).vibe.trim().slice(0, 200) : "";
+    const sampleHeadline =
+      typeof (d as { sampleHeadline?: unknown })?.sampleHeadline === "string"
+        ? (d as { sampleHeadline: string }).sampleHeadline.trim().slice(0, 120)
+        : "";
+    const t = (d as { tokens?: unknown })?.tokens as Record<string, unknown> | undefined;
+    if (!name || !vibe || !sampleHeadline || !t) continue;
+    const hex = (v: unknown) => (typeof v === "string" && HEX6.test(v.trim()) ? v.trim() : null);
+    const colorBg = hex(t.colorBg);
+    const colorFg = hex(t.colorFg);
+    const colorAccent = hex(t.colorAccent);
+    const colorSurface = hex(t.colorSurface) ?? colorBg;
+    if (!colorBg || !colorFg || !colorAccent || !colorSurface) continue;
+    directions.push({ name, vibe, sampleHeadline, tokens: { colorBg, colorFg, colorAccent, colorSurface } });
+    if (directions.length === 3) break;
+  }
+
+  if (directions.length === 0) throw new AiFailedError("The AI didn't return usable directions.");
+  return directions;
+}
+
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
 function coerce(value: unknown, def: PropDef): unknown {
   switch (def.kind) {
