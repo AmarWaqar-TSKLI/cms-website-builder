@@ -85,6 +85,11 @@ export default async function Dashboard({
     }),
   ]);
 
+  // If this site is a branch, look up its parent's name for the merge UI.
+  const parent = site.parentSiteId
+    ? await prisma.site.findUnique({ where: { id: site.parentSiteId }, select: { name: true } })
+    : null;
+
   return (
     <DashboardShell
       user={{ id: user.id, name: user.name, email: user.email }}
@@ -112,6 +117,8 @@ export default async function Dashboard({
         customDomain: site.customDomain,
         modules: site.modules.map((m) => m.module),
         liveReleaseId: site.liveReleaseId,
+        parentSiteId: site.parentSiteId,
+        parentName: parent?.name ?? null,
       }}
       pages={site.pages.map((page) => ({
         id: page.id,

@@ -48,6 +48,20 @@ export interface DashSite {
   customDomain: string | null;
   modules: string[];
   liveReleaseId: string | null;
+  /** Set when this site is a branch of another; enables the compare + merge UI. */
+  parentSiteId: string | null;
+  parentName: string | null;
+}
+
+/** The block-level diff of a branch vs its parent (mirrors BranchDiff in lib/branch). */
+interface BranchDiff {
+  parentName: string;
+  changed: { nodeId: string; type: string; fields: { key: string; before: string; after: string }[] }[];
+  added: { nodeId: string; type: string; sample: string }[];
+  removed: { nodeId: string; type: string; sample: string }[];
+  theme: { key: string; label: string; before: string; after: string }[];
+  pagesAdded: string[];
+  pagesRemoved: string[];
 }
 
 export interface DashPage {
@@ -264,6 +278,7 @@ export function DashboardShell({
   const [watching, setWatching] = useState<{ releaseId: string; versionNo: number } | null>(null);
   const [rebrandVibe, setRebrandVibe] = useState("");
   const [directions, setDirections] = useState<BrandDirection[] | null>(null);
+  const [diff, setDiff] = useState<BranchDiff | null>(null);
 
   const router = useRouter();
 
@@ -378,6 +393,69 @@ export function DashboardShell({
       setBusy(null);
     }
   }, [site.id]);
+
+  // ── Branches ───────────────────────────────────────────────────────────────
+  const branchSite = useCallback(async () => {
+    setBusy("branch");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/branch`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFlash({ kind: "error", text: data.error ?? "Couldn't branch the site." });
+        return;
+      }
+      router.push(`/dashboard?site=${data.id}`);
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, router]);
+
+  const loadDiff = useCallback(async () => {
+    setBusy("diff");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/branch-diff`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFlash({ kind: "error", text: data.error ?? "Couldn't compute the diff." });
+        return;
+      }
+      setDiff(data as BranchDiff);
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id]);
+
+  const mergeToParent = useCallback(async () => {
+    setBusy("merge");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/branch-merge`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFlash({ kind: "error", text: data.error ?? "Couldn't merge the branch." });
+        return;
+      }
+      setDiff(null);
+      setFlash({
+        kind: "info",
+        text: `Merged ${data.blocksMerged} block${data.blocksMerged === 1 ? "" : "s"}${
+          data.themeMerged ? " + theme" : ""
+        } into ${site.parentName ?? "the parent"}${
+          data.versionNo ? ` — published v${data.versionNo}` : ""
+        }.`,
+      });
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, site.parentName]);
 
   useEffect(() => {
     if (!watching) return;
@@ -691,6 +769,116 @@ export function DashboardShell({
         publishing={busy === "publish"}
         building={building}
       />
+
+      {/* ── Branches (Git for your site) ─────────────────────────────────── */}
+      <section className="mt-5 overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
+          <span aria-hidden>⑂</span> Branches
+        </div>
+
+        {site.parentSiteId ? (
+          <>
+            <h2 className="display mt-2 text-[20px] text-ink-100">
+              This is a branch of {site.parentName ?? "another site"}
+            </h2>
+            <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
+              Redesign it freely — by hand or with AI — without touching what's live. When you're
+              happy, review exactly what changed and merge it back as one version.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadDiff()}
+                disabled={busy === "diff" || busy === "merge"}
+                className="rounded-lg border border-ink-700 px-4 py-2 text-[13px] font-semibold text-ink-100 transition-colors hover:border-ink-500 disabled:opacity-40"
+              >
+                {busy === "diff" ? "Comparing…" : "Review changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void mergeToParent()}
+                disabled={busy === "merge" || busy === "diff"}
+                className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+              >
+                {busy === "merge" ? "Merging…" : `Merge into ${site.parentName ?? "parent"} & publish`}
+              </button>
+            </div>
+
+            {diff ? (
+              <div className="mt-4 rounded-xl border border-ink-800 bg-ink-950 p-4">
+                <div className="text-[12px] text-ink-300">
+                  <b className="text-ink-100">{diff.changed.length}</b> block
+                  {diff.changed.length === 1 ? "" : "s"} changed
+                  {diff.theme.length ? (
+                    <>
+                      {" · "}
+                      <b className="text-ink-100">{diff.theme.length}</b> theme change
+                      {diff.theme.length === 1 ? "" : "s"}
+                    </>
+                  ) : null}
+                  {diff.added.length ? <> · {diff.added.length} added</> : null}
+                  {diff.removed.length ? <> · {diff.removed.length} removed</> : null}
+                </div>
+
+                {diff.theme.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {diff.theme
+                      .filter((t) => t.after.startsWith("#") || t.after.startsWith("rgb"))
+                      .slice(0, 7)
+                      .map((t) => (
+                        <span
+                          key={t.key}
+                          className="inline-flex items-center gap-1 rounded-md border border-ink-800 px-1.5 py-1 text-[10.5px] text-ink-400"
+                        >
+                          {t.label}
+                          <span
+                            className="h-3 w-3 rounded-full border border-ink-700"
+                            style={{ background: t.before }}
+                          />
+                          <span aria-hidden>→</span>
+                          <span
+                            className="h-3 w-3 rounded-full border border-ink-700"
+                            style={{ background: t.after }}
+                          />
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 space-y-2.5">
+                  {diff.changed.slice(0, 6).map((c) => (
+                    <div key={c.nodeId} className="text-[12px] leading-snug">
+                      <div className="text-[10px] uppercase tracking-wide text-ink-600">{c.type}</div>
+                      <div className="text-red-400/80 line-through">{c.fields[0].before}</div>
+                      <div className="text-emerald-400">{c.fields[0].after}</div>
+                    </div>
+                  ))}
+                  {diff.changed.length > 6 ? (
+                    <div className="text-[11px] text-ink-500">+ {diff.changed.length - 6} more…</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <h2 className="display mt-2 text-[20px] text-ink-100">Branch this site</h2>
+            <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
+              Fork a full copy you can redesign freely — by hand or with AI — without touching what's
+              live. Then review a block-level diff and merge the changes back as one version. Like
+              Git, for your website.
+            </p>
+            <button
+              type="button"
+              onClick={() => void branchSite()}
+              disabled={busy === "branch"}
+              className="mt-3 rounded-lg border border-ink-700 px-4 py-2 text-[13px] font-semibold text-ink-100 transition-colors hover:border-ink-500 disabled:opacity-40"
+            >
+              {busy === "branch" ? "Branching…" : "⑂ Branch this site"}
+            </button>
+          </>
+        )}
+      </section>
 
       {/* ── 4a. AI rebrand ───────────────────────────────────────────────── */}
       <section className="mt-5 overflow-hidden rounded-2xl border border-flux-500/30 bg-gradient-to-br from-ink-900 to-ink-950 p-6">
