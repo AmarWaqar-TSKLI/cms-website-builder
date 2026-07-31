@@ -12,8 +12,13 @@
 import React from "react";
 import type { ThemeLayout, ThemeTokens } from "../../lib/registry/types";
 import { resolveHref } from "../../lib/registry/style";
+import { sanitizeTokens } from "../../lib/theme";
 
-export function tokensToCss(t: ThemeTokens): string {
+export function tokensToCss(raw: ThemeTokens): string {
+  // Sanitise at the sink too: this string goes into a <style> via
+  // dangerouslySetInnerHTML, so a hostile value stored before validation existed
+  // must still not be able to break out here.
+  const t = sanitizeTokens(raw);
   return `:root{
   --cms-bg:${t.colorBg};
   --cms-fg:${t.colorFg};

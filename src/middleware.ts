@@ -59,6 +59,49 @@ const SESSION_COOKIE = "cms_session";
 /** Product surfaces that require a session. */
 const PROTECTED = [/^\/dashboard(\/|$)/, /^\/editor(\/|$)/];
 
+// The cart island on a published page calls the app origin for cart/orders; on a
+// custom domain that is cross-origin, so connect-src must allow it explicitly.
+const RUNTIME_ORIGIN = (() => {
+  const raw = process.env.NEXT_PUBLIC_RUNTIME_API?.trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).origin;
+  } catch {
+    return "";
+  }
+})();
+
+// Published pages ship no eval and (aside from Next's own inline hydration) no
+// inline app script, so this locks resource loading down hard: no external
+// scripts, no <object>/<embed>, no <base> hijack, no framing (clickjacking), no
+// off-site form posts. It's the backstop behind the theme-token sanitiser — even
+// if some value ever reached CSS unescaped, an injected external script or a
+// stolen form submission still can't run.
+const SITE_CSP = [
+  "default-src 'self'",
+  "img-src 'self' https: data:",
+  "font-src 'self' https: data:",
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline'",
+  `connect-src 'self'${RUNTIME_ORIGIN ? ` ${RUNTIME_ORIGIN}` : ""}`,
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+].join("; ");
+
+/** Always-on hardening for every response; the strict CSP is added for published sites. */
+function harden(res: NextResponse, siteResponse: boolean): NextResponse {
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  if (siteResponse) {
+    res.headers.set("Content-Security-Policy", SITE_CSP);
+    res.headers.set("X-Frame-Options", "DENY");
+  }
+  return res;
+}
+
 export function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const override = url.searchParams.get("host");
@@ -68,7 +111,7 @@ export function middleware(req: NextRequest) {
   if (host && (override || !APP_HOSTS.has(host))) {
     const rewritten = new URL(`/site-by-host/${encodeURIComponent(host)}${url.pathname}`, url);
     rewritten.search = "";
-    return NextResponse.rewrite(rewritten);
+    return harden(NextResponse.rewrite(rewritten), true);
   }
 
   // ── 2. The login gate ─────────────────────────────────────────────────────
@@ -83,7 +126,8 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  // Published sites are also reachable directly at /s/<slug>; harden those too.
+  return harden(NextResponse.next(), url.pathname.startsWith("/s/"));
 }
 
 export const config = {
