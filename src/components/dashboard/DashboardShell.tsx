@@ -254,6 +254,7 @@ export function DashboardShell({
     message: string;
   } | null>(null);
   const [watching, setWatching] = useState<{ releaseId: string; versionNo: number } | null>(null);
+  const [rebrandVibe, setRebrandVibe] = useState("");
 
   const router = useRouter();
 
@@ -305,6 +306,40 @@ export function DashboardShell({
       setBusy(null);
     }
   }, [site.id, notes, load]);
+
+  // AI rebrand: rewrite all copy + restyle the theme, publish as one release,
+  // then watch it build via the same mechanism a normal publish uses.
+  const rebrand = useCallback(async () => {
+    const instruction = rebrandVibe.trim();
+    if (instruction.length < 3) return;
+    setBusy("rebrand");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/ai-rebrand`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFlash({ kind: "error", text: data.error ?? "The rebrand didn't go through." });
+        return;
+      }
+      setRebrandVibe("");
+      setFlash({
+        kind: "info",
+        text: `Rebranded — rewrote ${data.fieldsRewritten} text field${
+          data.fieldsRewritten === 1 ? "" : "s"
+        }${data.themeChanged ? " and a fresh palette" : ""}. Publishing v${data.versionNo}…`,
+      });
+      setWatching({ releaseId: data.releaseId, versionNo: data.versionNo });
+      await load();
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, rebrandVibe, load]);
 
   useEffect(() => {
     if (!watching) return;
@@ -618,6 +653,43 @@ export function DashboardShell({
         publishing={busy === "publish"}
         building={building}
       />
+
+      {/* ── 4a. AI rebrand ───────────────────────────────────────────────── */}
+      <section className="mt-5 overflow-hidden rounded-2xl border border-flux-500/30 bg-gradient-to-br from-ink-900 to-ink-950 p-6">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
+          <span aria-hidden>✨</span> AI rebrand
+        </div>
+        <h2 className="display mt-2 text-[20px] text-ink-100">Reimagine the whole site in one line</h2>
+        <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
+          Describe a new look and tone. The AI rewrites the words on every page and restyles your
+          theme, then publishes it as one version — so a single rollback undoes all of it.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void rebrand();
+          }}
+          className="mt-4 flex flex-col gap-2 sm:flex-row"
+        >
+          <input
+            value={rebrandVibe}
+            onChange={(e) => setRebrandVibe(e.target.value)}
+            disabled={busy === "rebrand" || !!watching}
+            placeholder="e.g. a dark, high-end luxury real-estate brand"
+            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-[13px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={busy === "rebrand" || !!watching || rebrandVibe.trim().length < 3}
+            className="shrink-0 rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+          >
+            {busy === "rebrand" ? "Rebranding…" : watching ? "Publishing…" : "Rebrand & publish"}
+          </button>
+        </form>
+        <p className="mt-2 text-[11px] text-ink-500">
+          Changes every page at once. It becomes a new version you can roll back with one click.
+        </p>
+      </section>
 
       {/* ── 4b. your own domain ──────────────────────────────────────────── */}
       <CustomDomainCard className="mt-5" siteId={site.id} initialDomain={site.customDomain} />

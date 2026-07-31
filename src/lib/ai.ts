@@ -15,6 +15,7 @@
  * services. Swapping providers is a one-function change.
  */
 import { getSchema, paletteFor, type PageNode, type PropDef } from "./registry";
+import type { ThemeTokens } from "./registry/types";
 import { slugify } from "./slug";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -414,6 +415,114 @@ Rules:
   }
   if (!edits.length) throw new AiFailedError("The AI didn't return any usable changes.");
   return edits;
+}
+
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const THEME_COLOR_KEYS = [
+  "colorBg",
+  "colorFg",
+  "colorMuted",
+  "colorAccent",
+  "colorAccentFg",
+  "colorSurface",
+  "colorBorder",
+] as const;
+
+/**
+ * Restyle a site's theme tokens to match a vibe ("dark luxury", "warm and
+ * playful"). Given the current tokens and an instruction, the model proposes a
+ * new palette + fonts. Every value is STRICTLY validated here — colours must be
+ * 6-digit hex, radius a length, fonts short strings — because these become raw
+ * CSS custom properties; a malformed value would break the page, so a bad one
+ * is dropped and the token keeps its current value.
+ */
+export async function rebrandTheme(
+  current: ThemeTokens,
+  instruction: string,
+): Promise<Partial<ThemeTokens>> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+
+  const system = `You restyle a website's theme to match a vibe. You get the CURRENT design tokens and an instruction; return NEW tokens as JSON.
+
+Tokens (all are raw CSS values):
+- colorBg: page background — hex #rrggbb
+- colorFg: main text — hex
+- colorMuted: secondary/subtle text — hex
+- colorAccent: brand & button colour — hex
+- colorAccentFg: text placed ON the accent — hex
+- colorSurface: card / panel background — hex
+- colorBorder: hairline borders — hex
+- fontHeading: a CSS font-family stack for headings
+- fontBody: a CSS font-family stack for body text
+- radius: corner radius, a CSS length like "10px" or "0px"
+
+Return a JSON object with ALL of those keys.
+
+Rules:
+- Choose a COHERENT, professional palette for the vibe. Contrast must be strong and readable: colorFg on colorBg, and colorAccentFg on colorAccent.
+- Colours MUST be 6-digit hex (#rrggbb). radius a px value. Fonts real CSS stacks, e.g. "Georgia, 'Times New Roman', serif" or "'Helvetica Neue', Arial, sans-serif".
+- Output ONLY the JSON object. No prose, no code fences.`;
+
+  const user = `Instruction: ${instruction.slice(0, 400)}\n\nCurrent tokens:\n${JSON.stringify({
+    colorBg: current.colorBg,
+    colorFg: current.colorFg,
+    colorMuted: current.colorMuted,
+    colorAccent: current.colorAccent,
+    colorAccentFg: current.colorAccentFg,
+    colorSurface: current.colorSurface,
+    colorBorder: current.colorBorder,
+    fontHeading: current.fontHeading,
+    fontBody: current.fontBody,
+    radius: current.radius,
+  })}`;
+
+  const res = await callGroqWithRetry(
+    key,
+    JSON.stringify({
+      model: MODEL,
+      temperature: 0.6,
+      max_tokens: 800,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  );
+  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
+
+  let content: string;
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    content = data.choices?.[0]?.message?.content ?? "";
+  } catch {
+    throw new AiFailedError("The AI returned an unreadable response.");
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    throw new AiFailedError("The AI returned invalid JSON.");
+  }
+
+  const out: Partial<ThemeTokens> = {};
+  for (const k of THEME_COLOR_KEYS) {
+    const v = parsed[k];
+    if (typeof v === "string" && HEX6.test(v.trim())) out[k] = v.trim();
+  }
+  for (const k of ["fontHeading", "fontBody"] as const) {
+    const v = parsed[k];
+    if (typeof v === "string" && v.trim() && v.trim().length <= 200) out[k] = v.trim();
+  }
+  const radius = parsed.radius;
+  if (typeof radius === "string" && /^\d{1,3}(px|rem|em|%)?$/.test(radius.trim())) {
+    out.radius = radius.trim();
+  }
+
+  if (Object.keys(out).length === 0) throw new AiFailedError("The AI didn't return a usable palette.");
+  return out;
 }
 
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
