@@ -30,6 +30,7 @@ export type ActivityAction =
   | "component.deleted"
   | "site.published"
   | "site.rolled_back"
+  | "site.renamed"
   | "site.domain_set"
   | "site.domain_removed"
   | "theme.updated"

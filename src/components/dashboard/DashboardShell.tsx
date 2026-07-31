@@ -116,6 +116,114 @@ export interface DashLock {
   isMine: boolean;
 }
 
+/**
+ * The site's display name, editable in place. Click the pencil (or the name),
+ * type, press Enter — it PATCHes /api/sites/:id and refreshes so the new name
+ * shows here, in the switcher and in the editor. The slug never changes, so no
+ * existing link breaks.
+ */
+function SiteTitle({ siteId, name }: { siteId: string; name: string }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Follow the server value after a refresh (or a rename elsewhere).
+  useEffect(() => setValue(name), [name]);
+
+  const cancel = useCallback(() => {
+    setEditing(false);
+    setValue(name);
+    setError(null);
+  }, [name]);
+
+  const save = useCallback(async () => {
+    const next = value.trim().slice(0, 60);
+    if (!next || next === name) {
+      cancel();
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Couldn't rename the site.");
+      }
+      setEditing(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't rename the site.");
+    } finally {
+      setSaving(false);
+    }
+  }, [value, name, siteId, cancel, router]);
+
+  if (editing) {
+    return (
+      <div className="mt-3">
+        <input
+          autoFocus
+          value={value}
+          maxLength={60}
+          disabled={saving}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void save();
+            } else if (e.key === "Escape") {
+              cancel();
+            }
+          }}
+          onBlur={() => void save()}
+          aria-label="Site name"
+          className="display w-full max-w-[22ch] rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-[30px] text-ink-100 outline-none focus:border-flux-400 disabled:opacity-60 sm:text-[36px]"
+        />
+        {error ? <span className="mt-1 block text-[12px] text-red-400">{error}</span> : null}
+      </div>
+    );
+  }
+
+  return (
+    <h1 className="display group mt-3 flex items-center gap-2 text-[30px] text-ink-100 sm:text-[36px]">
+      <span className="truncate">{name}</span>
+      <button
+        type="button"
+        onClick={() => {
+          setValue(name);
+          setEditing(true);
+        }}
+        title="Rename this site"
+        aria-label="Rename this site"
+        className="shrink-0 rounded-md p-1.5 text-ink-500 opacity-0 transition hover:bg-ink-800 hover:text-ink-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400 group-hover:opacity-100"
+      >
+        <svg
+          width="17"
+          height="17"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+        </svg>
+      </button>
+    </h1>
+  );
+}
+
 export function DashboardShell({
   site,
   pages,
@@ -679,9 +787,7 @@ function Hero({
             <span className="text-[12px] text-ink-500">{site.orgName}</span>
           </div>
 
-          <h1 className="display mt-3 truncate text-[30px] text-ink-100 sm:text-[36px]">
-            {site.name}
-          </h1>
+          <SiteTitle siteId={site.id} name={site.name} />
 
           <p className="mt-2 max-w-prose text-[13.5px] leading-relaxed text-ink-300">
             {!loaded ? (
