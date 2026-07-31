@@ -221,6 +221,108 @@ export async function generateSite(
   return { siteName, pages };
 }
 
+/**
+ * Validate a model's blocks against the registry — identical rules to the site
+ * builder: unknown block types and invented props are dropped, so the worst a
+ * bad completion can do is return fewer valid blocks, never an unsafe one. Ids
+ * are throwaway (insertSection re-mints them on the way into the page).
+ */
+function buildNodes(items: AiBlock[]): PageNode[] {
+  const allowed = new Set(allowedSchemas().map((s) => s.name));
+  let seq = 0;
+  const build = (list: AiBlock[], depth: number): PageNode[] => {
+    const out: PageNode[] = [];
+    for (const item of list) {
+      const type = typeof item?.type === "string" ? item.type : "";
+      const schema = getSchema(type);
+      if (!schema || !allowed.has(type)) continue;
+
+      const node: PageNode = { id: `ai${++seq}`, type, props: {}, children: [] };
+      for (const [k, def] of Object.entries(schema.props)) node.props[k] = def.default;
+
+      const given =
+        item.props && typeof item.props === "object" ? (item.props as Record<string, unknown>) : {};
+      for (const [k, v] of Object.entries(given)) {
+        const def = schema.props[k];
+        if (!def) continue;
+        const value = coerce(v, def);
+        if (value !== undefined) node.props[k] = value;
+      }
+
+      if (schema.acceptsChildren && depth < 2 && Array.isArray(item.children)) {
+        node.children = build(item.children as AiBlock[], depth + 1);
+      }
+      out.push(node);
+    }
+    return out;
+  };
+  return build(items, 0);
+}
+
+function sectionPrompt(cat: string, siteName?: string): string {
+  return `You add ONE cohesive section to an existing web page, as JSON.${
+    siteName ? ` The site is called "${siteName}".` : ""
+  } Compose the section from these block types and their listed prop keys ONLY:
+${cat}
+
+Return a JSON object of exactly this shape:
+{ "blocks": [ { "type": "<BlockType>", "props": { ... }, "children": [ ... ] } ] }
+
+Rules:
+- Return 1 to 4 blocks that TOGETHER form the section the user asked for, and pick blocks that genuinely fit: a "pricing section" might be a Feature heading plus a Columns holding three Cards; an "FAQ" a couple of FAQ blocks; a "call to action" a single Cta; "testimonials" a Testimonial or a Columns of them.
+- Write REAL, specific, generous copy for the user's request — real headings and 1 to 3 full sentences for every body. Never lorem ipsum, never placeholders like "Your text here".
+- Set ONLY the props listed for each block above. Do NOT invent props, and never set sizes, spacing, colours, line-height or widths — those are styled automatically.
+- Only blocks marked "[accepts child blocks]" may have a "children" array (Cards go inside Columns). Every other block is flat.
+- Do NOT set any image, photo or media prop. For any link or href prop use "#" or a path like "/pricing".
+- Output ONLY the JSON object. No prose, no markdown code fences.`;
+}
+
+/**
+ * Compose a single section for the page the user is editing, from a plain-
+ * language instruction ("a pricing section with three tiers", "an FAQ about
+ * shipping"). Returns validated blocks ready to drop in via insertSection — the
+ * same shape the Sections palette uses, so the result is an ordinary, editable
+ * part of the page, not a special AI artifact.
+ */
+export async function generateSection(instruction: string, siteName?: string): Promise<PageNode[]> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+
+  const requestBody = JSON.stringify({
+    model: MODEL,
+    temperature: 0.7,
+    max_tokens: 2500,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: sectionPrompt(catalogue(), siteName) },
+      { role: "user", content: instruction.slice(0, 400) },
+    ],
+  });
+
+  const res = await callGroqWithRetry(key, requestBody);
+  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
+
+  let content: string;
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    content = data.choices?.[0]?.message?.content ?? "";
+  } catch {
+    throw new AiFailedError("The AI returned an unreadable response.");
+  }
+
+  let parsed: { blocks?: unknown };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new AiFailedError("The AI returned invalid JSON.");
+  }
+
+  const raw = Array.isArray(parsed.blocks) ? (parsed.blocks as AiBlock[]) : [];
+  const blocks = buildNodes(raw);
+  if (blocks.length === 0) throw new AiFailedError("The AI produced no usable blocks.");
+  return blocks;
+}
+
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
 function coerce(value: unknown, def: PropDef): unknown {
   switch (def.kind) {

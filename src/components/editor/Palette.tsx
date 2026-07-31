@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from "react";
 import { paletteFor } from "@/lib/registry";
-import type { ComponentSchema, ModuleName, ResolvedComponent } from "@/lib/registry/types";
+import type { ComponentSchema, ModuleName, PageNode, ResolvedComponent } from "@/lib/registry/types";
 import { useEditor } from "@/lib/editor/store";
 import { SECTION_TEMPLATES } from "@/lib/editor/sections";
 import { cx } from "../ui";
@@ -51,6 +51,37 @@ export function Palette({
   const [query, setQuery] = useState("");
   const technical = useTechnical();
 
+  // "Ask AI to add a section" — the instruction goes to /api/ai/section, which
+  // returns registry-validated blocks; insertSection drops them in exactly like
+  // a Sections-palette click, so the result is ordinary, editable and undoable.
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function askAi() {
+    const instruction = aiPrompt.trim();
+    if (instruction.length < 3 || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai/section", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instruction }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { blocks?: unknown; error?: string };
+      if (!res.ok) throw new Error(data.error || "The AI couldn't build that.");
+      const blocks = Array.isArray(data.blocks) ? (data.blocks as PageNode[]) : [];
+      if (!blocks.length) throw new Error("The AI returned nothing usable — try rewording it.");
+      insertSection(blocks);
+      setAiPrompt("");
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   const available = useMemo(() => paletteFor(modules), [modules]);
 
   const matchingSections = useMemo(() => {
@@ -83,6 +114,39 @@ export function Palette({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void askAi();
+          }}
+          className="mb-3"
+        >
+          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-tight text-flux-400">
+            <span aria-hidden>✨</span> Ask AI to add a section
+          </div>
+          <div className="flex gap-1.5">
+            <input
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={aiBusy}
+              placeholder="e.g. a pricing section with 3 tiers"
+              className="w-full rounded-lg border border-flux-500/40 bg-ink-950 px-2.5 py-1.5 text-[12.5px] text-ink-100 outline-none placeholder:text-ink-600 focus:border-flux-500 disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={aiBusy || aiPrompt.trim().length < 3}
+              className="shrink-0 rounded-lg bg-flux-500 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+            >
+              {aiBusy ? "…" : "Add"}
+            </button>
+          </div>
+          {aiBusy ? (
+            <p className="mt-1.5 text-[11px] text-ink-500">Composing your section…</p>
+          ) : aiError ? (
+            <p className="mt-1.5 text-[11px] text-red-400">{aiError}</p>
+          ) : null}
+        </form>
+
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
