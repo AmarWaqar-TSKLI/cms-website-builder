@@ -61,10 +61,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ siteId
 }
 
 /**
- * Delete a site and everything in it — pages, components, theme, releases, media.
- * Every child cascades at the database level; the one thing that isn't a child is
- * the site's own live-release pointer, so we null it first to drop the self-
- * reference, then delete. Irreversible, which is why the UI confirms in place.
+ * Delete (archive) a site. A hard delete is impossible on purpose: revisions and
+ * the activity log are append-only (a DB trigger forbids DELETE), which is what
+ * makes published versions immutable. So this sets `deletedAt` — the site drops
+ * out of every list and stops serving — and frees its slug and domain for reuse.
+ * Nothing published is destroyed, so it stays recoverable.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
@@ -72,10 +73,17 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ site
   if (!auth.ok) return auth.response;
 
   try {
-    await prisma.$transaction([
-      prisma.site.update({ where: { id: siteId }, data: { liveReleaseId: null } }),
-      prisma.site.delete({ where: { id: siteId } }),
-    ]);
+    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { slug: true } });
+    if (!site) return NextResponse.json({ error: "Site not found." }, { status: 404 });
+
+    await prisma.site.update({
+      where: { id: siteId },
+      data: {
+        deletedAt: new Date(),
+        customDomain: null, // free the domain
+        slug: `${site.slug}-deleted-${Date.now().toString(36)}`.slice(0, 120), // free the slug
+      },
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     captureError(err, { scope: "site.delete", siteId });

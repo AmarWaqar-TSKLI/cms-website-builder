@@ -202,7 +202,7 @@ export async function requireSiteAccess(userId: string, siteId: string): Promise
 /** Every site this user can reach. The dashboard's list. */
 export async function sitesForUser(userId: string) {
   return prisma.site.findMany({
-    where: { org: { memberships: { some: { userId } } } },
+    where: { org: { memberships: { some: { userId } } }, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
 }

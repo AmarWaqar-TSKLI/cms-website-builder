@@ -212,7 +212,7 @@ const SITE_FIELDS = {
 } as const;
 
 export async function siteBySlug(slug: string): Promise<LiveSite | null> {
-  return prisma.site.findUnique({ where: { slug }, select: SITE_FIELDS });
+  return prisma.site.findFirst({ where: { slug, deletedAt: null }, select: SITE_FIELDS });
 }
 
 /**
@@ -223,7 +223,7 @@ export async function siteBySlug(slug: string): Promise<LiveSite | null> {
  */
 export async function siteByHost(host: string): Promise<LiveSite | null> {
   return prisma.site.findFirst({
-    where: { customDomain: { in: domainMatchCandidates(host) } },
+    where: { customDomain: { in: domainMatchCandidates(host) }, deletedAt: null },
     select: SITE_FIELDS,
   });
 }

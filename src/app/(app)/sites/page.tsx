@@ -16,7 +16,7 @@ export default async function SitesHub() {
   if (!user) redirect("/login?next=/sites");
 
   const sites = await prisma.site.findMany({
-    where: { org: { memberships: { some: { userId: user.id } } } },
+    where: { org: { memberships: { some: { userId: user.id } } }, deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: {
       org: { select: { name: true } },

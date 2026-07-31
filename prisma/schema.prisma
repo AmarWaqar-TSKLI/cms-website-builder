@@ -152,6 +152,12 @@ model Site {
   // block-by-block and merge the changes back. Null for a normal (trunk) site.
   parentSiteId String? @map("parent_site_id")
 
+  // Archive, not erase: revisions and the activity log are append-only (a DB
+  // trigger forbids DELETE), which is the whole point of the immutable model. So
+  // "delete a site" sets this; it drops out of every list and stops serving, and
+  // its slug/domain are freed for reuse. Nothing that was published is destroyed.
+  deletedAt DateTime? @map("deleted_at")
+
   // ── THE ROLLBACK SWITCH ──────────────────────────────────────────────────
   // The only column connecting versioned content to what visitors actually see.
   // Rollback is: UPDATE sites SET live_release_id = <older release>. That's all.
