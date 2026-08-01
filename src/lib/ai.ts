@@ -617,6 +617,93 @@ Rules:
   return directions;
 }
 
+/** One recommended section the AI thinks this page should have next. */
+export interface PagePlanItem {
+  title: string;
+  why: string;
+  blocks: PageNode[];
+}
+
+/**
+ * The agentic builder's brain: look at what's already on a page and plan the
+ * sections it still NEEDS to be a complete, high-converting page of its kind —
+ * in order, each with a reason and real composed copy. It's context-aware (it
+ * won't re-suggest a hero if there's already one) and, like every other AI path
+ * here, bounded to the registry: a recommendation can only ever be valid blocks.
+ */
+export async function planPage(
+  existingTypes: string[],
+  siteName?: string,
+  pageTitle?: string,
+): Promise<PagePlanItem[]> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+
+  const system = `You are an expert web designer and conversion copywriter helping build ONE page. Given what's already on the page and the site, recommend the NEXT sections this page needs to be complete, professional and high-converting — in the order they should appear.
+
+Compose the section from these block types and their listed prop keys ONLY:
+${catalogue()}
+
+Return a JSON object of exactly this shape:
+{ "recommendations": [ { "title": "<2-4 word section name>", "why": "<one sentence on why this page needs it>", "blocks": [ { "type": "<BlockType>", "props": { ... }, "children": [ ... ] } ] } ] }
+
+Rules:
+- Recommend 3 to 4 sections, each genuinely useful for THIS page's purpose, in the order they should appear down the page.
+- Recommend sections that are MISSING. Do NOT re-suggest a section type the page already has, unless a great page of this kind clearly needs a second one.
+- Each recommendation is 1 to 4 blocks with REAL, specific copy for this exact business — real headings and full sentences, never placeholders.
+- Set ONLY the listed props. Never set sizes, spacing, colours or widths, and never set an image/media prop. For links use "#" or a path.
+- Only blocks marked "[accepts child blocks]" may have "children".
+- Output ONLY the JSON object. No prose, no code fences.`;
+
+  const user = `Site: "${siteName ?? "this business"}". Page: "${pageTitle ?? "a page"}". Already on the page, in order: [${
+    existingTypes.length ? existingTypes.join(", ") : "nothing yet — an empty page"
+  }].`;
+
+  const res = await callGroqWithRetry(
+    key,
+    JSON.stringify({
+      model: MODEL,
+      temperature: 0.7,
+      max_tokens: 5000,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  );
+  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
+
+  let content: string;
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    content = data.choices?.[0]?.message?.content ?? "";
+  } catch {
+    throw new AiFailedError("The AI returned an unreadable response.");
+  }
+
+  let parsed: { recommendations?: unknown };
+  try {
+    parsed = JSON.parse(content) as { recommendations?: unknown };
+  } catch {
+    throw new AiFailedError("The AI returned invalid JSON.");
+  }
+
+  const raw = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+  const out: PagePlanItem[] = [];
+  for (const r of raw) {
+    const title = typeof (r as { title?: unknown })?.title === "string" ? (r as { title: string }).title.trim().slice(0, 48) : "";
+    const why = typeof (r as { why?: unknown })?.why === "string" ? (r as { why: string }).why.trim().slice(0, 160) : "";
+    const rawBlocks = Array.isArray((r as { blocks?: unknown })?.blocks) ? ((r as { blocks: AiBlock[] }).blocks) : [];
+    const blocks = buildNodes(rawBlocks);
+    if (title && blocks.length) out.push({ title, why, blocks });
+    if (out.length === 4) break;
+  }
+
+  if (out.length === 0) throw new AiFailedError("The AI didn't return usable recommendations.");
+  return out;
+}
+
 /** Coerce a model-supplied value to what the prop's kind expects, or drop it. */
 function coerce(value: unknown, def: PropDef): unknown {
   switch (def.kind) {

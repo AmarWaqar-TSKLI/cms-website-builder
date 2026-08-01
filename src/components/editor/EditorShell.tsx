@@ -592,6 +592,7 @@ export function EditorShell(boot: EditorBootstrap) {
                 // `paletteComponents` already excludes the one being edited, and
                 // includes any just-created block optimistically.
                 components={paletteComponents}
+                siteName={boot.site.name}
                 onNewComponent={newComponent}
                 onEditComponent={(id) => router.push(`/editor/component/${id}?from=${boot.page.id}`)}
               />

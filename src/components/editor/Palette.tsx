@@ -33,17 +33,23 @@ const CATEGORY_LABEL: Record<string, string> = {
   layout: "Layout",
 };
 
+/** One AI-recommended section for this page (mirrors PagePlanItem in lib/ai). */
+type PlanItem = { title: string; why: string; blocks: PageNode[] };
+
 export function Palette({
   modules,
   components = [],
   onNewComponent,
   onEditComponent,
+  siteName,
 }: {
   modules: ModuleName[];
   /** The site's shared components. Listed separately — they are this site's, not the engine's. */
   components?: ResolvedComponent[];
   onNewComponent?: () => void;
   onEditComponent?: (id: string) => void;
+  /** For the AI copilot — tailors recommendations to the business. */
+  siteName?: string;
 }) {
   const addNode = useEditor((s) => s.addNode);
   const addComponentRef = useEditor((s) => s.addComponentRef);
@@ -59,6 +65,51 @@ export function Palette({
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // AI Copilot: analyses the page and recommends the sections it still needs.
+  const [plan, setPlan] = useState<PlanItem[] | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  async function runCopilot() {
+    if (planBusy) return;
+    setPlanBusy(true);
+    setPlanError(null);
+    setPlan(null);
+    try {
+      // The section types already on the page, in order (unwrap component refs).
+      const existingTypes = (body.root ?? [])
+        .map((n) => (n.type === "@component" ? (n.children?.[0]?.type ?? n.type) : n.type))
+        .filter((t) => t && t !== "@component");
+      const res = await fetch("/api/ai/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ existingTypes, siteName }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { recommendations?: unknown; error?: string };
+      if (!res.ok) throw new Error(data.error || "The copilot couldn't plan that.");
+      const recs = Array.isArray(data.recommendations) ? (data.recommendations as PlanItem[]) : [];
+      if (!recs.length) throw new Error("No suggestions came back — try again.");
+      setPlan(recs);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  function addRec(item: PlanItem) {
+    if (Array.isArray(item.blocks) && item.blocks.length) insertSection(item.blocks);
+    setPlan((cur) => (cur ? cur.filter((r) => r !== item) : cur));
+  }
+
+  function addAll() {
+    if (!plan) return;
+    for (const item of plan) {
+      if (Array.isArray(item.blocks) && item.blocks.length) insertSection(item.blocks);
+    }
+    setPlan(null);
+  }
 
   async function askAi() {
     const instruction = aiPrompt.trim();
@@ -169,6 +220,54 @@ export function Palette({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-800 p-3">
+        {/* AI Copilot — analyses the page and recommends the sections it needs. */}
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => void runCopilot()}
+            disabled={planBusy}
+            className="w-full rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-50"
+          >
+            {planBusy ? "Analysing your page…" : "✨ Suggest what to add"}
+          </button>
+          {planError ? <p className="mt-1.5 text-[11px] text-red-400">{planError}</p> : null}
+          {plan ? (
+            <div className="mt-2">
+              <div className="mb-1.5 flex items-center justify-between px-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                  Suggested for this page
+                </span>
+                <button
+                  type="button"
+                  onClick={addAll}
+                  className="text-[11px] font-semibold text-flux-400 hover:text-flux-500"
+                >
+                  Add all
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {plan.map((r, i) => (
+                  <div key={i} className="rounded-lg border border-ink-800 bg-ink-950 p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-semibold text-ink-100">{r.title}</div>
+                        <div className="mt-0.5 text-[11px] leading-snug text-ink-400">{r.why}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addRec(r)}
+                        className="shrink-0 rounded-md bg-flux-500 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-flux-400"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div className="mb-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-tight text-flux-400">
             <span aria-hidden>✨</span> Ask AI
