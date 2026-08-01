@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
-import { AccountBar } from "./AccountBar";
+import { SiteSidebar } from "./SiteSidebar";
 import { ActivityFeed } from "./ActivityFeed";
 import { CustomDomainCard } from "./CustomDomainCard";
 import { NextStep } from "./NextStep";
@@ -678,15 +678,20 @@ export function DashboardShell({
       {/* First-run orientation. Shows itself once per user, then hands off to the
           "Start here" card below; reopenable from the top bar. */}
       <Welcome userId={user.id} userName={user.name} siteName={site.name} editHref={editHref} />
-      <AccountBar
-        user={user}
-        sites={sites}
-        currentSiteId={site.id}
-        technical={technical}
-        onTechnicalChange={setTechnical}
-      />
-      <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
-      <TopBar modules={site.modules} />
+      <div className="flex min-h-screen">
+        <SiteSidebar
+          user={user}
+          sites={sites}
+          currentSiteId={site.id}
+          currentSiteName={site.name}
+          modules={site.modules}
+          technical={technical}
+          onTechnicalChange={setTechnical}
+          editHref={editHref}
+          liveUrl={site.customDomain ? `https://${site.customDomain}` : `/s/${site.slug}`}
+        />
+        <main className="min-w-0 flex-1 px-5 pb-20 pt-8 sm:px-8">
+          <div className="mx-auto w-full max-w-[1040px]">
 
       {/* Who is in the building. Only shown when it is somebody else — telling
           you that you are editing your own page is noise. */}
@@ -1152,7 +1157,9 @@ export function DashboardShell({
           )}
         </div>
       </section>
-    </main>
+          </div>
+        </main>
+      </div>
     </TechnicalDetails>
   );
 }
