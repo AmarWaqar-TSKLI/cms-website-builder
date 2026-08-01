@@ -46,7 +46,7 @@ export default function Closing() {
             <span
               className={[
                 "flex items-center gap-2 text-[15px] font-semibold tracking-tight",
-                l.primary ? "text-white" : "text-ink-100",
+                l.primary ? "text-ink-950" : "text-ink-100",
               ].join(" ")}
             >
               {l.label}
@@ -60,7 +60,7 @@ export default function Closing() {
             <span
               className={[
                 "mt-6 text-[13px] leading-relaxed",
-                l.primary ? "text-white/75" : "text-ink-400",
+                l.primary ? "text-ink-950/70" : "text-ink-400",
               ].join(" ")}
             >
               {l.note}
@@ -68,7 +68,7 @@ export default function Closing() {
             <span
               className={[
                 "mono-xs mt-4",
-                l.primary ? "text-white/60" : "text-ink-600",
+                l.primary ? "text-ink-950/55" : "text-ink-600",
               ].join(" ")}
             >
               {l.href}

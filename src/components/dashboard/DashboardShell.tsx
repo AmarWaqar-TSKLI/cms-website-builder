@@ -799,7 +799,7 @@ export function DashboardShell({
       />
 
       {/* ── Branches (Git for your site) ─────────────────────────────────── */}
-      <section className="mt-5 overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
+      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           <span aria-hidden>⑂</span> Branches
         </div>
@@ -965,7 +965,7 @@ export function DashboardShell({
       </section>
 
       {/* ── 4a. AI rebrand ───────────────────────────────────────────────── */}
-      <section className="mt-5 overflow-hidden rounded-2xl border border-flux-500/30 bg-gradient-to-br from-ink-900 to-ink-950 p-6">
+      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>✨</span> AI rebrand
         </div>
@@ -1113,7 +1113,7 @@ export function DashboardShell({
       </Card>
 
       {/* ── Danger zone: delete this site ────────────────────────────────── */}
-      <section className="mt-6 rounded-2xl border border-red-500/25 bg-red-500/[0.03] p-5 sm:p-6">
+      <section className="mt-6 rounded-xl border border-red-500/25 bg-red-500/[0.03] p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-[15px] font-semibold text-ink-100">Delete this site</h2>
@@ -1227,10 +1227,6 @@ function Hero({
 
   return (
     <Card tone={live && !building ? "live" : "default"} className="relative overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_120%_at_0%_0%,rgba(109,92,255,0.13),transparent_60%)]"
-      />
       <div className="relative flex flex-col gap-6 p-6 sm:p-7 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
