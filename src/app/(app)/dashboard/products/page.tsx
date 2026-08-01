@@ -1,15 +1,35 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { currentUser, sitesForUser } from "@/lib/auth";
 import { Card, CardHead, LinkBtn, Tile, UnderTheHood, money } from "@/components/dashboard/dash-ui";
+import { AppShell } from "@/components/dashboard/AppShell";
 import { ProductManager } from "@/components/dashboard/ProductManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductsPage() {
-  const site = await prisma.site.findFirst({
-    orderBy: { createdAt: "asc" },
-    include: { collections: { where: { deletedAt: null }, orderBy: { title: "asc" } } },
-  });
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ site?: string }>;
+}) {
+  const user = await currentUser();
+  if (!user) redirect("/login?next=/dashboard/products");
+
+  const { site: requestedSiteId } = await searchParams;
+  const reachable = await sitesForUser(user.id);
+  const targetId =
+    requestedSiteId && reachable.some((s) => s.id === requestedSiteId)
+      ? requestedSiteId
+      : reachable[0]?.id;
+  const site = targetId
+    ? await prisma.site.findUnique({
+        where: { id: targetId },
+        include: {
+          modules: true,
+          collections: { where: { deletedAt: null }, orderBy: { title: "asc" } },
+        },
+      })
+    : null;
 
   if (!site) {
     return (
@@ -45,26 +65,24 @@ export default async function ProductsPage() {
 
   const revenue = totals._sum.totalCents ?? 0;
   const orderCount = totals._count._all;
+  const home = await prisma.page.findFirst({
+    where: { siteId: site.id, path: "/", deletedAt: null },
+    select: { id: true },
+  });
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-400 transition-colors hover:text-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
-        >
-          ← {site.name}
-        </Link>
-        <nav className="flex items-center gap-1">
-          <LinkBtn href="/walkthrough" size="sm" variant="quiet">
-            Walkthrough
-          </LinkBtn>
-          <LinkBtn href={`/s/${site.slug}`} external size="sm" variant="quiet">
-            View live site ↗
-          </LinkBtn>
-        </nav>
-      </div>
-
+    <AppShell
+      user={{ name: user.name, email: user.email }}
+      sites={reachable.map((s) => ({ id: s.id, name: s.name, slug: s.slug }))}
+      site={{
+        id: site.id,
+        name: site.name,
+        slug: site.slug,
+        customDomain: site.customDomain,
+        modules: site.modules.map((m) => m.module),
+      }}
+      editHref={home ? `/editor/${home.id}` : "/dashboard"}
+    >
       <header className="mb-5">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink-100 sm:text-[32px]">
           Store
@@ -166,6 +184,6 @@ export default async function ProductsPage() {
           </p>
         </UnderTheHood>
       </div>
-    </main>
+    </AppShell>
   );
 }

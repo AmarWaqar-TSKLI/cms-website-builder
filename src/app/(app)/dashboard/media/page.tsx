@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { currentUser, sitesForUser } from "@/lib/auth";
-import { LinkBtn } from "@/components/dashboard/dash-ui";
+import { AppShell } from "@/components/dashboard/AppShell";
 import { MediaManager } from "@/components/dashboard/MediaManager";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +13,22 @@ export const dynamic = "force-dynamic";
  * outside the editor. Guarded like the dashboard: resolved against the session
  * and scoped to a site this user's organisation actually owns.
  */
-export default async function MediaPage() {
+export default async function MediaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ site?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/dashboard/media");
 
+  const { site: requestedSiteId } = await searchParams;
   const reachable = await sitesForUser(user.id);
-  const site = reachable[0]
-    ? await prisma.site.findUnique({ where: { id: reachable[0].id } })
+  const targetId =
+    requestedSiteId && reachable.some((s) => s.id === requestedSiteId)
+      ? requestedSiteId
+      : reachable[0]?.id;
+  const site = targetId
+    ? await prisma.site.findUnique({ where: { id: targetId }, include: { modules: true } })
     : null;
 
   if (!site) {
@@ -44,25 +52,24 @@ export default async function MediaPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  return (
-    <main className="mx-auto min-h-screen w-full max-w-[1140px] px-4 pb-20 pt-6 sm:px-6 sm:pt-8">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-400 transition-colors hover:text-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
-        >
-          ← {site.name}
-        </Link>
-        <nav className="flex items-center gap-1">
-          <LinkBtn href="/dashboard/products" size="sm" variant="quiet">
-            Store
-          </LinkBtn>
-          <LinkBtn href={`/s/${site.slug}`} external size="sm" variant="quiet">
-            View live site ↗
-          </LinkBtn>
-        </nav>
-      </div>
+  const home = await prisma.page.findFirst({
+    where: { siteId: site.id, path: "/", deletedAt: null },
+    select: { id: true },
+  });
 
+  return (
+    <AppShell
+      user={{ name: user.name, email: user.email }}
+      sites={reachable.map((s) => ({ id: s.id, name: s.name, slug: s.slug }))}
+      site={{
+        id: site.id,
+        name: site.name,
+        slug: site.slug,
+        customDomain: site.customDomain,
+        modules: site.modules.map((m) => m.module),
+      }}
+      editHref={home ? `/editor/${home.id}` : "/dashboard"}
+    >
       <header className="mb-6">
         <h1 className="display text-[28px] text-ink-100 sm:text-[32px]">Images</h1>
         <p className="mt-2 max-w-prose text-[13.5px] leading-relaxed text-ink-300">
@@ -84,6 +91,6 @@ export default async function MediaPage() {
           height: m.height,
         }))}
       />
-    </main>
+    </AppShell>
   );
 }
