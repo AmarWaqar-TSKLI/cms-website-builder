@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, sitesForUser } from "@/lib/auth";
-import { Card, CardHead, LinkBtn, Tile, UnderTheHood, money } from "@/components/dashboard/dash-ui";
+import { Card, CardHead, LinkBtn, Tile, UnderTheHood } from "@/components/dashboard/dash-ui";
 import { AppShell } from "@/components/dashboard/AppShell";
 import { ProductManager } from "@/components/dashboard/ProductManager";
 
 export const dynamic = "force-dynamic";
+
+// dash-ui's money() is a client export; format here so this server component can call it.
+const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 export default async function ProductsPage({
   searchParams,
