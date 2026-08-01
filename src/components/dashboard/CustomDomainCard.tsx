@@ -12,7 +12,7 @@
  * public server, there's nothing to point a domain AT, so the panel says so and
  * offers the local preview link instead of pretending.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Badge, Dot, cx } from "../ui";
 import { Btn, Card, CardHead } from "./dash-ui";
 import type { DomainTarget } from "@/lib/domains";
@@ -34,6 +34,9 @@ interface DomainState {
   // Present when the host integration is wired up: the exact DNS record(s) to
   // add, straight from the platform, so the owner never leaves this app.
   railway?: { dnsRecords: RailwayDnsRecord[]; certificateStatus: string | null; connected: boolean } | null;
+  // Present when WE run the DNS: the customer delegates their nameservers to us
+  // once and we manage every record for them (the Vercel/Netlify model).
+  managed?: { active: boolean; nameservers: string[] } | null;
 }
 
 const INPUT =
@@ -156,9 +159,20 @@ export function CustomDomainCard({
           </div>
           {error && <p className="mt-2 text-[12px] text-fail-500">{error}</p>}
           <p className="mt-3 text-[11.5px] leading-relaxed text-ink-500">
-            You'll get the exact DNS record to add at your domain provider (GoDaddy, Namecheap,
-            Cloudflare…). Don't own one yet? You can still connect it — nothing breaks, and your
-            site keeps working at its <span className="font-mono text-ink-400">/s/</span> address.
+            {state?.managed?.active ? (
+              <>
+                Point your domain's nameservers at ours once and we run its DNS from then on — the
+                certificate and every record included. Prefer not to delegate? You'll also get a
+                single record to add instead.
+              </>
+            ) : (
+              <>
+                You'll get the exact DNS record to add at your domain provider (GoDaddy, Namecheap,
+                Cloudflare…).
+              </>
+            )}{" "}
+            Don't own one yet? You can still connect it — nothing breaks, and your site keeps working
+            at its <span className="font-mono text-ink-400">/s/</span> address.
           </p>
         </div>
       ) : (
@@ -196,7 +210,18 @@ export function CustomDomainCard({
           )}
 
           {state?.status !== "connected" &&
-            (state?.railway?.dnsRecords?.length ? (
+            (state?.managed?.active && state.managed.nameservers.length ? (
+              <NameserverInstructions
+                nameservers={state.managed.nameservers}
+                fallback={
+                  state?.railway?.dnsRecords?.length ? (
+                    <RailwayRecords records={state.railway.dnsRecords} />
+                  ) : (
+                    <DnsInstructions domain={domain} target={state?.target} />
+                  )
+                }
+              />
+            ) : state?.railway?.dnsRecords?.length ? (
               <RailwayRecords records={state.railway.dnsRecords} />
             ) : (
               <DnsInstructions domain={domain} target={state?.target} />
@@ -241,6 +266,89 @@ function StatusBadge({ status, busy }: { status: Status; busy: boolean }) {
       <Dot tone="warn" pulse />
       Waiting for DNS
     </Badge>
+  );
+}
+
+/**
+ * The premium path: hand the customer our nameservers. They change them ONCE at
+ * their registrar and we own every record from then on — apex, www, subdomains,
+ * the certificate, all of it. This is what "we host your domain" means, and it's
+ * strictly less error-prone than copy-pasting a record, so it leads. The
+ * single-record method stays one click away for people who'd rather not delegate.
+ */
+function NameserverInstructions({
+  nameservers,
+  fallback,
+}: {
+  nameservers: string[];
+  fallback: ReactNode;
+}) {
+  const [showFallback, setShowFallback] = useState(false);
+  const [copied, setCopied] = useState<number | null>(null);
+
+  const copy = async (value: string, i: number) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(i);
+      setTimeout(() => setCopied((c) => (c === i ? null : c)), 1200);
+    } catch {
+      /* clipboard blocked — the value is right there to select by hand */
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-ink-800 bg-ink-950/50 p-4">
+        <div className="flex items-center gap-2">
+          <Badge tone="neutral">Recommended</Badge>
+          <span className="text-[12.5px] font-medium text-ink-200">Point your nameservers to us</span>
+        </div>
+        <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">
+          At your domain provider, replace the nameservers with the two below. That's the only
+          change you make — we handle every record and the certificate from here, and it keeps
+          working even if our servers move.
+        </p>
+        <div className="mt-3 space-y-1.5">
+          {nameservers.map((ns, i) => (
+            <button
+              key={ns}
+              type="button"
+              onClick={() => void copy(ns, i)}
+              className="group flex w-full items-center justify-between gap-3 rounded-lg border border-ink-800 bg-ink-950/70 px-3 py-2 text-left font-mono text-[13px] text-ink-100 hover:border-ink-600"
+              title="Click to copy"
+            >
+              <span className="break-all">{ns}</span>
+              <span className="shrink-0 text-[11px] text-ink-500 group-hover:text-flux-300">
+                {copied === i ? "Copied" : "Copy"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-2.5 text-[11px] leading-relaxed text-ink-600">
+          Nameserver changes can take a few minutes to a few hours to propagate. This flips to{" "}
+          <span className="text-ink-400">Connected</span> automatically once it does.
+        </p>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowFallback((v) => !v)}
+          className="text-[11.5px] text-ink-500 underline decoration-ink-700 underline-offset-2 hover:text-flux-300"
+        >
+          {showFallback ? "Hide the single-record method" : "Prefer to add just one DNS record instead?"}
+        </button>
+        {showFallback && (
+          <div className="mt-2.5">
+            <p className="mb-2 text-[11.5px] leading-relaxed text-ink-500">
+              If you'd rather keep your current nameservers, add this one record instead. Either
+              method works — you only need one.
+            </p>
+            {fallback}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

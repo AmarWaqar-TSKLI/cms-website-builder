@@ -25,6 +25,12 @@ import {
   registerRailwayDomain,
   railwayDomainStatus,
 } from "@/lib/railway";
+import {
+  createManagedZone,
+  deleteManagedZone,
+  managedDnsConfigured,
+  managedNameservers,
+} from "@/lib/dnszone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +44,40 @@ export const dynamic = "force-dynamic";
  */
 async function domainResponse(siteId: string, domain: string | null, register: boolean) {
   if (!domain) {
-    return { domain: null, target: domainTarget(), status: "none" as const, detail: "", railway: null };
+    return {
+      domain: null,
+      target: domainTarget(),
+      status: "none" as const,
+      detail: "",
+      railway: null,
+      managed: managedDnsConfigured() ? { active: true, nameservers: managedNameservers() } : null,
+    };
   }
+
+  // The best path when it's configured: we run the customer's DNS ourselves.
+  // They point their nameservers at ours ONCE and we manage every record for
+  // them (apex, www, wildcard → the TLS front door), and the certificate is
+  // issued automatically on first request. This is the Vercel/Netlify model —
+  // no per-record copy-paste, and it survives the server ever changing IP.
+  if (managedDnsConfigured()) {
+    let nameservers = managedNameservers();
+    if (register) {
+      try {
+        const ns = await createManagedZone(domain);
+        if (ns) nameservers = ns;
+      } catch (err) {
+        // A DNS-API hiccup must not fail the request — the domain is saved
+        // either way; the customer can still point their nameservers, and a
+        // re-check re-creates the zone (createManagedZone is idempotent).
+        captureError(err, { scope: "domain.managed", siteId });
+      }
+    }
+    // The same DNS resolution check works for this path too: once delegation
+    // propagates, the domain resolves (via our zone) to the TLS front door.
+    const status = await checkDomainStatus(domain);
+    return { domain, target: domainTarget(), ...status, railway: null, managed: { active: true, nameservers } };
+  }
+
   if (railwayConfigured()) {
     try {
       const info = register ? await registerRailwayDomain(domain) : await railwayDomainStatus(domain);
@@ -52,6 +90,7 @@ async function domainResponse(siteId: string, domain: string | null, register: b
             ? "Your domain points here and its certificate is issued — it's live."
             : "Add the DNS record below at your domain provider. It usually goes live within an hour.",
           railway: info,
+          managed: null,
         };
       }
     } catch (err) {
@@ -61,7 +100,7 @@ async function domainResponse(siteId: string, domain: string | null, register: b
     }
   }
   const status = await checkDomainStatus(domain);
-  return { domain, target: domainTarget(), ...status, railway: null };
+  return { domain, target: domainTarget(), ...status, railway: null, managed: null };
 }
 
 /** Current domain, where to point it, and whether it's live yet. */
@@ -135,8 +174,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ site
 
   if (site?.customDomain) {
     // Also unregister it from the host, so disconnecting here fully undoes the
-    // connect (best-effort — a leftover on Railway won't fail the disconnect).
+    // connect (best-effort — a leftover won't fail the disconnect).
     await deleteRailwayDomain(site.customDomain);
+    await deleteManagedZone(site.customDomain);
     await logActivity({
       siteId,
       userId: auth.user.id,
