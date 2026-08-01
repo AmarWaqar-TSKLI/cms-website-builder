@@ -25,19 +25,19 @@ const FOCUS =
   "outline-none focus-visible:ring-2 focus-visible:ring-flux-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950";
 
 const VARIANT: Record<Variant, string> = {
-  primary:
-    "bg-flux-500 text-white shadow-[0_1px_0_0_rgba(255,255,255,0.14)_inset] hover:bg-flux-400 active:bg-flux-500",
-  secondary:
-    "border border-ink-600 bg-ink-800/70 text-ink-100 hover:border-ink-500 hover:bg-ink-800",
-  ghost: "border border-ink-700 text-ink-300 hover:border-ink-500 hover:text-ink-100",
-  quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-800/70",
-  danger: "bg-warn-500 text-ink-950 font-semibold hover:bg-warn-500/90",
+  // Flat black fill, white text — the Geist primary. No gloss, just contrast.
+  primary: "bg-flux-500 text-white hover:bg-flux-400 active:bg-flux-500",
+  // White with a hairline border; the border darkens on hover.
+  secondary: "border border-ink-800 bg-ink-900 text-ink-200 hover:border-ink-600 hover:bg-ink-850",
+  ghost: "border border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100",
+  quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-850",
+  danger: "border border-fail-500/35 text-fail-500 hover:bg-fail-500/8",
 };
 
 const SIZE: Record<Size, string> = {
-  md: "h-10 px-4 text-[13px] rounded-xl",
-  sm: "h-8 px-3 text-[12px] rounded-lg",
-  xs: "h-7 px-2.5 text-[11px] rounded-lg",
+  md: "h-9 px-4 text-[13px] rounded-md",
+  sm: "h-8 px-3 text-[12px] rounded-md",
+  xs: "h-7 px-2.5 text-[11px] rounded",
 };
 
 export function btn(variant: Variant = "secondary", size: Size = "md", className?: string) {
@@ -119,7 +119,7 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-2xl border bg-ink-900 shadow-[0_1px_2px_rgba(17,24,32,0.04)]",
+        "rounded-xl border bg-ink-900",
         tone === "live" ? "border-live-500/30" : "border-ink-800",
         className,
       )}

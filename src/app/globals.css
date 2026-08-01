@@ -25,33 +25,36 @@
 */
 
 @theme {
-  --color-ink-950: #f4f6f8; /* page ground */
+  /* Geist-style true neutrals — no blue bias. The scale still reads by ROLE:
+     950 is the page, 900 a card, 800 the hairline, 100 the strongest text. */
+  --color-ink-950: #fafafa; /* page ground */
   --color-ink-900: #ffffff; /* cards, panels, bars */
-  --color-ink-850: #eef1f5; /* hover on a surface */
-  --color-ink-800: #e2e6ec; /* hairlines and borders */
-  --color-ink-700: #d0d6df; /* stronger borders, inputs */
-  --color-ink-600: #aab3c0; /* placeholders, disabled */
-  --color-ink-500: #7c8797; /* faint labels */
-  --color-ink-400: #5a6472; /* secondary text */
-  --color-ink-300: #414b58; /* body text */
-  --color-ink-200: #232c37; /* strong body */
-  --color-ink-100: #111820; /* headings */
+  --color-ink-850: #f4f4f5; /* hover on a surface */
+  --color-ink-800: #eaeaea; /* hairlines and borders — the signature */
+  --color-ink-700: #dcdcdc; /* stronger borders, inputs */
+  --color-ink-600: #a1a1a1; /* placeholders, disabled */
+  --color-ink-500: #8f8f8f; /* faint labels */
+  --color-ink-400: #666666; /* secondary text */
+  --color-ink-300: #454545; /* body text */
+  --color-ink-200: #171717; /* strong body */
+  --color-ink-100: #000000; /* headings */
 
-  /* Ink blue. 500 fills, 400 is the darker hover, 300 is text on white. */
-  --color-flux-500: #1f5fa9;
-  --color-flux-400: #184c87;
-  --color-flux-300: #1b5a9e;
+  /* The one accent IS the ink: a black fill. 400 is the (lighter) hover,
+     300 is emphasis text. Colour is spent only on state, never on chrome. */
+  --color-flux-500: #000000;
+  --color-flux-400: #333333;
+  --color-flux-300: #000000;
 
   /* State only. Never decoration, never an accent. */
-  --color-live-500: #0e7c58;
-  --color-warn-500: #a96400;
-  --color-fail-500: #c0342f;
+  --color-live-500: #17864e;
+  --color-warn-500: #a9640a;
+  --color-fail-500: #d02a2a;
 
-  /* Reuse, which is its own idea and deserves its own hue. */
-  --color-reuse-500: #0f766e;
+  /* Reuse stays distinct, but muted to a neutral so the palette holds. */
+  --color-reuse-500: #171717;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -62,25 +65,26 @@
   resolves through these vars rather than a literal colour.
 */
 .theme-dark {
-  --color-ink-950: #08080a;
-  --color-ink-900: #0d0d11;
-  --color-ink-850: #121217;
-  --color-ink-800: #17171d;
-  --color-ink-700: #212129;
-  --color-ink-600: #2e2e39;
-  --color-ink-500: #454553;
-  --color-ink-400: #6e6e80;
-  --color-ink-300: #9a9aad;
-  --color-ink-200: #c8c8d4;
-  --color-ink-100: #e8e8ef;
+  --color-ink-950: #000000; /* true black page */
+  --color-ink-900: #0a0a0a; /* cards */
+  --color-ink-850: #141414; /* hover */
+  --color-ink-800: #2a2a2a; /* hairlines */
+  --color-ink-700: #383838; /* stronger borders */
+  --color-ink-600: #4d4d4d;
+  --color-ink-500: #6b6b6b;
+  --color-ink-400: #8f8f8f;
+  --color-ink-300: #a8a8a8;
+  --color-ink-200: #ededed;
+  --color-ink-100: #ffffff;
 
-  --color-flux-500: #6d5cff;
-  --color-flux-400: #8b7cff;
-  --color-flux-300: #a89dff;
+  /* In the dark, the accent inverts to white (a white fill, dark text). */
+  --color-flux-500: #ededed;
+  --color-flux-400: #cfcfcf;
+  --color-flux-300: #ffffff;
 
-  --color-live-500: #12b981;
-  --color-warn-500: #f0a83c;
-  --color-fail-500: #f2555a;
+  --color-live-500: #3fb950;
+  --color-warn-500: #d29922;
+  --color-fail-500: #f85149;
 
   color-scheme: dark;
   background: var(--color-ink-950);
@@ -99,13 +103,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Page and section titles. Used sparingly — the serif is the warmth, and it
-   stops being warm the moment it is everywhere. */
+/* Page and section titles. Geist-style: the same sans as the body, but tight
+   and heavy, so hierarchy comes from weight + tracking, not a second typeface. */
 .display {
   font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-weight: 660;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
@@ -147,7 +150,7 @@ body {
 @utility panel {
   background: var(--color-ink-900);
   border: 1px solid var(--color-ink-800);
-  border-radius: 14px;
+  border-radius: 10px;
 }
 
 @utility mono-xs {

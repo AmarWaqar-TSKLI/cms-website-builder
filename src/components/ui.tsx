@@ -6,7 +6,7 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cx("rounded-2xl border border-ink-700 bg-ink-900/80", className)}>{children}</div>
+    <div className={cx("rounded-xl border border-ink-800 bg-ink-900", className)}>{children}</div>
   );
 }
 
