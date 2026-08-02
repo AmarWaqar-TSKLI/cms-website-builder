@@ -108,6 +108,18 @@ const VISIBLE_VERSIONS = 4;
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Languages offered by AI Translate (must mirror LOCALES in lib/translate). */
+const TRANSLATE_LOCALES: { code: string; native: string; name: string }[] = [
+  { code: "es", native: "Español", name: "Spanish" },
+  { code: "fr", native: "Français", name: "French" },
+  { code: "de", native: "Deutsch", name: "German" },
+  { code: "pt", native: "Português", name: "Portuguese" },
+  { code: "it", native: "Italiano", name: "Italian" },
+  { code: "ja", native: "日本語", name: "Japanese" },
+  { code: "zh", native: "中文", name: "Chinese" },
+  { code: "ar", native: "العربية", name: "Arabic" },
+];
+
 /* ── shell ────────────────────────────────────────────────────────────────── */
 
 export interface DashUser {
@@ -283,6 +295,8 @@ export function DashboardShell({
   const [mergeSel, setMergeSel] = useState<Set<string>>(new Set());
   const [mergeTheme, setMergeTheme] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [translateSel, setTranslateSel] = useState<Set<string>>(new Set());
+  const [translated, setTranslated] = useState<string[]>([]);
 
   const router = useRouter();
 
@@ -397,6 +411,41 @@ export function DashboardShell({
       setBusy(null);
     }
   }, [site.id]);
+
+  // AI translate: build translated locale pages, publish as one release, watch it.
+  const runTranslate = useCallback(async () => {
+    const codes = [...translateSel];
+    if (!codes.length) return;
+    setBusy("translate");
+    setFlash(null);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/translate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locales: codes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFlash({ kind: "error", text: data.error ?? "The translation didn't go through." });
+        return;
+      }
+      const created: string[] = data.localesCreated ?? [];
+      setTranslated(created);
+      setTranslateSel(new Set());
+      setFlash({
+        kind: "info",
+        text: created.length
+          ? `Translated into ${created.length} language${created.length === 1 ? "" : "s"} (${data.pagesCreated} page${data.pagesCreated === 1 ? "" : "s"}, ${data.fieldsTranslated} fields). Publishing v${data.versionNo}…`
+          : `Nothing new to translate${data.localesSkipped?.length ? ` — ${data.localesSkipped.join(", ")} already exist.` : "."}`,
+      });
+      if (data.releaseId) setWatching({ releaseId: data.releaseId, versionNo: data.versionNo });
+      await load();
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, translateSel, load]);
 
   // ── Branches ───────────────────────────────────────────────────────────────
   const branchSite = useCallback(async () => {
@@ -1047,6 +1096,86 @@ export function DashboardShell({
             Changes every page at once. It becomes a new version you can roll back with one click.
           </p>
         )}
+      </section>
+
+      {/* ── 4a-ii. AI translate ──────────────────────────────────────────── */}
+      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
+          <span aria-hidden>🌍</span> AI translate
+        </div>
+        <h2 className="display mt-2 text-[20px] text-ink-100">Go multilingual in one click</h2>
+        <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
+          Pick languages and the AI translates every page, serving each at its own address
+          (<span className="font-mono text-ink-400">/es</span>,{" "}
+          <span className="font-mono text-ink-400">/fr</span>…) with a language switcher added to your
+          nav. It's published as one version, so a single rollback removes them all.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {TRANSLATE_LOCALES.map((l) => {
+            const on = translateSel.has(l.code);
+            return (
+              <button
+                key={l.code}
+                type="button"
+                aria-pressed={on}
+                disabled={busy === "translate" || !!watching}
+                onClick={() =>
+                  setTranslateSel((s) => {
+                    const next = new Set(s);
+                    if (next.has(l.code)) next.delete(l.code);
+                    else next.add(l.code);
+                    return next;
+                  })
+                }
+                className={cx(
+                  "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-40",
+                  on
+                    ? "border-flux-500 bg-flux-500/15 text-flux-200"
+                    : "border-ink-700 text-ink-300 hover:border-ink-500",
+                )}
+              >
+                {l.native}
+                <span className="ml-1.5 font-mono text-[10.5px] text-ink-500">/{l.code}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void runTranslate()}
+            disabled={busy === "translate" || !!watching || translateSel.size === 0}
+            className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+          >
+            {busy === "translate"
+              ? "Translating…"
+              : watching
+                ? "Publishing…"
+                : `Translate into ${translateSel.size || "…"} language${translateSel.size === 1 ? "" : "s"} & publish`}
+          </button>
+          {translated.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-400">
+              <span>Live:</span>
+              {translated.map((code) => (
+                <a
+                  key={code}
+                  href={
+                    site.customDomain
+                      ? `https://${site.customDomain}/${code}`
+                      : `/s/${site.slug}/${code}`
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-ink-700 px-2 py-0.5 font-mono text-[11px] text-flux-300 hover:border-flux-500/50"
+                >
+                  /{code} ↗
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── 4b. your own domain ──────────────────────────────────────────── */}
