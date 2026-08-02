@@ -23,6 +23,12 @@ what still needs doing. Honest, not aspirational.
 - **Tenant isolation / authz.** Every site-scoped route runs `guardSite` (or a
   by-entity variant) against the DB — authorization is in the route, not the edge.
   "Not yours" and "doesn't exist" return the same `403`, so ids can't be probed.
+- **CSRF.** The session cookie is `httpOnly` + `SameSite=Lax` (blocks the classic
+  cross-site POST). On top of that, every cookie-authed guard runs a first-party
+  check (`Sec-Fetch-Site`, with an Origin-vs-Host fallback) before authorizing —
+  a cross-site call to a dashboard/editor endpoint is refused with `403`. The
+  public cross-origin surfaces (bearer-auth Content API, cart/forms runtime)
+  don't use those guards, so they're unaffected. `isFirstParty` is unit-tested.
 - **Credential storage.** Passwords are scrypt with parameters carried in the
   hash. Session tokens and Content-API keys are stored **only as SHA-256** — a
   leaked DB yields no working credential. API keys show their plaintext once and
@@ -44,9 +50,6 @@ what still needs doing. Honest, not aspirational.
 
 ## Known gaps / to do
 
-- **CSRF.** State-changing routes are cookie-authenticated; verify the session
-  cookie's `SameSite` (should be `Lax`/`Strict`) and add explicit CSRF tokens for
-  anything a cross-site form could POST. **← audit this before real users.**
 - **Secret rotation.** Several secrets were passed through operator chat during
   bring-up and must be rotated: DB password, `PDNS_API_KEY` (was printed to a
   console once), the AI key, and the host API token. None are in git.

@@ -1,0 +1,84 @@
+name: Integration
+
+# The integration suite needs the full stack: Postgres + the app server + the
+# build worker (tests hit HTTP endpoints via requireApp and wait for real builds).
+# It's manual (workflow_dispatch) on purpose: it hasn't been observed green in CI
+# yet, so it should not gate pushes until it has. Once it passes here, promote it
+# by adding `push`/`pull_request` triggers. Run it from the Actions tab → this
+# workflow → "Run workflow".
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cms
+          POSTGRES_PASSWORD: cms
+          POSTGRES_DB: cms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cms -d cms"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      DATABASE_URL: postgresql://cms:cms@localhost:5432/cms?schema=public
+      # Local Postgres runs migrations directly, so DIRECT_URL == DATABASE_URL.
+      DIRECT_URL: postgresql://cms:cms@localhost:5432/cms?schema=public
+      ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+      NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
+      APP_URL: http://localhost:3000
+      APP_INTERNAL_URL: http://localhost:3000
+      WORKER_POLL_MS: "250"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run build
+
+      - name: Start app + worker
+        run: |
+          mkdir -p artifacts
+          npm start > app.log 2>&1 &
+          echo $! > app.pid
+          npm run worker:once > worker.log 2>&1 &
+          echo $! > worker.pid
+          # Wait for the app to answer /api/health before the tests assume it.
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "app is up after ${i} tries"; exit 0
+            fi
+            sleep 2
+          done
+          echo "app did not become healthy; logs:"; cat app.log; exit 1
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: App / worker logs on failure
+        if: failure()
+        run: |
+          echo "=== app.log ==="; cat app.log || true
+          echo "=== worker.log ==="; cat worker.log || true
+
+      - name: Stop background processes
+        if: always()
+        run: |
+          kill "$(cat app.pid)" 2>/dev/null || true
+          kill "$(cat worker.pid)" 2>/dev/null || true

@@ -117,9 +117,12 @@ same pointer flip.
   href/basePath, theme-security (XSS sink), content-API serialization + key
   crypto, locale helpers. No DB. **These run in CI.**
 - **Integration** (`tests/integration`, `npm run test:integration`) — real
-  Postgres + spawned worker processes + a running app (`requireApp`): publish,
-  rollback, autosave, the static cart, worker builds. **Not in CI yet** because
-  they need a live app server; run locally against a migrated dev DB.
+  Postgres + the build worker + a running app (`requireApp`): publish, rollback,
+  autosave, the static cart, worker builds. Wired as a **manual** workflow
+  (`.github/workflows/integration.yml`, `workflow_dispatch`: Postgres service →
+  migrate → build → start app + worker → run the suite). It's manual, not a push
+  gate, until it's been observed green in CI — promote it by adding `push`
+  triggers once it has.
 
 CI (`.github/workflows/ci.yml`) gates every push on **typecheck + unit + build**.
 
@@ -145,7 +148,8 @@ Being explicit so nobody has to discover these the hard way:
 - **Export to code.** Faithful (same renderer) but section internals are HTML
   strings via `dangerouslySetInnerHTML`, not hand-written JSX; interactivity (the
   cart) is intentionally dropped.
-- **Integration tests aren't in CI** (see Testing).
+- **Integration tests are a manual CI workflow**, not yet a push gate (see
+  Testing) — pending a first green run.
 
 ## What I'd do next, at scale
 

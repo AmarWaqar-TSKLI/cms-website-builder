@@ -2,8 +2,8 @@ name: CI
 
 # Runs on every push and pull request. Three gates that must stay green:
 # types compile, unit tests pass, and the app actually builds. Integration
-# tests are not run here on purpose — they need a live app server + Postgres
-# (see ARCHITECTURE.md § Testing); run them locally with `npm run test:integration`.
+# tests need a live app server + Postgres, so they live in a separate manual
+# workflow (integration.yml) until they've been observed green in CI.
 on:
   push:
     branches: [master]
