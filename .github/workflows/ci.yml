@@ -1,0 +1,47 @@
+name: CI
+
+# Runs on every push and pull request. Three gates that must stay green:
+# types compile, unit tests pass, and the app actually builds. Integration
+# tests are not run here on purpose — they need a live app server + Postgres
+# (see ARCHITECTURE.md § Testing); run them locally with `npm run test:integration`.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Prisma needs a syntactically valid URL to instantiate the client; nothing
+      # in typecheck/unit/build actually connects, so a dummy is enough and no
+      # secret is required for CI.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
