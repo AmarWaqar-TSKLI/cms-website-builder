@@ -14,7 +14,6 @@
  * up and ready to use, with preflight off so it never fights the site's own reset.
  */
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import archiver from "archiver";
 import { PassThrough } from "node:stream";
 import { prisma } from "./db";
@@ -29,6 +28,19 @@ export interface NextExportBundle {
   bytes: Buffer;
   releaseId: string;
   versionNo: number;
+}
+
+/**
+ * react-dom/server is loaded via a dynamic import ON PURPOSE: a STATIC import of
+ * it anywhere reachable from an app route fails the Next build (it must not enter
+ * the RSC/client graph). Deferring it to call time keeps this module importable
+ * by the route while the actual markup rendering happens server-side in Node.
+ */
+type RenderFn = (el: React.ReactElement) => string;
+let _render: RenderFn | null = null;
+async function getRenderer(): Promise<RenderFn> {
+  if (!_render) _render = (await import("react-dom/server")).renderToStaticMarkup as RenderFn;
+  return _render;
 }
 
 function exportContext(rel: LoadedRelease): RenderContext {
@@ -47,8 +59,8 @@ function exportContext(rel: LoadedRelease): RenderContext {
   };
 }
 
-function toStaticHtml(nodes: PageNode[], ctx: RenderContext): string {
-  return renderToStaticMarkup(React.createElement(React.Fragment, null, renderBody(nodes, ctx)));
+function toStaticHtml(render: RenderFn, nodes: PageNode[], ctx: RenderContext): string {
+  return render(React.createElement(React.Fragment, null, renderBody(nodes, ctx)));
 }
 
 /** "Hero", "Our Team" → "Hero", "OurTeam"; anything empty → "Section". */
@@ -90,6 +102,7 @@ export async function buildNextExport(releaseId: string): Promise<NextExportBund
   const rel = await loadRelease(releaseId);
   if (!rel) throw new Error("Release is not ready to render.");
   const ctx = exportContext(rel);
+  const render = await getRenderer();
 
   const archive = archiver("zip", { zlib: { level: 9 } });
   const sink = new PassThrough();
@@ -119,10 +132,10 @@ export async function buildNextExport(releaseId: string): Promise<NextExportBund
   );
 
   // ── chrome (nav + footer), rendered once and reused by the layout ───────────
-  const navHtml = renderToStaticMarkup(
+  const navHtml = render(
     React.createElement(SiteNav, { layout: rel.layout, tokens: rel.tokens, basePath: "" }),
   );
-  const footerHtml = renderToStaticMarkup(
+  const footerHtml = render(
     React.createElement(SiteFooter, { layout: rel.layout, tokens: rel.tokens, basePath: "" }),
   );
   add(
@@ -182,7 +195,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       usedNames.add(unique);
       name = unique;
 
-      const html = toStaticHtml([node], ctx);
+      const html = toStaticHtml(render, [node], ctx);
       add(`${root}components/${compDir}/${name}.tsx`, sectionFile(html));
       const importPath = `@/components/${compDir}/${name}`;
       imports.push(`import ${name} from ${JSON.stringify(importPath)};`);
