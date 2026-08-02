@@ -22,6 +22,7 @@ import { Ago } from "./Ago";
 import { SiteSidebar } from "./SiteSidebar";
 import { ActivityFeed } from "./ActivityFeed";
 import { CustomDomainCard } from "./CustomDomainCard";
+import { ContentApiCard } from "./ContentApiCard";
 import { NextStep } from "./NextStep";
 import { SetupChecklist, type SetupStep } from "./SetupChecklist";
 import { Welcome } from "./Welcome";
@@ -1050,6 +1051,9 @@ export function DashboardShell({
 
       {/* ── 4b. your own domain ──────────────────────────────────────────── */}
       <CustomDomainCard className="mt-5" siteId={site.id} initialDomain={site.customDomain} />
+
+      {/* ── 4c. headless Content API ─────────────────────────────────────── */}
+      <ContentApiCard className="mt-5" siteId={site.id} slug={site.slug} />
 
       {/* ── 5. the store ─────────────────────────────────────────────────── */}
       <CommercePanel className="mt-5" commerce={commerce} modules={site.modules} />

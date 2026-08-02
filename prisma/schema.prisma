@@ -180,8 +180,38 @@ model Site {
   tags      Tag[]
   activity  ActivityLog[]
   formSubmissions FormSubmission[]
+  apiKeys   ApiKey[]
 
   @@map("sites")
+}
+
+/// A read-only key for the headless Content API.
+///
+/// Same discipline as Session and the password column: the row stores only a
+/// SHA-256 of the secret, never the secret itself. The plaintext is shown to the
+/// owner exactly once, at creation, and cannot be recovered afterwards — a
+/// leaked database therefore hands out no working keys. Revoking is a soft flag
+/// (append-only spirit) so an audit of "what could read this site, and when"
+/// stays answerable.
+model ApiKey {
+  id         String    @id @default(uuid())
+  siteId     String    @map("site_id")
+  name       String    @default("API key")
+  /// SHA-256 of the token. The primary lookup — an incoming key is hashed and
+  /// matched here, so the plaintext never has to exist server-side.
+  keyHash    String    @unique @map("key_hash")
+  /// A short, non-secret prefix ("cms_live_a1b2…") shown in the dashboard so the
+  /// owner can tell their keys apart without ever seeing the full secret again.
+  prefix     String
+  lastUsedAt DateTime? @map("last_used_at")
+  createdBy  String?   @map("created_by")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("api_keys")
 }
 
 enum ModuleName {

@@ -33,6 +33,8 @@ export type ActivityAction =
   | "site.renamed"
   | "site.domain_set"
   | "site.domain_removed"
+  | "site.api_key_created"
+  | "site.api_key_revoked"
   | "theme.updated"
   | "product.created"
   | "product.deleted"
