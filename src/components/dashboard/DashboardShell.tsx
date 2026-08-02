@@ -1746,6 +1746,15 @@ function ReleaseCard({
               .zip
             </LinkBtn>
             <LinkBtn
+              href={`/api/releases/${r.id}/export/nextjs`}
+              download
+              size="xs"
+              variant="quiet"
+              title="Download this exact version as an editable Next.js project"
+            >
+              Code
+            </LinkBtn>
+            <LinkBtn
               href={`/api/releases/${r.id}/export/container`}
               download
               size="xs"
@@ -1805,7 +1814,7 @@ function ExportPanel({
         </div>
       ) : (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <ExportCard
               title="Open it here"
               detail="Your site, served from this app. The address you'd hand to anyone."
@@ -1820,6 +1829,14 @@ function ExportPanel({
               cta="Download .zip"
               href={`/api/releases/${releaseId}/export/static`}
               tech="The build output copied verbatim; it runs from file:// with no server."
+            />
+            <ExportCard
+              title="Export to code"
+              detail="A real Next.js + TypeScript project — one component per section, your theme, ready to edit."
+              cta="Download project"
+              href={`/api/releases/${releaseId}/export/nextjs`}
+              tech="Every block rendered by the same engine, emitted as React components. npm i && npm run dev."
+              accent
             />
             <ExportCard
               title="Run it yourself"
@@ -1856,6 +1873,7 @@ function ExportCard({
   href,
   external,
   tech,
+  accent,
 }: {
   title: string;
   detail: string;
@@ -1863,13 +1881,19 @@ function ExportCard({
   href: string;
   external?: boolean;
   tech: string;
+  accent?: boolean;
 }) {
   return (
     <a
       href={href}
       {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
       title={tech}
-      className="group flex flex-col rounded-xl border border-ink-800 bg-ink-950/60 p-4 transition-colors hover:border-flux-500/40 hover:bg-ink-900/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
+      className={cx(
+        "group flex flex-col rounded-xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400",
+        accent
+          ? "border-flux-500/40 bg-flux-500/[0.06] hover:border-flux-500/70 hover:bg-flux-500/10"
+          : "border-ink-800 bg-ink-950/60 hover:border-flux-500/40 hover:bg-ink-900/70",
+      )}
     >
       <div className="text-[13.5px] font-medium text-ink-100">{title}</div>
       <p className="mt-1 flex-1 text-[12px] leading-relaxed text-ink-400">{detail}</p>
