@@ -11,8 +11,8 @@
  */
 import { NextResponse } from "next/server";
 import { verifyKey } from "@/lib/apikeys";
-import { siteBySlug, loadRelease } from "@/lib/runtime/release";
-import { serializeRelease } from "@/lib/content-api";
+import { siteBySlug, loadRelease, normalisePath } from "@/lib/runtime/release";
+import { serializeRelease, contentEtag } from "@/lib/content-api";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { captureError } from "@/lib/monitor";
 
@@ -72,12 +72,31 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     const release = await loadRelease(site.liveReleaseId);
     if (!release) return json({ error: "Published release is not ready." }, 409);
 
-    const embed = new URL(req.url).searchParams.get("embed") === "1";
-    return json(serializeRelease(release, embed), 200, {
-      // Immutable-release semantics: safe to cache hard, keyed by the version.
+    const url = new URL(req.url);
+    const embed = url.searchParams.get("embed") === "1";
+    const pageParam = url.searchParams.get("page");
+    const page = pageParam ? normalisePath(pageParam) : null;
+
+    // Conditional GET: the response is a pure function of the immutable release
+    // (+ embed + page), so a matching If-None-Match can 304 with no work.
+    const etag = contentEtag(release.versionNo, embed, page);
+    const cacheHeaders = {
       "Cache-Control": "public, max-age=60, s-maxage=300",
       "X-Content-Version": String(release.versionNo),
-    });
+      ETag: etag,
+      "Last-Modified": new Date(release.createdAt).toUTCString(),
+    };
+    if (req.headers.get("if-none-match") === etag) {
+      return new NextResponse(null, { status: 304, headers: { ...CORS, ...cacheHeaders } });
+    }
+
+    const content = serializeRelease(release, embed);
+    if (page) {
+      const only = content.pages.find((p) => p.path === page);
+      if (!only) return json({ error: `No page '${page}' in this site.` }, 404);
+      return json({ ...content, pages: [only] }, 200, cacheHeaders);
+    }
+    return json(content, 200, cacheHeaders);
   } catch (err) {
     captureError(err, { scope: "content-api", slug });
     return json({ error: "Failed to load content." }, 500);

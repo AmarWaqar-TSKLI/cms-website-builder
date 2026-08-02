@@ -9,11 +9,12 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { loadRelease, normalisePath, type LiveSite, type LoadedRelease } from "./release";
-import { SiteBody } from "@/components/site/SiteBody";
+import { SiteBody, type LocaleAlternate } from "@/components/site/SiteBody";
 import { CartBar } from "@/components/site/CartBar";
 import { NotPublished, PageMissing } from "@/components/site/Empty";
 import type { RenderContext, ResolvedPost } from "@/lib/registry/types";
 import { postPageNodes, postPath } from "@/lib/post-page";
+import { localeOf, stripLocale } from "@/lib/locales";
 
 export interface Resolved {
   site: LiveSite;
@@ -66,6 +67,23 @@ function findFrozenPost(release: LoadedRelease, path: string): ResolvedPost | nu
   return Object.values(posts).find((p) => p.slug === slug && !p.missing) ?? null;
 }
 
+/**
+ * The locale of the requested page and every locale variant of it, computed from
+ * the release's own page set. `alternates` is what becomes hreflang links; it
+ * only has more than one entry once the site has actually been translated.
+ */
+function localeInfo(
+  release: LoadedRelease,
+  path: string,
+): { locale: string | null; alternates: LocaleAlternate[] } {
+  const logical = stripLocale(path);
+  const alternates: LocaleAlternate[] = Object.values(release.pages)
+    .filter((p) => stripLocale(p.path) === logical)
+    .map((p) => ({ code: localeOf(p.path) ?? "x-default", path: p.path }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+  return { locale: localeOf(path), alternates };
+}
+
 export function contextFor(release: LoadedRelease, basePath = ""): RenderContext {
   return {
     siteId: release.siteId,
@@ -95,6 +113,7 @@ export function SitePage({ resolved, basePath = "" }: { resolved: Resolved; base
   const { release, path } = resolved;
   const page = release.pages[path];
   const ctx = contextFor(release, basePath);
+  const { locale, alternates } = localeInfo(release, path);
 
   return (
     <>
@@ -106,7 +125,13 @@ export function SitePage({ resolved, basePath = "" }: { resolved: Resolved; base
       <meta name="cms:frozen-at" content={release.data.frozenAt} />
       <title>{`${page.title} — ${release.siteName}`}</title>
 
-      <SiteBody body={page.root} layout={release.layout} ctx={ctx}>
+      <SiteBody
+        body={page.root}
+        layout={release.layout}
+        ctx={ctx}
+        locale={locale}
+        alternates={alternates}
+      >
         {/* The one interactive island. Everything above it is server-rendered
             and ships no JavaScript. */}
         <CartBar

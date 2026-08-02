@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serializeRelease } from "../../src/lib/content-api";
+import { serializeRelease, contentEtag } from "../../src/lib/content-api";
 import { hashToken, looksLikeKey, mintKey } from "../../src/lib/apikeys";
 import type { LoadedRelease } from "../../src/lib/runtime/release";
 import type { PageNode } from "../../src/lib/registry/types";
@@ -84,6 +84,16 @@ describe("serializeRelease", () => {
     const embedded = serializeRelease(fixture(), true).pages[0].blocks[1].props.image as string;
     expect(embedded.startsWith("data:image/png;base64,")).toBe(true);
     expect(embedded.length).toBeGreaterThan(400);
+  });
+});
+
+describe("contentEtag", () => {
+  it("changes with version, embed and page — and is stable otherwise", () => {
+    expect(contentEtag(3, false)).toBe(contentEtag(3, false));
+    expect(contentEtag(3, false)).not.toBe(contentEtag(4, false)); // new release
+    expect(contentEtag(3, false)).not.toBe(contentEtag(3, true)); // embed flips bytes
+    expect(contentEtag(3, false, "/about")).not.toBe(contentEtag(3, false, "/")); // page filter
+    expect(contentEtag(3, false)).toMatch(/^W\//); // weak validator
   });
 });
 

@@ -28,38 +28,15 @@ import { asLayout, asTokens } from "./theme";
 import { toJson } from "./json";
 import { rewriteCopy, type CopyField } from "./ai";
 import { publishSite, type PublishResult } from "./publish";
+import { LOCALES, localeByCode, localeOf, type Locale } from "./locales";
 
-export interface Locale {
-  code: string;
-  name: string; // English name (for the AI instruction)
-  native: string; // shown in the switcher
-}
+export { LOCALES, type Locale };
 
-/** The languages offered. Codes double as the URL prefix (/es, /fr…). */
-export const LOCALES: Locale[] = [
-  { code: "es", name: "Spanish", native: "Español" },
-  { code: "fr", name: "French", native: "Français" },
-  { code: "de", name: "German", native: "Deutsch" },
-  { code: "pt", name: "Portuguese", native: "Português" },
-  { code: "it", name: "Italian", native: "Italiano" },
-  { code: "ja", name: "Japanese", native: "日本語" },
-  { code: "zh", name: "Chinese", native: "中文" },
-  { code: "ar", name: "Arabic", native: "العربية" },
-];
-
-const LOCALE_CODES = new Set(LOCALES.map((l) => l.code));
 const EMPTY: PageBody = { version: 1, root: [] };
-
-const localeByCode = (code: string) => LOCALES.find((l) => l.code === code);
-
-/** First path segment, e.g. "/es/about" → "es". */
-function firstSegment(path: string): string {
-  return path.replace(/^\/+/, "").split("/")[0] ?? "";
-}
 
 /** A page that is itself a translation (so we never translate translations). */
 function isLocalePath(path: string): boolean {
-  return LOCALE_CODES.has(firstSegment(path));
+  return localeOf(path) !== null;
 }
 
 function splitNs(id: string): [string, string] | null {

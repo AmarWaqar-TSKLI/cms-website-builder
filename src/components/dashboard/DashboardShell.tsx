@@ -23,6 +23,7 @@ import { SiteSidebar } from "./SiteSidebar";
 import { ActivityFeed } from "./ActivityFeed";
 import { CustomDomainCard } from "./CustomDomainCard";
 import { ContentApiCard } from "./ContentApiCard";
+import { LOCALES } from "@/lib/locales";
 import { NextStep } from "./NextStep";
 import { SetupChecklist, type SetupStep } from "./SetupChecklist";
 import { Welcome } from "./Welcome";
@@ -108,17 +109,8 @@ const VISIBLE_VERSIONS = 4;
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Languages offered by AI Translate (must mirror LOCALES in lib/translate). */
-const TRANSLATE_LOCALES: { code: string; native: string; name: string }[] = [
-  { code: "es", native: "Español", name: "Spanish" },
-  { code: "fr", native: "Français", name: "French" },
-  { code: "de", native: "Deutsch", name: "German" },
-  { code: "pt", native: "Português", name: "Portuguese" },
-  { code: "it", native: "Italiano", name: "Italian" },
-  { code: "ja", native: "日本語", name: "Japanese" },
-  { code: "zh", native: "中文", name: "Chinese" },
-  { code: "ar", native: "العربية", name: "Arabic" },
-];
+/** Languages offered by AI Translate — one source of truth in lib/locales. */
+const TRANSLATE_LOCALES = LOCALES;
 
 /* ── shell ────────────────────────────────────────────────────────────────── */
 

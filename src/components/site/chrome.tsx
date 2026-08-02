@@ -13,6 +13,24 @@ import React from "react";
 import type { ThemeLayout, ThemeTokens } from "../../lib/registry/types";
 import { resolveHref } from "../../lib/registry/style";
 import { sanitizeTokens } from "../../lib/theme";
+import { LOCALE_CODES, withLocale } from "../../lib/locales";
+
+/**
+ * Resolve a nav link for the CURRENT locale.
+ *
+ * On a translated page (locale set), an internal content link like "/about" must
+ * point at that locale's page ("/fr/about"). Two things stay absolute: external
+ * links (handled by resolveHref), and the language-switcher links that already
+ * target a locale root ("/es", "/fr") — those are how you LEAVE the current
+ * locale, so they must not be re-prefixed.
+ */
+function navHref(basePath: string | undefined, locale: string | null | undefined, href: string): string {
+  if (!locale || !href) return resolveHref(basePath, href);
+  if (/^(https?:|mailto:|tel:|#|\/\/)/i.test(href)) return resolveHref(basePath, href);
+  const seg = href.replace(/^\/+/, "").split("/")[0];
+  if (LOCALE_CODES.has(seg)) return resolveHref(basePath, href); // switcher link
+  return resolveHref(basePath, withLocale(locale, href.startsWith("/") ? href : `/${href}`));
+}
 
 export function tokensToCss(raw: ThemeTokens): string {
   // Sanitise at the sink too: this string goes into a <style> via
@@ -63,10 +81,12 @@ export function SiteNav({
   layout,
   tokens: t,
   basePath = "",
+  locale = null,
 }: {
   layout: ThemeLayout;
   tokens: ThemeTokens;
   basePath?: string;
+  locale?: string | null;
 }) {
   const nav = layout?.nav ?? { brand: "", links: [] };
   return (
@@ -84,7 +104,7 @@ export function SiteNav({
         }}
       >
         <a
-          href={resolveHref(basePath, "/")}
+          href={navHref(basePath, locale, "/")}
           style={{
             fontFamily: t.fontHeading,
             fontWeight: 680,
@@ -100,7 +120,7 @@ export function SiteNav({
           {(nav.links ?? []).map((l, i) => (
             <a
               key={`${l.href}-${i}`}
-              href={resolveHref(basePath, l.href)}
+              href={navHref(basePath, locale, l.href)}
               style={{ color: "inherit", textDecoration: "none", opacity: 0.72, fontSize: 14 }}
             >
               {l.label}
@@ -116,10 +136,12 @@ export function SiteFooter({
   layout,
   tokens: t,
   basePath = "",
+  locale = null,
 }: {
   layout: ThemeLayout;
   tokens: ThemeTokens;
   basePath?: string;
+  locale?: string | null;
 }) {
   const f = layout?.footer ?? { text: "", links: [] };
   return (
@@ -149,7 +171,7 @@ export function SiteFooter({
           {(f.links ?? []).map((l, i) => (
             <a
               key={`${l.href}-${i}`}
-              href={resolveHref(basePath, l.href)}
+              href={navHref(basePath, locale, l.href)}
               style={{ color: "inherit", textDecoration: "none", opacity: 0.6, fontSize: 13 }}
             >
               {l.label}

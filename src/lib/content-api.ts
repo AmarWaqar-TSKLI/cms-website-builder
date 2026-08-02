@@ -46,6 +46,16 @@ export interface SiteContent {
   data: unknown;
 }
 
+/**
+ * A weak ETag for a content response. It's a pure function of what actually
+ * varies the bytes — the immutable release version, the embed flag, and any
+ * single-page filter — so a client's conditional GET can be answered with a 304
+ * without re-serializing. Immutable releases make this exact and safe.
+ */
+export function contentEtag(versionNo: number, embed: boolean, page?: string | null): string {
+  return `W/"v${versionNo}-${embed ? "e" : "_"}-${page ?? "all"}"`;
+}
+
 const DATA_URI = /^data:([^;,]*)[^,]*,(.*)$/s;
 
 /**
