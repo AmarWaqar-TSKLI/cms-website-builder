@@ -16,6 +16,7 @@
  * different answer for "not found" would let anyone map out which ids are real.
  */
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { prisma } from "./db";
 import { captureError } from "./monitor";
 import {
@@ -26,6 +27,48 @@ import {
   requireUser,
   type SessionUser,
 } from "./auth";
+
+/* ── CSRF: cookie-authed endpoints must be first-party ─────────────────────────
+ *
+ * The session cookie is already `SameSite=Lax`, which blocks the classic
+ * cross-site form POST. This is defense-in-depth on top of that: every guard here
+ * protects a COOKIE-authenticated endpoint that is only ever called by our own
+ * dashboard/editor, so a cross-site caller is by definition forgery. The public,
+ * cross-origin surfaces (the bearer-auth Content API under /api/v1 and the cart/
+ * forms runtime) do NOT use these guards, so they are unaffected.
+ *
+ * `Sec-Fetch-Site` is the browser stating the relationship directly; when it's
+ * absent (older clients, non-browser tools) we fall back to matching Origin
+ * against Host. No signal at all → allow, because CSRF requires a browser.
+ */
+export function isFirstParty(
+  secFetchSite: string | null,
+  origin: string | null,
+  host: string | null,
+): boolean {
+  if (secFetchSite) return secFetchSite !== "cross-site";
+  if (origin) {
+    try {
+      return new URL(origin).host.toLowerCase() === (host ?? "").toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function requireApiSameOrigin(): Promise<void> {
+  const h = await headers();
+  if (!isFirstParty(h.get("sec-fetch-site"), h.get("origin"), h.get("host"))) {
+    throw new AuthError(403, "Cross-site request blocked");
+  }
+}
+
+/** requireUser, gated by the CSRF check. The single entry every guard uses. */
+async function requireApiUser(): Promise<SessionUser> {
+  await requireApiSameOrigin();
+  return requireUser();
+}
 
 export type Guarded<T> = { ok: true; user: SessionUser; extra: T } | { ok: false; response: NextResponse };
 
@@ -42,7 +85,7 @@ function deny(err: unknown): { ok: false; response: NextResponse } {
 /** Signed in, nothing more. */
 export async function guard(): Promise<Guarded<null>> {
   try {
-    return { ok: true, user: await requireUser(), extra: null };
+    return { ok: true, user: await requireApiUser(), extra: null };
   } catch (err) {
     return deny(err);
   }
@@ -51,7 +94,7 @@ export async function guard(): Promise<Guarded<null>> {
 /** Signed in and a member of the org owning `siteId`. */
 export async function guardSite(siteId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     await requireSiteAccess(user.id, siteId);
     return { ok: true, user, extra: { siteId } };
   } catch (err) {
@@ -62,7 +105,7 @@ export async function guardSite(siteId: string): Promise<Guarded<{ siteId: strin
 /** Signed in and able to reach the site that owns this page. */
 export async function guardPage(pageId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const siteId = await requirePageAccess(user.id, pageId);
     return { ok: true, user, extra: { siteId } };
   } catch (err) {
@@ -73,7 +116,7 @@ export async function guardPage(pageId: string): Promise<Guarded<{ siteId: strin
 /** Signed in and able to reach the site that owns this component. */
 export async function guardComponent(componentId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const siteId = await requireComponentAccess(user.id, componentId);
     return { ok: true, user, extra: { siteId } };
   } catch (err) {
@@ -84,7 +127,7 @@ export async function guardComponent(componentId: string): Promise<Guarded<{ sit
 /** Guard by RELEASE id — resolve to its site, then check membership. */
 export async function guardRelease(releaseId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const release = await prisma.release.findUnique({
       where: { id: releaseId },
       select: { siteId: true },
@@ -102,7 +145,7 @@ export async function guardRelease(releaseId: string): Promise<Guarded<{ siteId:
 /** Guard by PRODUCT id. */
 export async function guardProduct(productId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const product = await prisma.product.findUnique({
       where: { id: productId },
       select: { siteId: true },
@@ -118,7 +161,7 @@ export async function guardProduct(productId: string): Promise<Guarded<{ siteId:
 /** Guard by MEDIA id — resolve to its site, then check membership. */
 export async function guardMedia(mediaId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const media = await prisma.media.findUnique({
       where: { id: mediaId },
       select: { siteId: true },
@@ -135,7 +178,7 @@ export async function guardMedia(mediaId: string): Promise<Guarded<{ siteId: str
 /** Guard by POST id — resolve to its site, then check membership. */
 export async function guardPost(postId: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const post = await prisma.post.findUnique({
       where: { id: postId },
       select: { siteId: true },
@@ -151,7 +194,7 @@ export async function guardPost(postId: string): Promise<Guarded<{ siteId: strin
 /** Guard by FORM SUBMISSION id — resolve to its site, then check membership. */
 export async function guardFormSubmission(id: string): Promise<Guarded<{ siteId: string }>> {
   try {
-    const user = await requireUser();
+    const user = await requireApiUser();
     const submission = await prisma.formSubmission.findUnique({
       where: { id },
       select: { siteId: true },
