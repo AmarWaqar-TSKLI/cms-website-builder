@@ -15,6 +15,7 @@ import { NotPublished, PageMissing } from "@/components/site/Empty";
 import type { RenderContext, ResolvedPost } from "@/lib/registry/types";
 import { postPageNodes, postPath } from "@/lib/post-page";
 import { localeOf, stripLocale } from "@/lib/locales";
+import { deriveDescription } from "@/lib/seo";
 
 export interface Resolved {
   site: LiveSite;
@@ -103,6 +104,23 @@ export function contextFor(release: LoadedRelease, basePath = ""): RenderContext
 }
 
 /**
+ * Description + social-card tags, derived from the release (lib/seo.ts) — no
+ * stored SEO fields to drift from the content. Empty description → no tags, so
+ * a sparse page never ships an empty meta.
+ */
+function SeoMeta({ title, description }: { title: string; description: string }) {
+  return (
+    <>
+      {description ? <meta name="description" content={description} /> : null}
+      <meta property="og:title" content={title} />
+      {description ? <meta property="og:description" content={description} /> : null}
+      <meta property="og:type" content="website" />
+      <meta name="twitter:card" content="summary" />
+    </>
+  );
+}
+
+/**
  * The rendered page.
  *
  * The provenance meta tags are not decoration: they are how you prove, from a
@@ -124,6 +142,10 @@ export function SitePage({ resolved, basePath = "" }: { resolved: Resolved; base
       <meta name="cms:page-revision" content={page.revisionId} />
       <meta name="cms:frozen-at" content={release.data.frozenAt} />
       <title>{`${page.title} — ${release.siteName}`}</title>
+      <SeoMeta
+        title={`${page.title} — ${release.siteName}`}
+        description={deriveDescription(page.root, release.components)}
+      />
 
       <SiteBody
         body={page.root}
@@ -173,6 +195,10 @@ export function SitePostPage({
       <meta name="cms:path" content={postPath(post.slug)} />
       <meta name="cms:frozen-at" content={release.data.frozenAt} />
       <title>{`${post.title} — ${release.siteName}`}</title>
+      <SeoMeta
+        title={`${post.title} — ${release.siteName}`}
+        description={(post.excerpt || post.body).trim().slice(0, 160)}
+      />
 
       <SiteBody body={nodes} layout={release.layout} ctx={ctx}>
         <CartBar
