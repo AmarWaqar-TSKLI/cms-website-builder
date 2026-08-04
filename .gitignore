@@ -28,4 +28,6 @@ Thumbs.db
 /.*.mjs
 /.shots/
 /.cap/
+# Working docs with deployment specifics (client domains, IPs) — local only.
 HANDOFF.md
+docs/DEMO.md
