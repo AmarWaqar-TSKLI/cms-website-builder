@@ -15,7 +15,7 @@ export default async function SitesHub() {
   const user = await currentUser();
   if (!user) redirect("/login?next=/sites");
 
-  const sites = await prisma.site.findMany({
+  const rows = await prisma.site.findMany({
     where: { org: { memberships: { some: { userId: user.id } } }, deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: {
@@ -23,6 +23,15 @@ export default async function SitesHub() {
       pages: { where: { deletedAt: null }, select: { id: true } },
     },
   });
+
+  // Branches sit with their parent, not scattered through the grid by age: each
+  // trunk site is followed by its branches; a branch whose parent is archived
+  // falls back to the end.
+  const nameById = new Map(rows.map((s) => [s.id, s.name]));
+  const trunks = rows.filter((s) => !s.parentSiteId);
+  const branchesOf = (id: string) => rows.filter((s) => s.parentSiteId === id);
+  const orphans = rows.filter((s) => s.parentSiteId && !nameById.has(s.parentSiteId));
+  const sites = [...trunks.flatMap((t) => [t, ...branchesOf(t.id)]), ...orphans];
 
   return (
     <main className="min-h-screen bg-ink-950">
@@ -69,6 +78,11 @@ export default async function SitesHub() {
                       style={{ background: s.liveReleaseId ? "#22c55e" : "var(--color-ink-600)" }}
                     />
                     {s.liveReleaseId ? "Live" : "Draft"}
+                    {s.parentSiteId ? (
+                      <span className="ml-1 rounded border border-ink-700 px-1.5 py-px text-[10px] text-ink-400">
+                        ⑂ branch{nameById.get(s.parentSiteId) ? ` of ${nameById.get(s.parentSiteId)}` : ""}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     aria-hidden
