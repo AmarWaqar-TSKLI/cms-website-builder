@@ -17,6 +17,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { cleanSubmission, isHoneypotTripped } from "@/lib/forms";
+import { storeSiteId } from "@/lib/store-site";
+import { mailConfigured, sendMail } from "@/lib/mail";
+import { captureError } from "@/lib/monitor";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +52,10 @@ export async function POST(req: Request) {
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true } });
   if (!site) return NextResponse.json({ error: "Unknown site" }, { status: 404, headers: CORS });
 
+  // One inbox per site family (store-site.ts): a message sent on a branch's
+  // preview lands where somebody actually reads — same rule as orders.
+  const storeId = await storeSiteId(siteId);
+
   // A bot that filled the hidden field: tell it "ok", store nothing. Returning an
   // error would only teach it to try again without the giveaway.
   if (isHoneypotTripped(payload.fields)) {
@@ -62,7 +69,7 @@ export async function POST(req: Request) {
 
   const submission = await prisma.formSubmission.create({
     data: {
-      siteId,
+      siteId: storeId,
       formKey: formKey.slice(0, 80),
       formName,
       data: clean.fields as Prisma.InputJsonValue,
@@ -74,7 +81,7 @@ export async function POST(req: Request) {
   // Live data changes; the artifact does not. A submission is Tier-2 — it will
   // not roll back when the site's appearance does.
   await logActivity({
-    siteId,
+    siteId: storeId,
     actorName: "A visitor",
     action: "form.submitted",
     entityType: "form",
@@ -82,8 +89,52 @@ export async function POST(req: Request) {
     summary: `A visitor sent the “${formName || formKey}” form`,
   });
 
+  // Tell the owners someone wrote in — fire-and-forget, response never waits.
+  // A dashboard inbox nobody knows to check is where messages go to die.
+  if (mailConfigured()) {
+    void notifyOwners(storeId, formName || formKey, clean.fields, clean.email).catch((err) =>
+      captureError(err, { scope: "forms.notify", siteId: storeId }),
+    );
+  }
+
   return NextResponse.json(
     { ok: true, id: submission.id, note: "Written to `form_submissions`. The page was not modified." },
     { headers: CORS },
+  );
+}
+
+/** Email each org OWNER a plain-text copy of the submission. */
+async function notifyOwners(
+  siteId: string,
+  formLabel: string,
+  fields: Record<string, string>,
+  fromEmail: string | null,
+): Promise<void> {
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: {
+      name: true,
+      org: {
+        select: {
+          memberships: {
+            where: { role: "owner" },
+            select: { user: { select: { email: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!site) return;
+  const lines = Object.entries(fields)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+  await Promise.all(
+    site.org.memberships.map((m) =>
+      sendMail({
+        to: m.user.email,
+        subject: `New "${formLabel}" submission on ${site.name}`,
+        text: `${lines}\n${fromEmail ? `\nReply to: ${fromEmail}\n` : ""}\nOpen the inbox: see the Forms page of your dashboard.`,
+      }),
+    ),
   );
 }

@@ -105,6 +105,12 @@ export function LoginForm({ next }: { next?: string }) {
         {busy ? "Signing in…" : "Sign in"}
       </button>
 
+      <p className="mt-3 text-center text-[12px] text-ink-500">
+        <a href="/forgot" className="transition-colors hover:text-ink-300">
+          Forgot your password?
+        </a>
+      </p>
+
       <p className="mt-5 border-t border-ink-800 pt-4 text-center text-[12.5px] text-ink-400">
         New here?{" "}
         <a href="/signup" className="font-medium text-flux-300 transition-colors hover:text-flux-400">
