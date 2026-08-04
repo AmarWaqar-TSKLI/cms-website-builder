@@ -98,13 +98,31 @@ same pointer flip.
 
 ## Feature surface (all built on the above)
 
-- **Branches** — fork a site, block-level diff against the parent (matched by
-  stable node id), cherry-pick merge back as one release. **A branch forks the
+- **Branches** — fork a site, THREE-WAY diff against the parent (a fork-point
+  baseline in `branch_baselines` separates "branch changed it" from "parent
+  moved on" from "conflict — a person decides"), cherry-pick merge back as one
+  release, including STRUCTURE: blocks, whole sections and pages added or
+  removed on the branch land on the parent in place. **A branch forks the
   design only** — pages, components, theme. Tier-2 (products, media, posts,
   orders) is a single store shared with the parent, resolved via
   `src/lib/store-site.ts`: the same rule as rollback (reverting a design must
   not touch live business data), applied in the other direction. The diff is
   therefore a *design* diff, and says so when it's empty.
+- **Team** — email-bound, expiring, hash-stored invites into the org; roles on
+  the membership (owner/editor) enforced server-side: destroying the site, its
+  domain, keys, webhooks and team management are owner-only.
+- **Payments** — env-gated Stripe Checkout over plain fetch. Unconfigured:
+  demo mode (orders written paid). Configured: orders start `pending`, and only
+  the signature-verified webhook marks them paid and moves inventory.
+- **Publish webhooks** — HMAC-signed `site.live_changed` fired on publish AND
+  rollback (to a consumer they're the same fact), so headless consumers refetch
+  instead of polling.
+- **Email seam** — `lib/mail.ts` (Resend-compatible, no SDK): invite delivery,
+  form-submission notifications to owners, and a full password-reset flow
+  (hash-only single-use tokens; all sessions destroyed on reset).
+- **SEO** — per-site `sitemap.xml` (both surfaces), `robots.txt` on custom
+  domains, and meta description + OG tags DERIVED from the release, so they can
+  never drift from the content.
 - **AI suite** — add section, rewrite page, whole-site rebrand (+3 directions),
   agentic "suggest what to add", and **translate** (multi-locale). All
   registry/id-bounded; all one atomic release; all one-click rollback.
