@@ -44,7 +44,7 @@ export default async function TemplatesPage() {
 
       <div className="mx-auto max-w-4xl px-6 py-10 sm:px-10">
         <div className="mb-8">
-          <h1 className="display text-[30px] text-ink-100">Start from a template</h1>
+          <h1 className="display-mega text-[clamp(28px,4.5vw,40px)] text-ink-100">Start from a template</h1>
           <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-ink-400">
             Pick a finished design to start from. You get a full, multi-page site with its own
             colours and fonts — then change the words, colours and layout to make it yours. Prefer a

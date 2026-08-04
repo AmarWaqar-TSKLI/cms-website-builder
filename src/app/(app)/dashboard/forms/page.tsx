@@ -74,7 +74,7 @@ export default async function FormsPage({
       editHref={home ? `/editor/${home.id}` : "/dashboard"}
     >
       <header className="mb-6">
-        <h1 className="display text-[28px] text-ink-100 sm:text-[32px]">Forms</h1>
+        <h1 className="display-mega text-[28px] text-ink-100 sm:text-[34px]">Forms</h1>
         <p className="mt-2 max-w-prose text-[13.5px] leading-relaxed text-ink-300">
           Messages people send through your Contact and Newsletter blocks land here. They are kept
           separately from your pages, so going back to an older design never loses one.

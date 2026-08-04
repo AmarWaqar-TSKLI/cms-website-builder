@@ -15,7 +15,7 @@ export default async function BuildPage() {
           <span className="mx-auto mb-5 inline-grid h-12 w-12 place-items-center rounded-2xl bg-flux-500 text-[20px] text-white">
             ✨
           </span>
-          <h1 className="display text-[32px] text-ink-100">What are you building?</h1>
+          <h1 className="display-mega text-[clamp(30px,5vw,44px)] text-ink-100">What are you building?</h1>
           <p className="mx-auto mt-2.5 max-w-md text-[15px] leading-relaxed text-ink-400">
             Describe your site in a sentence — I&rsquo;ll write the words and lay out a homepage you
             can start editing right away.

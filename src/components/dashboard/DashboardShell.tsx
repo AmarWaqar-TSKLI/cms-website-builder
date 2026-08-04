@@ -854,8 +854,9 @@ export function DashboardShell({
         </div>
       )}
 
-      {/* ── 2 + 3. pages, publishing ─────────────────────────────────────── */}
-      <div className="mt-5 grid items-start gap-5 lg:grid-cols-5">
+      {/* ── ZONE 1 · SHIP — the daily loop: edit pages, publish versions ── */}
+      <Zone label="Ship it" pop="yellow" hint="Edit, publish, roll back — the daily loop." />
+      <div className="mt-4 grid items-start gap-5 lg:grid-cols-5">
         <PagesPanel
           pages={pages}
           lastPublishedAt={lastPublishedAt}
@@ -885,20 +886,13 @@ export function DashboardShell({
         />
       </div>
 
-      {/* ── 4. take it elsewhere ─────────────────────────────────────────── */}
-      <ExportPanel
-        className="mt-5"
-        siteSlug={site.slug}
-        releaseId={exportReleaseId}
-        versionNo={live?.versionNo ?? null}
-        customDomain={site.customDomain}
-        onPublish={publish}
-        publishing={busy === "publish"}
-        building={building}
-      />
-
-      {/* ── Branches (Git for your site) ─────────────────────────────────── */}
-      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
+      {/* ── ZONE 2 · GROW — branches and the AI suite, side by side ──────
+          The experiments live together: fork-and-merge on the left, one-shot
+          AI transformations stacked on the right. No more scrolling through
+          three full-width sections to find one button. */}
+      <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo." />
+      <div className="mt-4 grid items-start gap-5 xl:grid-cols-2">
+      <section className="min-w-0 overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           <span aria-hidden>⑂</span> Branches
         </div>
@@ -1180,8 +1174,9 @@ export function DashboardShell({
         )}
       </section>
 
-      {/* ── 4a. AI rebrand ───────────────────────────────────────────────── */}
-      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
+      {/* The one-shot AI moves, stacked beside branching. */}
+      <div className="flex min-w-0 flex-col gap-5">
+      <section className="overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>✨</span> AI rebrand
         </div>
@@ -1260,7 +1255,7 @@ export function DashboardShell({
       </section>
 
       {/* ── 4a-ii. AI translate ──────────────────────────────────────────── */}
-      <section className="mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 p-6">
+      <section className="overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>🌍</span> AI translate
         </div>
@@ -1338,17 +1333,30 @@ export function DashboardShell({
           )}
         </div>
       </section>
+      </div>
+      </div>
 
-      {/* ── 4b. your own domain ──────────────────────────────────────────── */}
-      <CustomDomainCard className="mt-5" siteId={site.id} initialDomain={site.customDomain} />
-
-      {/* ── 4c. headless Content API ─────────────────────────────────────── */}
-      <ContentApiCard className="mt-5" siteId={site.id} slug={site.slug} />
-
-      <TeamCard className="mt-5" siteId={site.id} />
-
-      {/* ── 5. the store ─────────────────────────────────────────────────── */}
-      <CommercePanel className="mt-5" commerce={commerce} modules={site.modules} />
+      {/* ── ZONE 3 · WIRE — the connections to the outside world ─────────
+          Domain, API, team, export, store: infrastructure reads as a grid of
+          equal utilities, not a queue you scroll through. */}
+      <Zone label="Wire it up" pop="violet" hint="Domains, teammates, the API, exports — how this site meets the world." />
+      <div className="mt-4 grid items-start gap-5 xl:grid-cols-2">
+        <CustomDomainCard className="min-w-0" siteId={site.id} initialDomain={site.customDomain} />
+        <div className="flex min-w-0 flex-col gap-5">
+          <TeamCard siteId={site.id} />
+          <ExportPanel
+            siteSlug={site.slug}
+            releaseId={exportReleaseId}
+            versionNo={live?.versionNo ?? null}
+            customDomain={site.customDomain}
+            onPublish={publish}
+            publishing={busy === "publish"}
+            building={building}
+          />
+        </div>
+        <ContentApiCard className="min-w-0" siteId={site.id} slug={site.slug} />
+        <CommercePanel className="min-w-0" commerce={commerce} modules={site.modules} />
+      </div>
 
       {/* ── 6. the internals, on request ─────────────────────────────────── */}
       <div className="mt-5">
@@ -2316,6 +2324,44 @@ function StructureGroup({
           </label>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ── zone dividers ────────────────────────────────────────────────────────── */
+
+/**
+ * A loud section boundary: rotated sticker label, one-line promise, hard rule.
+ * The dashboard reads as three zones — Ship / Grow / Wire — instead of an
+ * undifferentiated scroll; the sticker colour is the zone's identity.
+ */
+function Zone({
+  label,
+  hint,
+  pop,
+}: {
+  label: string;
+  hint: string;
+  pop: "yellow" | "pink" | "violet";
+}) {
+  const chip =
+    pop === "yellow"
+      ? "bg-pop-yellow text-ink-100"
+      : pop === "pink"
+        ? "bg-pop-pink text-ink-100"
+        : "bg-flux-500 text-white";
+  return (
+    <div className="mt-12 flex flex-wrap items-center gap-3">
+      <span
+        className={cx(
+          "sticker inline-block -rotate-1 rounded-lg border-2 border-ink-100 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
+          chip,
+        )}
+      >
+        {label}
+      </span>
+      <span className="text-[12.5px] font-medium text-ink-500">{hint}</span>
+      <span className="h-0 min-w-8 flex-1 border-t-2 border-ink-800" aria-hidden />
     </div>
   );
 }

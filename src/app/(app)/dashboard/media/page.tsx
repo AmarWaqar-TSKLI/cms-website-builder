@@ -76,7 +76,7 @@ export default async function MediaPage({
       editHref={home ? `/editor/${home.id}` : "/dashboard"}
     >
       <header className="mb-6">
-        <h1 className="display text-[28px] text-ink-100 sm:text-[32px]">Images</h1>
+        <h1 className="display-mega text-[28px] text-ink-100 sm:text-[34px]">Images</h1>
         <p className="mt-2 max-w-prose text-[13.5px] leading-relaxed text-ink-300">
           Every picture your site can use. Upload your own here, then choose them while editing a
           page. Images are stored with your site, so a downloaded copy of your site still shows them

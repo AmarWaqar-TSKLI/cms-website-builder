@@ -94,7 +94,7 @@ export default async function ProductsPage({
       editHref={home ? `/editor/${home.id}` : "/dashboard"}
     >
       <header className="mb-5">
-        <h1 className="text-[28px] font-semibold tracking-tight text-ink-100 sm:text-[32px]">
+        <h1 className="display-mega text-[28px] text-ink-100 sm:text-[34px]">
           Store
         </h1>
         <p className="mt-2 max-w-prose text-[13.5px] leading-relaxed text-ink-300">
