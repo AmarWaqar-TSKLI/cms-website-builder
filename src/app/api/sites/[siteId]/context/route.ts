@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { asLayout, asTokens } from "@/lib/theme";
+import { storeSiteId } from "@/lib/store-site";
 import type {
   ResolvedCollection,
   ResolvedMedia,
@@ -33,20 +34,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
     ? theme.revisions.find((r) => r.id === theme.currentRevisionId)
     : theme?.revisions.sort((a, b) => b.versionNo - a.versionNo)[0];
 
+  // Tier-2 from the family's shared store (store-site.ts), matching bootstrap:
+  // a branch's canvas resolves the same records the freeze will.
+  const storeId = site.parentSiteId ? await storeSiteId(site.id) : site.id;
+
   const [productRows, collectionRows, mediaRows, postRows] = await Promise.all([
     prisma.product.findMany({
-      where: { siteId },
+      where: { siteId: storeId },
       include: { variants: { orderBy: { priceCents: "asc" }, take: 1 } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.collection.findMany({
-      where: { siteId },
+      where: { siteId: storeId },
       include: { products: { orderBy: { position: "asc" } } },
       orderBy: { title: "asc" },
     }),
-    prisma.media.findMany({ where: { siteId }, orderBy: { createdAt: "asc" } }),
+    prisma.media.findMany({ where: { siteId: storeId }, orderBy: { createdAt: "asc" } }),
     prisma.post.findMany({
-      where: { siteId, status: "published", deletedAt: null },
+      where: { siteId: storeId, status: "published", deletedAt: null },
       orderBy: { publishedAt: "desc" },
     }),
   ]);
