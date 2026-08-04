@@ -9,7 +9,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { guardSite } from "@/lib/api-auth";
+import { guardSite, guardSiteOwner } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { captureError } from "@/lib/monitor";
 
@@ -69,7 +69,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ siteId
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const auth = await guardSite(siteId);
+  // Deleting a site is an OWNER action; editors build, owners destroy.
+  const auth = await guardSiteOwner(siteId);
   if (!auth.ok) return auth.response;
 
   try {

@@ -199,6 +199,26 @@ export async function requireSiteAccess(userId: string, siteId: string): Promise
   }
 }
 
+/**
+ * Owner-only operations. Roles live on the membership ("owner" | "editor");
+ * every pre-roles member was created as "owner", so nothing existing loses
+ * access. Editors can build and publish; destroying things (the site, its
+ * domain, its keys) and managing the team stay with owners.
+ */
+export async function requireSiteOwner(userId: string, siteId: string): Promise<void> {
+  const allowed = await prisma.site.count({
+    where: { id: siteId, org: { memberships: { some: { userId, role: "owner" } } } },
+  });
+  if (allowed === 0) {
+    // Same shape as requireSiteAccess: no distinction between "not yours",
+    // "not an owner" and "doesn't exist" beyond the message a member sees.
+    const member = await prisma.site.count({
+      where: { id: siteId, org: { memberships: { some: { userId } } } },
+    });
+    throw new AuthError(403, member ? "Only an owner can do this" : "No access to this site");
+  }
+}
+
 /** Every site this user can reach. The dashboard's list. */
 export async function sitesForUser(userId: string) {
   return prisma.site.findMany({

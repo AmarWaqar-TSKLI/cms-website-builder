@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { guardSite } from "@/lib/api-auth";
+import { guardSite, guardSiteOwner } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { captureError } from "@/lib/monitor";
 import { checkDomainStatus, domainTarget, normalizeDomain } from "@/lib/domains";
@@ -118,10 +118,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
   return NextResponse.json(await domainResponse(siteId, site.customDomain, false));
 }
 
-/** Connect (or replace) the domain for this site. */
+/** Connect (or replace) the domain for this site. OWNER ONLY — it changes
+ * what the public internet resolves. */
 export async function PUT(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const auth = await guardSite(siteId);
+  const auth = await guardSiteOwner(siteId);
   if (!auth.ok) return auth.response;
 
   let payload: { domain?: unknown };
@@ -163,7 +164,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ siteId: 
 /** Disconnect the domain — the site keeps serving at /s/<slug> as before. */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const auth = await guardSite(siteId);
+  const auth = await guardSiteOwner(siteId);
   if (!auth.ok) return auth.response;
 
   const site = await prisma.site.findUnique({

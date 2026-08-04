@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { guardSite } from "@/lib/api-auth";
+import { guardSite, guardSiteOwner } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { captureError } from "@/lib/monitor";
 import { mintKey } from "@/lib/apikeys";
@@ -32,7 +32,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ siteId:
 
 export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const auth = await guardSite(siteId);
+  // Minting a credential that can read the whole site is an OWNER action.
+  const auth = await guardSiteOwner(siteId);
   if (!auth.ok) return auth.response;
 
   let name = "API key";
@@ -74,7 +75,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const auth = await guardSite(siteId);
+  const auth = await guardSiteOwner(siteId);
   if (!auth.ok) return auth.response;
 
   const id = new URL(req.url).searchParams.get("id");

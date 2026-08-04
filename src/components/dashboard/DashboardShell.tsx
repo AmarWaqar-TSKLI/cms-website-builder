@@ -23,6 +23,7 @@ import { SiteSidebar } from "./SiteSidebar";
 import { ActivityFeed } from "./ActivityFeed";
 import { CustomDomainCard } from "./CustomDomainCard";
 import { ContentApiCard } from "./ContentApiCard";
+import { TeamCard } from "./TeamCard";
 import { LOCALES } from "@/lib/locales";
 import { NextStep } from "./NextStep";
 import { SetupChecklist, type SetupStep } from "./SetupChecklist";
@@ -1343,6 +1344,8 @@ export function DashboardShell({
 
       {/* ── 4c. headless Content API ─────────────────────────────────────── */}
       <ContentApiCard className="mt-5" siteId={site.id} slug={site.slug} />
+
+      <TeamCard className="mt-5" siteId={site.id} />
 
       {/* ── 5. the store ─────────────────────────────────────────────────── */}
       <CommercePanel className="mt-5" commerce={commerce} modules={site.modules} />

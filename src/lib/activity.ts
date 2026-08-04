@@ -46,7 +46,9 @@ export type ActivityAction =
   | "form.submitted"
   | "form.deleted"
   | "user.signed_in"
-  | "user.signed_out";
+  | "user.signed_out"
+  | "team.invited"
+  | "team.joined";
 
 export interface ActivityInput {
   siteId?: string | null;

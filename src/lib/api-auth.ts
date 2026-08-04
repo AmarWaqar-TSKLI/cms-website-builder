@@ -24,6 +24,7 @@ import {
   requireComponentAccess,
   requirePageAccess,
   requireSiteAccess,
+  requireSiteOwner,
   requireUser,
   type SessionUser,
 } from "./auth";
@@ -96,6 +97,17 @@ export async function guardSite(siteId: string): Promise<Guarded<{ siteId: strin
   try {
     const user = await requireApiUser();
     await requireSiteAccess(user.id, siteId);
+    return { ok: true, user, extra: { siteId } };
+  } catch (err) {
+    return deny(err);
+  }
+}
+
+/** Signed in and an OWNER of the org owning `siteId` — destructive/team ops. */
+export async function guardSiteOwner(siteId: string): Promise<Guarded<{ siteId: string }>> {
+  try {
+    const user = await requireApiUser();
+    await requireSiteOwner(user.id, siteId);
     return { ok: true, user, extra: { siteId } };
   } catch (err) {
     return deny(err);
