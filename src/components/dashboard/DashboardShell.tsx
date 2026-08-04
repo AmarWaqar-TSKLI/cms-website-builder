@@ -206,7 +206,7 @@ function SiteTitle({ siteId, name }: { siteId: string; name: string }) {
           }}
           onBlur={() => void save()}
           aria-label="Site name"
-          className="display w-full max-w-[22ch] rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-[30px] text-ink-100 outline-none focus:border-flux-400 disabled:opacity-60 sm:text-[36px]"
+          className="display-mega w-full max-w-[22ch] rounded-xl border-2 border-ink-700 bg-ink-950 px-2.5 py-1 text-[30px] text-ink-100 outline-none focus:border-flux-500 disabled:opacity-60 sm:text-[40px]"
         />
         {error ? <span className="mt-1 block text-[12px] text-red-400">{error}</span> : null}
       </div>
@@ -214,7 +214,7 @@ function SiteTitle({ siteId, name }: { siteId: string; name: string }) {
   }
 
   return (
-    <h1 className="display group mt-3 flex items-center gap-2 text-[30px] text-ink-100 sm:text-[36px]">
+    <h1 className="display-mega group mt-3 flex items-center gap-2 text-[30px] text-ink-100 sm:text-[40px]">
       <span className="truncate">{name}</span>
       <button
         type="button"

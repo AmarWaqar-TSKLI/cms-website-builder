@@ -275,7 +275,7 @@ export default function DescriptionScene() {
                   className="flex h-[38px] items-center"
                   style={{ opacity: 0 }}
                 >
-                  <span className="rounded-md bg-flux-500 px-4 py-2 text-[12px] font-semibold text-ink-950">
+                  <span className="rounded-md bg-flux-500 px-4 py-2 text-[12px] font-semibold text-white">
                     Shop now
                   </span>
                 </div>
