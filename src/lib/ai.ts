@@ -102,54 +102,108 @@ export interface GeneratedPage {
   blocks: PageNode[];
 }
 
-/** Call Groq with a 30s timeout, retrying once on a transient network failure. */
-async function callGroqWithRetry(key: string, body: string): Promise<Response> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
-    try {
-      return await fetch(GROQ_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body,
-        signal: controller.signal,
-      });
-    } catch {
-      // A blip or a timeout — fall through and try once more, then give up.
-    } finally {
-      clearTimeout(timer);
+/** What every feature sends: the model id and provider mechanics live in chat(). */
+interface ChatPayload {
+  temperature: number;
+  max_tokens: number;
+  messages: { role: "system" | "user"; content: string }[];
+}
+
+/** One provider attempt with a 30s timeout. Throws on network failure. */
+async function attempt(
+  url: string,
+  key: string,
+  model: string,
+  payload: ChatPayload,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, response_format: { type: "json_object" }, ...payload }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Call the model and return the completion's content string.
+ *
+ * Resilience lives here so every feature gets it for free:
+ *   - 429/5xx and network blips retry with a short backoff (Groq's free tier
+ *     rate-limits at the worst moments; one polite retry usually clears it);
+ *   - an OPTIONAL fallback provider (AI_FALLBACK_URL/KEY/MODEL — any
+ *     OpenAI-compatible endpoint) takes over when the primary is down or still
+ *     throttled. Env-gated like every other integration: unset, nothing changes.
+ */
+async function chat(payload: ChatPayload): Promise<string> {
+  const primaryKey = process.env.GROQ_API_KEY?.trim();
+  const fbUrl = process.env.AI_FALLBACK_URL?.trim();
+  const fbKey = process.env.AI_FALLBACK_KEY?.trim();
+  const fbModel = process.env.AI_FALLBACK_MODEL?.trim();
+  const fallbackConfigured = !!(fbUrl && fbKey && fbModel);
+  if (!primaryKey && !fallbackConfigured) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
+
+  let lastStatus = 0;
+  if (primaryKey) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await attempt(GROQ_URL, primaryKey, MODEL, payload);
+        if (res.ok) return contentOf(res);
+        lastStatus = res.status;
+        // 4xx other than 429 won't get better by retrying the same request.
+        if (res.status !== 429 && res.status < 500) break;
+      } catch {
+        /* network blip or timeout — retry, then fall back */
+      }
+      if (i < 2) await sleep(500 * (i + 1) ** 2);
     }
   }
-  throw new AiFailedError("Could not reach the AI service.");
+
+  if (fallbackConfigured) {
+    try {
+      const res = await attempt(fbUrl!, fbKey!, fbModel!, payload);
+      if (res.ok) return contentOf(res);
+      lastStatus = res.status;
+    } catch {
+      /* fall through to the error below */
+    }
+  }
+
+  throw new AiFailedError(
+    lastStatus ? `The AI service returned ${lastStatus}.` : "Could not reach the AI service.",
+  );
+}
+
+/** The completion's content, or a typed failure — never a half-parsed response. */
+async function contentOf(res: Response): Promise<string> {
+  try {
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content === "string" && content) return content;
+  } catch {
+    /* fall through */
+  }
+  throw new AiFailedError("The AI returned an unreadable response.");
 }
 
 export async function generateSite(
   description: string,
 ): Promise<{ siteName: string; pages: GeneratedPage[] }> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
-
-  const requestBody = JSON.stringify({
-    model: MODEL,
+  const content = await chat({
     temperature: 0.7,
     max_tokens: 6000, // multi-page JSON with generous copy — room so it never truncates
-    response_format: { type: "json_object" },
     messages: [
       { role: "system", content: systemPrompt(catalogue()) },
       { role: "user", content: description.slice(0, 400) },
     ],
   });
-
-  const res = await callGroqWithRetry(key, requestBody);
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
 
   let parsed: { siteName?: unknown; pages?: unknown };
   try {
@@ -286,30 +340,14 @@ Rules:
  * part of the page, not a special AI artifact.
  */
 export async function generateSection(instruction: string, siteName?: string): Promise<PageNode[]> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
-
-  const requestBody = JSON.stringify({
-    model: MODEL,
+  const content = await chat({
     temperature: 0.7,
     max_tokens: 2500,
-    response_format: { type: "json_object" },
     messages: [
       { role: "system", content: sectionPrompt(catalogue(), siteName) },
       { role: "user", content: instruction.slice(0, 400) },
     ],
   });
-
-  const res = await callGroqWithRetry(key, requestBody);
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
 
   let parsed: { blocks?: unknown };
   try {
@@ -347,8 +385,6 @@ export async function rewriteCopy(
   instruction: string,
   siteName?: string,
 ): Promise<{ id: string; props: Record<string, string> }[]> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
   if (!fields.length) return [];
 
   const system = `You rewrite the words on an existing web page, in place.${
@@ -367,27 +403,14 @@ Rules:
 
   const user = `Instruction: ${instruction.slice(0, 400)}\n\nText fields:\n${JSON.stringify(fields).slice(0, 12000)}`;
 
-  const requestBody = JSON.stringify({
-    model: MODEL,
+  const content = await chat({
     temperature: 0.6,
     max_tokens: 4000,
-    response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
   });
-
-  const res = await callGroqWithRetry(key, requestBody);
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
 
   let parsed: { edits?: unknown };
   try {
@@ -440,9 +463,6 @@ export async function rebrandTheme(
   current: ThemeTokens,
   instruction: string,
 ): Promise<Partial<ThemeTokens>> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
-
   const system = `You restyle a website's theme to match a vibe. You get the CURRENT design tokens and an instruction; return NEW tokens as JSON.
 
 Tokens (all are raw CSS values):
@@ -477,28 +497,14 @@ Rules:
     radius: current.radius,
   })}`;
 
-  const res = await callGroqWithRetry(
-    key,
-    JSON.stringify({
-      model: MODEL,
-      temperature: 0.6,
-      max_tokens: 800,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  );
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
+  const content = await chat({
+    temperature: 0.6,
+    max_tokens: 800,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
 
   let parsed: Record<string, unknown>;
   try {
@@ -546,9 +552,6 @@ export interface BrandDirection {
  * so a preview swatch can never be a broken colour.
  */
 export async function brandDirections(siteName?: string): Promise<BrandDirection[]> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
-
   const system = `You are a brand director. Propose THREE genuinely different brand directions for a website, as JSON.
 
 Return exactly:
@@ -562,28 +565,14 @@ Rules:
 - sampleHeadline and name must be real and specific — no placeholders, no lorem ipsum.
 - Output ONLY the JSON object. No prose, no code fences.`;
 
-  const res = await callGroqWithRetry(
-    key,
-    JSON.stringify({
-      model: MODEL,
-      temperature: 0.85,
-      max_tokens: 1200,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: siteName ? `The site is called "${siteName}".` : "A small business website." },
-      ],
-    }),
-  );
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
+  const content = await chat({
+    temperature: 0.85,
+    max_tokens: 1200,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: siteName ? `The site is called "${siteName}".` : "A small business website." },
+    ],
+  });
 
   let parsed: { directions?: unknown };
   try {
@@ -636,9 +625,6 @@ export async function planPage(
   siteName?: string,
   pageTitle?: string,
 ): Promise<PagePlanItem[]> {
-  const key = process.env.GROQ_API_KEY?.trim();
-  if (!key) throw new AiNotConfiguredError("GROQ_API_KEY is not set");
-
   const system = `You are an expert web designer and conversion copywriter helping build ONE page. Given what's already on the page and the site, recommend the NEXT sections this page needs to be complete, professional and high-converting — in the order they should appear.
 
 Compose the section from these block types and their listed prop keys ONLY:
@@ -659,28 +645,14 @@ Rules:
     existingTypes.length ? existingTypes.join(", ") : "nothing yet — an empty page"
   }].`;
 
-  const res = await callGroqWithRetry(
-    key,
-    JSON.stringify({
-      model: MODEL,
-      temperature: 0.7,
-      max_tokens: 5000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  );
-  if (!res.ok) throw new AiFailedError(`The AI service returned ${res.status}.`);
-
-  let content: string;
-  try {
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    content = data.choices?.[0]?.message?.content ?? "";
-  } catch {
-    throw new AiFailedError("The AI returned an unreadable response.");
-  }
+  const content = await chat({
+    temperature: 0.7,
+    max_tokens: 5000,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
 
   let parsed: { recommendations?: unknown };
   try {
