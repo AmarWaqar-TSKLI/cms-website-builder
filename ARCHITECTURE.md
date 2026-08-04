@@ -99,7 +99,12 @@ same pointer flip.
 ## Feature surface (all built on the above)
 
 - **Branches** — fork a site, block-level diff against the parent (matched by
-  stable node id), cherry-pick merge back as one release.
+  stable node id), cherry-pick merge back as one release. **A branch forks the
+  design only** — pages, components, theme. Tier-2 (products, media, posts,
+  orders) is a single store shared with the parent, resolved via
+  `src/lib/store-site.ts`: the same rule as rollback (reverting a design must
+  not touch live business data), applied in the other direction. The diff is
+  therefore a *design* diff, and says so when it's empty.
 - **AI suite** — add section, rewrite page, whole-site rebrand (+3 directions),
   agentic "suggest what to add", and **translate** (multi-locale). All
   registry/id-bounded; all one atomic release; all one-click rollback.

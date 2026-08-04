@@ -860,6 +860,11 @@ export function DashboardShell({
               Redesign it freely — by hand or with AI — without touching what's live. When you're
               happy, review exactly what changed and merge it back as one version.
             </p>
+            <p className="mt-1.5 max-w-prose text-[12px] leading-relaxed text-ink-500">
+              A branch covers your <b className="text-ink-300">design</b> — pages, copy, theme. The
+              store, images and blog are shared with {site.parentName ?? "the parent"}: live data
+              isn't branched, so a product added here is added for both.
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -889,7 +894,25 @@ export function DashboardShell({
               </button>
             </div>
 
-            {diff ? (
+            {diff &&
+            !diff.changed.length &&
+            !diff.theme.length &&
+            !diff.added.length &&
+            !diff.removed.length ? (
+              // The honest empty state. Without it, "0 blocks changed" after
+              // adding a product reads as a broken feature instead of the tier
+              // split doing its job.
+              <div className="mt-4 rounded-xl border border-dashed border-ink-700 bg-ink-950 p-4">
+                <p className="text-[13px] text-ink-200">No design changes yet.</p>
+                <p className="mt-1 max-w-prose text-[12px] leading-relaxed text-ink-500">
+                  This compares the branch's <b className="text-ink-300">design</b> against{" "}
+                  {site.parentName ?? "the parent"}: page copy, theme colours and fonts, and pages
+                  added or removed. Products, images, orders and blog posts don't appear here — the
+                  store is shared with the parent, so those changes are already live on both. Edit
+                  some text or restyle the theme on this branch, then compare again.
+                </p>
+              </div>
+            ) : diff ? (
               <div className="mt-4 rounded-xl border border-ink-800 bg-ink-950 p-4">
                 <div className="text-[12px] text-ink-300">
                   <b className="text-ink-100">{diff.changed.length}</b> block
@@ -998,6 +1021,11 @@ export function DashboardShell({
               Fork a full copy you can redesign freely — by hand or with AI — without touching what's
               live. Then review a block-level diff and merge the changes back as one version. Like
               Git, for your website.
+            </p>
+            <p className="mt-1.5 max-w-prose text-[12px] leading-relaxed text-ink-500">
+              A branch covers your <b className="text-ink-300">design</b> — pages, copy, theme. The
+              store, images and blog stay shared: live data isn't branched, the same way restoring
+              an old version never un-places an order.
             </p>
             <button
               type="button"
