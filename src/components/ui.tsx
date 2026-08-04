@@ -11,14 +11,15 @@ export function Panel({ className, children }: { className?: string; children: R
 }
 
 const TONES = {
-  neutral: "border-ink-600 bg-ink-800 text-ink-300",
-  live: "border-live-500/40 bg-live-500/12 text-live-500",
-  building: "border-flux-500/40 bg-flux-500/12 text-flux-300",
-  failed: "border-fail-500/40 bg-fail-500/12 text-fail-500",
-  warn: "border-warn-500/40 bg-warn-500/12 text-warn-500",
-  accent: "border-flux-500/40 bg-flux-500/12 text-flux-300",
+  neutral: "border-ink-600 bg-ink-850 text-ink-300",
+  live: "border-live-500 bg-live-500/12 text-live-500",
+  building: "border-flux-500 bg-flux-500/12 text-flux-300",
+  failed: "border-fail-500 bg-fail-500/12 text-fail-500",
+  warn: "border-warn-500 bg-warn-500/12 text-warn-500",
+  accent: "border-flux-500 bg-flux-500/12 text-flux-300",
 } as const;
 
+/** Sticker-style status chip: solid border, loud caps, wiggles on hover. */
 export function Badge({
   tone = "neutral",
   children,
@@ -31,7 +32,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+        "sticker inline-flex items-center gap-1.5 rounded-lg border-[1.5px] px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
         TONES[tone],
         className,
       )}

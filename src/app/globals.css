@@ -7,55 +7,67 @@
   the site's own theme, so an exported zip renders from file:// with no
   stylesheet at all, and a customer's site never inherits the builder's look.
 
-  ── The palette ────────────────────────────────────────────────────────────
-  Light, because the people using this are not developers and a dark tool reads
-  as somebody else's software. The neutrals are cool rather than pure grey —
-  biased a few degrees toward the blue accent so they read as chosen.
+  ── The direction: commercial brutalism, Notion underneath ─────────────────
+  Vibrant and loud where the product SPEAKS (page headers, primary actions,
+  the sites hub, stickers) and calm where people WORK (the editor panes, dense
+  cards, forms). One brand accent — electric violet — plus two "pop" sticker
+  colours used sparingly. Greens, ambers and reds stay reserved for STATE, so
+  colour always means the same thing.
 
-  The accent is an ink blue borrowed from the world this product is actually in:
-  publishing. It stays clear of the greens, ambers and reds, which are reserved
-  entirely for state — "live", "needs attention", "failed" — so colour always
-  means the same thing.
+  The physical language: warm paper ground, warm near-black ink, chunky borders
+  on the things that matter, and hard offset "punch" shadows instead of blurs —
+  interactive things push back when touched.
 
   ── The ramp ───────────────────────────────────────────────────────────────
   The scale reads by ROLE, not by lightness: 950 is the page, 900 is a card, 800
-  is a border, 100 is the strongest text. That was true when this was dark and it
-  is still true now, which is why flipping the theme was a change to these eleven
-  values rather than to every component.
+  is a border, 100 is the strongest text. Every screen resolves through these
+  eleven values, which is why this rehaul was a change HERE rather than a change
+  to every component.
 */
 
 @theme {
-  /* Geist-style true neutrals — no blue bias. The scale still reads by ROLE:
-     950 is the page, 900 a card, 800 the hairline, 100 the strongest text. */
-  --color-ink-950: #fafafa; /* page ground */
+  /* Warm paper neutrals — biased toward the ink, not sterile grey. */
+  --color-ink-950: #fbf8f3; /* page ground — warm paper */
   --color-ink-900: #ffffff; /* cards, panels, bars */
-  --color-ink-850: #f4f4f5; /* hover on a surface */
-  --color-ink-800: #eaeaea; /* hairlines and borders — the signature */
-  --color-ink-700: #dcdcdc; /* stronger borders, inputs */
-  --color-ink-600: #a1a1a1; /* placeholders, disabled */
-  --color-ink-500: #8f8f8f; /* faint labels */
-  --color-ink-400: #666666; /* secondary text */
-  --color-ink-300: #454545; /* body text */
-  --color-ink-200: #171717; /* strong body */
-  --color-ink-100: #000000; /* headings */
+  --color-ink-850: #f4efe6; /* hover on a surface */
+  --color-ink-800: #e9e2d6; /* hairlines and borders */
+  --color-ink-700: #d8cfc0; /* stronger borders, inputs */
+  --color-ink-600: #a89f92; /* placeholders, disabled */
+  --color-ink-500: #8c8272; /* faint labels */
+  --color-ink-400: #6b6255; /* secondary text */
+  --color-ink-300: #453f36; /* body text */
+  --color-ink-200: #211d18; /* strong body */
+  --color-ink-100: #141210; /* headings, borders that punch, shadows */
 
-  /* The one accent IS the ink: a black fill. 400 is the (lighter) hover,
-     300 is emphasis text. Colour is spent only on state, never on chrome. */
-  --color-flux-500: #000000;
-  --color-flux-400: #333333;
-  --color-flux-300: #000000;
+  /* THE brand accent: electric violet. Buttons, focus, selection — the product's
+     voice. 400 is hover, 300 is accent TEXT on the paper ground. */
+  --color-flux-500: #5b2eff;
+  --color-flux-400: #6d45ff;
+  --color-flux-300: #3d14c9;
+
+  /* Sticker pops — decoration with a budget. Badges, highlights, one per
+     surface at most. Never for state, never for body text. */
+  --color-pop-yellow: #ffd02f;
+  --color-pop-pink: #ff5ca8;
 
   /* State only. Never decoration, never an accent. */
-  --color-live-500: #17864e;
-  --color-warn-500: #a9640a;
-  --color-fail-500: #d02a2a;
+  --color-live-500: #0e9f6e;
+  --color-warn-500: #b45309;
+  --color-fail-500: #dc2626;
 
-  /* Reuse stays distinct, but muted to a neutral so the palette holds. */
-  --color-reuse-500: #171717;
+  /* Reuse stays distinct, but quiet, so the palette holds. */
+  --color-reuse-500: #211d18;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mega: "Unbounded", "Bricolage Grotesque", ui-sans-serif, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Hard offset shadows — the punch. They resolve through ink-100, so the
+     dark landing film gets correct shadows for free. */
+  --shadow-punch-sm: 2px 2px 0 var(--color-ink-100);
+  --shadow-punch: 4px 4px 0 var(--color-ink-100);
+  --shadow-punch-lg: 7px 7px 0 var(--color-ink-100);
 }
 
 /*
@@ -65,26 +77,26 @@
   resolves through these vars rather than a literal colour.
 */
 .theme-dark {
-  --color-ink-950: #000000; /* true black page */
-  --color-ink-900: #0a0a0a; /* cards */
-  --color-ink-850: #141414; /* hover */
-  --color-ink-800: #2a2a2a; /* hairlines */
-  --color-ink-700: #383838; /* stronger borders */
-  --color-ink-600: #4d4d4d;
-  --color-ink-500: #6b6b6b;
-  --color-ink-400: #8f8f8f;
-  --color-ink-300: #a8a8a8;
-  --color-ink-200: #ededed;
+  --color-ink-950: #0b0a12; /* deep violet-black page */
+  --color-ink-900: #131120; /* cards */
+  --color-ink-850: #1b1830; /* hover */
+  --color-ink-800: #2b2745; /* hairlines */
+  --color-ink-700: #3a3558; /* stronger borders */
+  --color-ink-600: #565170;
+  --color-ink-500: #6f6a8a;
+  --color-ink-400: #928da8;
+  --color-ink-300: #b3afc4;
+  --color-ink-200: #eceaf4;
   --color-ink-100: #ffffff;
 
-  /* In the dark, the accent inverts to white (a white fill, dark text). */
-  --color-flux-500: #ededed;
-  --color-flux-400: #cfcfcf;
-  --color-flux-300: #ffffff;
+  /* Same violet voice, brightened to carry on the dark ground. */
+  --color-flux-500: #7c5cff;
+  --color-flux-400: #937aff;
+  --color-flux-300: #b3a1ff;
 
-  --color-live-500: #3fb950;
-  --color-warn-500: #d29922;
-  --color-fail-500: #f85149;
+  --color-live-500: #34d399;
+  --color-warn-500: #fbbf24;
+  --color-fail-500: #f87171;
 
   color-scheme: dark;
   background: var(--color-ink-950);
@@ -103,12 +115,21 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Page and section titles. Geist-style: the same sans as the body, but tight
-   and heavy, so hierarchy comes from weight + tracking, not a second typeface. */
+/* Section and card titles: Bricolage — personality that stays legible at 17px. */
 .display {
   font-family: var(--font-display);
-  font-weight: 660;
-  letter-spacing: -0.025em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* Page-hero headings ONLY — the loud voice. Unbounded is expensive to read, so
+   it appears a handful of times per screen at large sizes, never in dense UI. */
+.display-mega {
+  font-family: var(--font-mega);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.06;
   text-wrap: balance;
 }
 
@@ -171,6 +192,93 @@ body {
 }
 .cms-flash {
   animation: cms-flash 1.1s ease-out;
+}
+
+/*
+  ── Motion kit ──────────────────────────────────────────────────────────────
+  A small vocabulary, used deliberately: entrance stagger on grids, a hard
+  lift on interactive cards/buttons, a marquee for the brand panel, a wiggle
+  for stickers. The global reduced-motion guard below switches all of it off.
+*/
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.anim-rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.anim-pop {
+  animation: pop-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+/* Stagger helpers for grid entrances. */
+.d-1 { animation-delay: 0.05s; }
+.d-2 { animation-delay: 0.1s; }
+.d-3 { animation-delay: 0.15s; }
+.d-4 { animation-delay: 0.2s; }
+.d-5 { animation-delay: 0.25s; }
+.d-6 { animation-delay: 0.3s; }
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-x 22s linear infinite;
+}
+
+/* The push-back: interactive surfaces lift onto a hard shadow. Pair with
+   `shadow-punch-*` classes; this only owns the movement. */
+.punchable {
+  transition:
+    transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.16s cubic-bezier(0.2, 0.9, 0.3, 1),
+    border-color 0.16s ease;
+}
+.punchable:hover {
+  transform: translate(-2px, -2px);
+}
+.punchable:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+.sticker:hover {
+  animation: wiggle 0.4s ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

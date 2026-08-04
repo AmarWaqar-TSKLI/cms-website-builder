@@ -25,26 +25,28 @@ const FOCUS =
   "outline-none focus-visible:ring-2 focus-visible:ring-flux-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950";
 
 const VARIANT: Record<Variant, string> = {
-  // Flat black fill, white text — the Geist primary. No gloss, just contrast.
-  primary: "bg-flux-500 text-white hover:bg-flux-400 active:bg-flux-500",
-  // White with a hairline border; the border darkens on hover.
-  secondary: "border border-ink-800 bg-ink-900 text-ink-200 hover:border-ink-600 hover:bg-ink-850",
-  ghost: "border border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100",
-  quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-850",
-  danger: "border border-fail-500/35 text-fail-500 hover:bg-fail-500/8",
+  // The violet voice, with the punch: lifts onto a hard ink shadow on hover,
+  // sits back down on press. The button physically pushes back.
+  primary:
+    "punchable border-2 border-ink-100 bg-flux-500 text-white hover:bg-flux-400 hover:shadow-punch-sm",
+  // Paper with a firm border; earns its shadow on hover.
+  secondary:
+    "punchable border-2 border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-100 hover:shadow-punch-sm",
+  ghost: "border border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100 transition-colors",
+  quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-850 transition-colors",
+  danger: "border-2 border-fail-500/40 text-fail-500 hover:border-fail-500 hover:bg-fail-500/8 transition-colors",
 };
 
 const SIZE: Record<Size, string> = {
-  md: "h-9 px-4 text-[13px] rounded-md",
-  sm: "h-8 px-3 text-[12px] rounded-md",
-  xs: "h-7 px-2.5 text-[11px] rounded",
+  md: "h-9 px-4 text-[13px] rounded-xl",
+  sm: "h-8 px-3 text-[12px] rounded-lg",
+  xs: "h-7 px-2.5 text-[11px] rounded-md",
 };
 
 export function btn(variant: Variant = "secondary", size: Size = "md", className?: string) {
   return cx(
-    "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium",
-    "transition-[background-color,border-color,color,transform] duration-150 active:translate-y-px",
-    "disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0",
+    "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-semibold",
+    "disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:shadow-none",
     VARIANT[variant],
     SIZE[size],
     FOCUS,
@@ -119,8 +121,8 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-xl border bg-ink-900",
-        tone === "live" ? "border-live-500/30" : "border-ink-800",
+        "rounded-2xl border-2 bg-ink-900",
+        tone === "live" ? "border-live-500/45" : "border-ink-800",
         className,
       )}
     >
@@ -151,7 +153,7 @@ export function CardHead({
   return (
     <div className={cx("flex flex-wrap items-start justify-between gap-x-4 gap-y-2", className)}>
       <div className="min-w-0">
-        <h2 className="display text-[17px] text-ink-100">{title}</h2>
+        <h2 className="display text-[18px] text-ink-100">{title}</h2>
         {hint && <p className="mt-1 max-w-prose text-[12.5px] leading-relaxed text-ink-400">{hint}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
@@ -186,21 +188,20 @@ export function Tile({
 }) {
   const inner = (
     <>
-      <div className="text-[22px] font-semibold leading-none tracking-tight text-ink-100">
+      <div className="display text-[28px] leading-none text-ink-100" style={{ fontVariantNumeric: "tabular-nums" }}>
         {value}
       </div>
-      <div className="mt-1.5 text-[12px] font-medium text-ink-300">{label}</div>
+      <div className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">{label}</div>
       {sub && <div className="mt-0.5 text-[11px] text-ink-500">{sub}</div>}
     </>
   );
-  const cls =
-    "block rounded-xl border border-ink-800 bg-ink-950/70 px-4 py-3.5 transition-colors";
+  const cls = "block rounded-2xl border-2 border-ink-800 bg-ink-950/70 px-4 py-4";
   if (href) {
     return (
       <Link
         href={href}
         title={title}
-        className={cx(cls, "hover:border-flux-500/40 hover:bg-ink-900/60", FOCUS)}
+        className={cx(cls, "punchable hover:border-ink-100 hover:shadow-punch-sm", FOCUS)}
       >
         {inner}
       </Link>
