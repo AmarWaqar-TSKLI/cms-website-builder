@@ -19,21 +19,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   const auth = await guardSite(siteId);
   if (!auth.ok) return auth.response;
 
-  // Optional cherry-pick: {nodeIds?: string[], includeTheme?: boolean}. Omitted
-  // (or empty) merges everything, so the simple "merge all" call still works.
-  let body: { nodeIds?: unknown; includeTheme?: unknown } = {};
+  // Cherry-pick selection; every list optional. Omitted defaults are safe by
+  // construction (mergeBranch): all clean text changes and all additions merge,
+  // conflicts and removals only when explicitly listed.
+  let body: Record<string, unknown> = {};
   try {
     body = await req.json();
   } catch {
-    /* no body → merge all */
+    /* no body → safe defaults */
   }
-  const nodeIds = Array.isArray(body.nodeIds)
-    ? body.nodeIds.filter((x): x is string => typeof x === "string")
-    : null;
-  const includeTheme = typeof body.includeTheme === "boolean" ? body.includeTheme : true;
+  const idList = (v: unknown): string[] | null =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null;
 
   try {
-    const result = await mergeBranch(siteId, auth.user.id, true, { nodeIds, includeTheme });
+    const result = await mergeBranch(siteId, auth.user.id, true, {
+      nodeIds: idList(body.nodeIds),
+      addNodeIds: idList(body.addNodeIds),
+      removeNodeIds: idList(body.removeNodeIds),
+      addSectionIds: idList(body.addSectionIds),
+      removeSectionIds: idList(body.removeSectionIds),
+      addPagePaths: idList(body.addPagePaths),
+      removePagePaths: idList(body.removePagePaths),
+      includeTheme: typeof body.includeTheme === "boolean" ? body.includeTheme : undefined,
+    });
     if (result.versionNo !== null) {
       await logActivity({
         siteId: result.parentId,
@@ -42,9 +50,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
         action: "site.published",
         entityType: "release",
         entityId: result.parentId,
-        summary: `${auth.user.name} merged a branch (${result.blocksMerged} block${
-          result.blocksMerged === 1 ? "" : "s"
-        }${result.themeMerged ? " + theme" : ""}) and published v${result.versionNo}`,
+        summary: `${auth.user.name} merged a branch (${[
+          result.blocksMerged && `${result.blocksMerged} edit${result.blocksMerged === 1 ? "" : "s"}`,
+          (result.sectionsAdded || result.nodesAdded) &&
+            `${result.sectionsAdded + result.nodesAdded} added`,
+          (result.sectionsRemoved || result.nodesRemoved) &&
+            `${result.sectionsRemoved + result.nodesRemoved} removed`,
+          result.pagesAdded && `${result.pagesAdded} page${result.pagesAdded === 1 ? "" : "s"}`,
+          result.themeMerged && "theme",
+        ]
+          .filter(Boolean)
+          .join(", ")}) and published v${result.versionNo}`,
         meta: { ...result },
       });
     }

@@ -55,16 +55,9 @@ export interface DashSite {
   parentName: string | null;
 }
 
-/** The block-level diff of a branch vs its parent (mirrors BranchDiff in lib/branch). */
-interface BranchDiff {
-  parentName: string;
-  changed: { nodeId: string; type: string; fields: { key: string; before: string; after: string }[] }[];
-  added: { nodeId: string; type: string; sample: string }[];
-  removed: { nodeId: string; type: string; sample: string }[];
-  theme: { key: string; label: string; before: string; after: string }[];
-  pagesAdded: string[];
-  pagesRemoved: string[];
-}
+/** The three-way diff and merge shapes come straight from the lib (type-only —
+ * erased at build, so no server code reaches the client bundle). */
+import type { BranchDiff, MergeResult } from "@/lib/branch";
 
 export interface DashPage {
   id: string;
@@ -285,7 +278,10 @@ export function DashboardShell({
   const [directions, setDirections] = useState<BrandDirection[] | null>(null);
   const [diff, setDiff] = useState<BranchDiff | null>(null);
   const [mergeSel, setMergeSel] = useState<Set<string>>(new Set());
+  /** Structural picks, prefix-keyed: an:/rn: nodes, as:/rs: sections, ap:/rp: pages. */
+  const [structSel, setStructSel] = useState<Set<string>>(new Set());
   const [mergeTheme, setMergeTheme] = useState(true);
+  const [merged, setMerged] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [translateSel, setTranslateSel] = useState<Set<string>>(new Set());
   const [translated, setTranslated] = useState<string[]>([]);
@@ -470,8 +466,17 @@ export function DashboardShell({
       }
       const d = data as BranchDiff;
       setDiff(d);
-      setMergeSel(new Set(d.changed.map((c) => c.nodeId)));
-      setMergeTheme(d.theme.length > 0);
+      // Safe defaults, mirroring the server's: clean changes and additions
+      // ticked; conflicts and removals never ticked without a human.
+      setMergeSel(new Set(d.changed.filter((c) => !c.conflict).map((c) => c.nodeId)));
+      setStructSel(
+        new Set([
+          ...d.addedNodes.map((a) => `an:${a.nodeId}`),
+          ...d.sectionsAdded.map((s) => `as:${s.branchComponentId}`),
+          ...d.pagesAdded.map((p) => `ap:${p.path}`),
+        ]),
+      );
+      setMergeTheme(d.theme.some((t) => !t.conflict));
     } catch {
       setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
     } finally {
@@ -483,31 +488,77 @@ export function DashboardShell({
     setBusy("merge");
     setFlash(null);
     try {
+      const picked = (prefix: string) =>
+        [...structSel].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
       const res = await fetch(`/api/sites/${site.id}/branch-merge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeIds: [...mergeSel], includeTheme: mergeTheme }),
+        body: JSON.stringify({
+          nodeIds: [...mergeSel],
+          addNodeIds: picked("an:"),
+          removeNodeIds: picked("rn:"),
+          addSectionIds: picked("as:"),
+          removeSectionIds: picked("rs:"),
+          addPagePaths: picked("ap:"),
+          removePagePaths: picked("rp:"),
+          includeTheme: mergeTheme,
+        }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as MergeResult & { error?: string };
       if (!res.ok) {
         setFlash({ kind: "error", text: data.error ?? "Couldn't merge the branch." });
         return;
       }
       setDiff(null);
+      setMerged(true);
+      const bits = [
+        data.blocksMerged && `${data.blocksMerged} edit${data.blocksMerged === 1 ? "" : "s"}`,
+        data.nodesAdded + data.sectionsAdded > 0 &&
+          `${data.nodesAdded + data.sectionsAdded} section${
+            data.nodesAdded + data.sectionsAdded === 1 ? "" : "s"
+          } added`,
+        data.nodesRemoved + data.sectionsRemoved > 0 &&
+          `${data.nodesRemoved + data.sectionsRemoved} removed`,
+        data.pagesAdded > 0 && `${data.pagesAdded} page${data.pagesAdded === 1 ? "" : "s"} added`,
+        data.pagesRemoved > 0 && `${data.pagesRemoved} page${data.pagesRemoved === 1 ? "" : "s"} removed`,
+        data.themeMerged && "theme",
+      ].filter(Boolean);
       setFlash({
         kind: "info",
-        text: `Merged ${data.blocksMerged} block${data.blocksMerged === 1 ? "" : "s"}${
-          data.themeMerged ? " + theme" : ""
-        } into ${site.parentName ?? "the parent"}${
-          data.versionNo ? ` — published v${data.versionNo}` : ""
-        }.`,
+        text: `Merged ${bits.length ? bits.join(", ") : "nothing"} into ${
+          site.parentName ?? "the parent"
+        }${data.versionNo ? ` — published v${data.versionNo}` : ""}${
+          data.conflictsSkipped
+            ? `. ${data.conflictsSkipped} conflicted change${
+                data.conflictsSkipped === 1 ? "" : "s"
+              } left untouched.`
+            : "."
+        }`,
       });
     } catch {
       setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
     } finally {
       setBusy(null);
     }
-  }, [site.id, site.parentName, mergeSel, mergeTheme]);
+  }, [site.id, site.parentName, mergeSel, structSel, mergeTheme]);
+
+  /** After a merge the branch has served its purpose — offer to archive it. */
+  const archiveBranch = useCallback(async () => {
+    setBusy("archive");
+    try {
+      const res = await fetch(`/api/sites/${site.id}`, { method: "DELETE" });
+      if (res.ok) {
+        router.push("/sites");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setFlash({ kind: "error", text: data.error ?? "Couldn't archive the branch." });
+    } catch {
+      setFlash({ kind: "error", text: "Could not reach the server. Check your connection." });
+    } finally {
+      setBusy(null);
+    }
+  }, [site.id, router]);
 
   const deleteSite = useCallback(async () => {
     setBusy("delete");
@@ -880,25 +931,42 @@ export function DashboardShell({
                 disabled={
                   busy === "merge" ||
                   busy === "diff" ||
-                  (!!diff && mergeSel.size === 0 && !(mergeTheme && diff.theme.length > 0))
+                  (!!diff &&
+                    mergeSel.size === 0 &&
+                    structSel.size === 0 &&
+                    !(mergeTheme && diff.theme.length > 0))
                 }
                 className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
               >
-                {busy === "merge"
-                  ? "Merging…"
-                  : diff
-                    ? `Merge ${mergeSel.size + (mergeTheme && diff.theme.length > 0 ? 1 : 0)} change${
-                        mergeSel.size + (mergeTheme && diff.theme.length > 0 ? 1 : 0) === 1 ? "" : "s"
-                      } & publish`
-                    : `Merge into ${site.parentName ?? "parent"} & publish`}
+                {(() => {
+                  if (busy === "merge") return "Merging…";
+                  if (!diff) return `Merge into ${site.parentName ?? "parent"} & publish`;
+                  const n =
+                    mergeSel.size + structSel.size + (mergeTheme && diff.theme.length > 0 ? 1 : 0);
+                  return `Merge ${n} change${n === 1 ? "" : "s"} & publish`;
+                })()}
               </button>
+              {merged ? (
+                <button
+                  type="button"
+                  onClick={() => void archiveBranch()}
+                  disabled={busy === "archive"}
+                  className="rounded-lg border border-ink-700 px-4 py-2 text-[13px] font-semibold text-ink-300 transition-colors hover:border-fail-500/50 hover:text-fail-500 disabled:opacity-40"
+                >
+                  {busy === "archive" ? "Archiving…" : "Archive this branch"}
+                </button>
+              ) : null}
             </div>
 
             {diff &&
             !diff.changed.length &&
             !diff.theme.length &&
-            !diff.added.length &&
-            !diff.removed.length ? (
+            !diff.addedNodes.length &&
+            !diff.removedNodes.length &&
+            !diff.sectionsAdded.length &&
+            !diff.sectionsRemoved.length &&
+            !diff.pagesAdded.length &&
+            !diff.pagesRemoved.length ? (
               // The honest empty state. Without it, "0 blocks changed" after
               // adding a product reads as a broken feature instead of the tier
               // split doing its job.
@@ -924,8 +992,24 @@ export function DashboardShell({
                       {diff.theme.length === 1 ? "" : "s"}
                     </>
                   ) : null}
-                  {diff.added.length ? <> · {diff.added.length} added</> : null}
-                  {diff.removed.length ? <> · {diff.removed.length} removed</> : null}
+                  {diff.sectionsAdded.length + diff.addedNodes.length > 0 ? (
+                    <> · {diff.sectionsAdded.length + diff.addedNodes.length} added</>
+                  ) : null}
+                  {diff.sectionsRemoved.length + diff.removedNodes.length > 0 ? (
+                    <> · {diff.sectionsRemoved.length + diff.removedNodes.length} removed</>
+                  ) : null}
+                  {diff.pagesAdded.length + diff.pagesRemoved.length > 0 ? (
+                    <> · {diff.pagesAdded.length + diff.pagesRemoved.length} page{diff.pagesAdded.length + diff.pagesRemoved.length === 1 ? "" : "s"}</>
+                  ) : null}
+                  {diff.conflictCount > 0 ? (
+                    <span className="text-amber-400">
+                      {" · "}
+                      {diff.conflictCount} conflict{diff.conflictCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  {!diff.threeWay ? (
+                    <span className="text-ink-500"> · forked before conflict tracking — two-way compare</span>
+                  ) : null}
                 </div>
 
                 {diff.theme.length ? (
@@ -1000,6 +1084,12 @@ export function DashboardShell({
                           <span className="min-w-0">
                             <span className="block text-[10px] uppercase tracking-wide text-ink-600">
                               {c.type}
+                              {c.conflict ? (
+                                <span className="ml-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold normal-case tracking-normal text-amber-400">
+                                  ⚠ also edited on {site.parentName ?? "the parent"} — merging
+                                  overwrites it
+                                </span>
+                              ) : null}
                             </span>
                             <span className="block text-red-400/80 line-through">
                               {c.fields[0].before}
@@ -1011,6 +1101,56 @@ export function DashboardShell({
                     </div>
                   </>
                 ) : null}
+
+                {/* ── Structure: sections/blocks/pages added or removed ── */}
+                <StructureGroup
+                  title="Added on this branch"
+                  hint="Ticked items are created on the parent, in place."
+                  items={[
+                    ...diff.sectionsAdded.map((s) => ({
+                      key: `as:${s.branchComponentId}`,
+                      label: `${s.kind} section on ${s.pagePath}`,
+                      sample: s.sample,
+                    })),
+                    ...diff.addedNodes.map((a) => ({
+                      key: `an:${a.nodeId}`,
+                      label: `${a.type} block`,
+                      sample: a.sample,
+                    })),
+                    ...diff.pagesAdded.map((p) => ({
+                      key: `ap:${p.path}`,
+                      label: `Page ${p.path}`,
+                      sample: p.title,
+                    })),
+                  ]}
+                  tone="add"
+                  sel={structSel}
+                  setSel={setStructSel}
+                />
+                <StructureGroup
+                  title="Removed on this branch"
+                  hint="Unticked by default — ticking deletes these from the parent too."
+                  items={[
+                    ...diff.sectionsRemoved.map((s) => ({
+                      key: `rs:${s.parentComponentId}`,
+                      label: `${s.kind} section on ${s.pagePath}`,
+                      sample: s.sample,
+                    })),
+                    ...diff.removedNodes.map((r) => ({
+                      key: `rn:${r.nodeId}`,
+                      label: `${r.type} block`,
+                      sample: r.sample,
+                    })),
+                    ...diff.pagesRemoved.map((path) => ({
+                      key: `rp:${path}`,
+                      label: `Page ${path}`,
+                      sample: "",
+                    })),
+                  ]}
+                  tone="remove"
+                  sel={structSel}
+                  setSel={setStructSel}
+                />
               </div>
             ) : null}
           </>
@@ -2106,5 +2246,73 @@ function CommercePanel({
         />
       </div>
     </Card>
+  );
+}
+
+/* ── branch structure picker ─────────────────────────────────────────────── */
+
+/** One checkbox group of structural branch changes (adds or removes). */
+function StructureGroup({
+  title,
+  hint,
+  items,
+  tone,
+  sel,
+  setSel,
+}: {
+  title: string;
+  hint: string;
+  items: { key: string; label: string; sample: string }[];
+  tone: "add" | "remove";
+  sel: Set<string>;
+  setSel: (fn: (s: Set<string>) => Set<string>) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-3">
+      <div className="flex items-baseline gap-2">
+        <span
+          className={cx(
+            "text-[11px] font-medium",
+            tone === "add" ? "text-emerald-400" : "text-red-400/90",
+          )}
+        >
+          {title}
+        </span>
+        <span className="text-[10.5px] text-ink-600">{hint}</span>
+      </div>
+      <div className="mt-1.5 space-y-1.5">
+        {items.map((item) => (
+          <label key={item.key} className="flex cursor-pointer gap-2 text-[12px] leading-snug">
+            <input
+              type="checkbox"
+              checked={sel.has(item.key)}
+              onChange={(e) =>
+                setSel((s) => {
+                  const next = new Set(s);
+                  if (e.target.checked) next.add(item.key);
+                  else next.delete(item.key);
+                  return next;
+                })
+              }
+              className="mt-0.5 accent-flux-500"
+            />
+            <span className="min-w-0">
+              <span
+                className={cx(
+                  "block",
+                  tone === "add" ? "text-emerald-400" : "text-red-400/80 line-through",
+                )}
+              >
+                {item.label}
+              </span>
+              {item.sample ? (
+                <span className="block truncate text-[11px] text-ink-500">{item.sample}</span>
+              ) : null}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
