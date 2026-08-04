@@ -181,8 +181,36 @@ model Site {
   activity  ActivityLog[]
   formSubmissions FormSubmission[]
   apiKeys   ApiKey[]
+  baseline  BranchBaseline?
 
   @@map("sites")
+}
+
+/// THE FORK POINT — what the parent looked like the moment a branch was created.
+///
+/// Written once at fork, read by diff and merge, gone with the branch (cascade).
+/// This is what upgrades the branch diff from two-way to three-way: with a base,
+/// "changed" can distinguish "the branch edited this" from "the PARENT moved on
+/// since the fork" — the first merges cleanly, the second must not be silently
+/// reverted, and both-changed is a conflict a person has to resolve.
+model BranchBaseline {
+  branchSiteId String   @id @map("branch_site_id")
+  /// Flat map nodeId → {type, text:{field:value}} across the parent's components
+  /// at fork time. Every node, even textless ones — structure needs them.
+  blocks       Json
+  /// Theme tokens at fork time, for three-way theme comparison.
+  tokens       Json
+  /// parent component id → branch component id, recorded from the fork's copy
+  /// step. What lets merge translate page references between the two sites.
+  componentMap Json     @map("component_map")
+  /// The parent's page paths at fork time — so a page the PARENT added after the
+  /// fork is never mistaken for one the branch deleted.
+  pagePaths    Json     @map("page_paths")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  branchSite Site @relation(fields: [branchSiteId], references: [id], onDelete: Cascade)
+
+  @@map("branch_baselines")
 }
 
 /// A read-only key for the headless Content API.
