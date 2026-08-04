@@ -1,11 +1,11 @@
-import Marketing from "@/components/landing/Marketing";
+import Home from "@/components/landing/Home";
 
 /**
- * The homepage. Warm, light, and written for the person who wants a website —
- * not the engineer reviewing how it's built. The old architecture film (the 3D
- * scroll narrative) still lives at /how-it-works for anyone curious about the
- * machinery underneath.
+ * The homepage: a dark, animated front door in the dev-platform register —
+ * the hero's circuit board IS the architecture (edit → immutable version →
+ * live pointer, with a rollback rail flowing the other way). The old 3D
+ * scroll narrative still lives at /how-it-works.
  */
 export default function LandingPage() {
-  return <Marketing />;
+  return <Home />;
 }
