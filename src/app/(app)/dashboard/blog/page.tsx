@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, sitesForUser } from "@/lib/auth";
+import { storeSiteId } from "@/lib/store-site";
 import { AppShell } from "@/components/dashboard/AppShell";
 import { BlogManager } from "@/components/dashboard/BlogManager";
 
@@ -49,8 +50,12 @@ export default async function BlogPage({
 
   const blogOn = site.modules.some((m) => m.module === "blog");
 
+  // A branch shares its parent's blog (store-site.ts) — posts are Tier-2.
   const posts = await prisma.post.findMany({
-    where: { siteId: site.id, deletedAt: null },
+    where: {
+      siteId: site.parentSiteId ? await storeSiteId(site.id) : site.id,
+      deletedAt: null,
+    },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { revisions: true } } },
   });

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, sitesForUser } from "@/lib/auth";
+import { storeSiteId } from "@/lib/store-site";
 import { AppShell } from "@/components/dashboard/AppShell";
 import { MediaManager } from "@/components/dashboard/MediaManager";
 
@@ -47,8 +48,12 @@ export default async function MediaPage({
     );
   }
 
+  // A branch shares its parent's library (store-site.ts) — media is Tier-2.
   const media = await prisma.media.findMany({
-    where: { siteId: site.id, deletedAt: null },
+    where: {
+      siteId: site.parentSiteId ? await storeSiteId(site.id) : site.id,
+      deletedAt: null,
+    },
     orderBy: { createdAt: "desc" },
   });
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, sitesForUser } from "@/lib/auth";
+import { storeSiteId } from "@/lib/store-site";
 import { Card, CardHead, LinkBtn, Tile, UnderTheHood } from "@/components/dashboard/dash-ui";
 import { AppShell } from "@/components/dashboard/AppShell";
 import { ProductManager } from "@/components/dashboard/ProductManager";
@@ -27,10 +28,7 @@ export default async function ProductsPage({
   const site = targetId
     ? await prisma.site.findUnique({
         where: { id: targetId },
-        include: {
-          modules: true,
-          collections: { where: { deletedAt: null }, orderBy: { title: "asc" } },
-        },
+        include: { modules: true },
       })
     : null;
 
@@ -51,19 +49,28 @@ export default async function ProductsPage({
     );
   }
 
-  const [orders, totals, productCount] = await Promise.all([
+  // A branch shares its parent's store (store-site.ts): products, orders and
+  // collections shown here are the family's ONE catalogue, whichever site of
+  // the family is selected.
+  const storeId = site.parentSiteId ? await storeSiteId(site.id) : site.id;
+
+  const [orders, totals, productCount, collections] = await Promise.all([
     prisma.order.findMany({
-      where: { siteId: site.id },
+      where: { siteId: storeId },
       orderBy: { placedAt: "desc" },
       take: 8,
       include: { lineItems: true, customer: true },
     }),
     prisma.order.aggregate({
-      where: { siteId: site.id },
+      where: { siteId: storeId },
       _count: { _all: true },
       _sum: { totalCents: true },
     }),
-    prisma.product.count({ where: { siteId: site.id, deletedAt: null } }),
+    prisma.product.count({ where: { siteId: storeId, deletedAt: null } }),
+    prisma.collection.findMany({
+      where: { siteId: storeId, deletedAt: null },
+      orderBy: { title: "asc" },
+    }),
   ]);
 
   const revenue = totals._sum.totalCents ?? 0;
@@ -108,7 +115,7 @@ export default async function ProductsPage({
         />
       </div>
 
-      <ProductManager siteId={site.id} collectionId={site.collections[0]?.id ?? null} />
+      <ProductManager siteId={site.id} collectionId={collections[0]?.id ?? null} />
 
       <Card className="mt-5 p-5 sm:p-6">
         <CardHead

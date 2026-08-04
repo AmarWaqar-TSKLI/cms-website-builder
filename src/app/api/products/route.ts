@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { guardSite } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { validateImageDataUri } from "@/lib/media";
+import { storeSiteId } from "@/lib/store-site";
 
 export const dynamic = "force-dynamic";
 
-/** Tier 2. No revisions, no releases — products are live data, full stop. (D5) */
+/** Tier 2. No revisions, no releases — products are live data, full stop. (D5)
+ * A branch shares its parent's store (store-site.ts), so reads and writes here
+ * resolve to the ROOT site: the same catalogue everywhere in the family. */
 export async function GET(req: Request) {
   const siteId = new URL(req.url).searchParams.get("siteId");
   if (!siteId) return NextResponse.json({ error: "siteId required" }, { status: 400 });
@@ -13,7 +16,7 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response;
 
   const products = await prisma.product.findMany({
-    where: { siteId },
+    where: { siteId: await storeSiteId(siteId) },
     include: {
       variants: { orderBy: { priceCents: "asc" } },
       collections: { include: { collection: { select: { id: true, title: true, handle: true } } } },
@@ -57,7 +60,9 @@ export async function POST(req: Request) {
 
   const product = await prisma.product.create({
     data: {
-      siteId: payload.siteId,
+      // Created in the family's shared store, so a product added while working
+      // on a branch exists for the parent and every sibling branch too.
+      siteId: await storeSiteId(String(payload.siteId)),
       title: String(payload.title),
       description: String(payload.description ?? ""),
       imageUrl,

@@ -15,16 +15,19 @@ import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { slugify } from "@/lib/slug";
 import { EMPTY_POST_BODY, uniqueSlug } from "@/lib/posts";
+import { storeSiteId } from "@/lib/store-site";
 
 export const dynamic = "force-dynamic";
 
+// Posts are Tier-2, and a branch shares its parent's blog (store-site.ts):
+// reads and writes resolve to the root site.
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   const auth = await guardSite(siteId);
   if (!auth.ok) return auth.response;
 
   const posts = await prisma.post.findMany({
-    where: { siteId, deletedAt: null },
+    where: { siteId: await storeSiteId(siteId), deletedAt: null },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { revisions: true } } },
   });
@@ -62,10 +65,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true } });
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
-  const slug = await uniqueSlug(siteId, slugify(title));
+  const storeId = await storeSiteId(siteId);
+  const slug = await uniqueSlug(storeId, slugify(title));
 
   const post = await prisma.post.create({
-    data: { siteId, title, slug, excerpt: "", authorId: userId, status: "draft" },
+    data: { siteId: storeId, title, slug, excerpt: "", authorId: userId, status: "draft" },
   });
   const revision = await prisma.postRevision.create({
     data: { postId: post.id, versionNo: 1, body: EMPTY_POST_BODY as never, createdBy: userId },
@@ -76,7 +80,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   });
 
   await logActivity({
-    siteId,
+    // Logged on the store site — that's whose blog the post belongs to.
+    siteId: storeId,
     userId,
     actorName: auth.user.name,
     action: "post.created",

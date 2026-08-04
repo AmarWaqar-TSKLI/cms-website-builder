@@ -15,6 +15,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { storeSiteId } from "@/lib/store-site";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,12 @@ export async function POST(req: Request) {
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true } });
   if (!site) return NextResponse.json({ error: "Unknown site" }, { status: 404, headers: CORS });
 
+  // A branch's published site sells the family's shared store (store-site.ts):
+  // its pages reference the root site's products, so both the ownership check
+  // and the order row use the root. An order placed on a branch preview is a
+  // real order in the one real store — not a row in a shadow store nobody reads.
+  const storeId = await storeSiteId(siteId);
+
   // Prices come from the database, never from the client. The artifact's baked-in
   // price is a display value that may be weeks stale; what someone is charged is
   // decided here, now.
@@ -61,7 +68,7 @@ export async function POST(req: Request) {
   const lines = items
     .map((item) => {
       const variant = variants.find((v) => v.id === item.variantId);
-      if (!variant || variant.product.siteId !== siteId || variant.product.deletedAt) return null;
+      if (!variant || variant.product.siteId !== storeId || variant.product.deletedAt) return null;
       const qty = Math.max(1, Math.min(99, Math.floor(Number(item.qty) || 1)));
       return {
         variantId: variant.id,
@@ -90,7 +97,7 @@ export async function POST(req: Request) {
   // FAKED: no payment processor. The order is written as `paid` immediately.
   const order = await prisma.order.create({
     data: {
-      siteId,
+      siteId: storeId,
       status: "paid",
       totalCents,
       lineItems: { create: lines },

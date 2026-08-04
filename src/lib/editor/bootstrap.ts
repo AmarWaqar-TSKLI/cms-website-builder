@@ -9,6 +9,7 @@
  */
 import { prisma } from "../db";
 import { asLayout, asTokens } from "../theme";
+import { storeSiteId } from "../store-site";
 import { directComponentRefs } from "../shared-components";
 import { displayNameOf } from "../shared-components";
 import type {
@@ -58,18 +59,25 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
     ? theme.revisions.find((r) => r.id === theme.currentRevisionId)
     : theme?.revisions.sort((a, b) => b.versionNo - a.versionNo)[0];
 
+  // Tier-2 comes from the family's shared store (store-site.ts): a branch edits
+  // its own design but references its PARENT's products, media and posts — the
+  // same records the freeze step will resolve at publish. Without this, every
+  // ProductGrid on a branch rendered "(deleted product)" for a perfectly live
+  // catalogue. Design reads below (components) stay on site.id.
+  const storeId = site.parentSiteId ? await storeSiteId(site.id) : site.id;
+
   const [productRows, collectionRows, mediaRows, componentRows, postRows] = await Promise.all([
     prisma.product.findMany({
-      where: { siteId: site.id },
+      where: { siteId: storeId },
       include: { variants: { orderBy: { priceCents: "asc" }, take: 1 } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.collection.findMany({
-      where: { siteId: site.id },
+      where: { siteId: storeId },
       include: { products: { orderBy: { position: "asc" } } },
       orderBy: { title: "asc" },
     }),
-    prisma.media.findMany({ where: { siteId: site.id }, orderBy: { createdAt: "asc" } }),
+    prisma.media.findMany({ where: { siteId: storeId }, orderBy: { createdAt: "asc" } }),
     // DRAFT bodies, not revisions. The editor previews what will be published
     // next, so a header you changed five seconds ago shows on every page that
     // uses it immediately — the build reads pinned revisions instead.
@@ -81,7 +89,7 @@ export async function loadEditorContext(siteId: string): Promise<EditorContext |
     // Only PUBLISHED posts can be featured on a page — an unpublished one would
     // freeze as `missing`, so offering it would only invite that surprise.
     prisma.post.findMany({
-      where: { siteId: site.id, status: "published", deletedAt: null },
+      where: { siteId: storeId, status: "published", deletedAt: null },
       orderBy: { publishedAt: "desc" },
     }),
   ]);

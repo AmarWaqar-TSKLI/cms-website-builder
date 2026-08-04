@@ -15,16 +15,20 @@ import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 import { cleanLabel, validateImageDataUri } from "@/lib/media";
 import { storeUpload } from "@/lib/storage";
+import { storeSiteId } from "@/lib/store-site";
 
 export const dynamic = "force-dynamic";
 
+// Media is Tier-2, and a branch shares its parent's library (store-site.ts):
+// reads and uploads resolve to the root site, so the same images are available
+// on the parent and on every branch.
 export async function GET(_req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   const auth = await guardSite(siteId);
   if (!auth.ok) return auth.response;
 
   const media = await prisma.media.findMany({
-    where: { siteId, deletedAt: null },
+    where: { siteId: await storeSiteId(siteId), deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 
@@ -67,6 +71,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
 
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true } });
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
+  const storeId = await storeSiteId(siteId);
 
   const filename = cleanLabel(payload.filename);
   const alt = cleanLabel(payload.alt, 300);
@@ -79,14 +84,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   const mediaId = randomUUID();
   const storageKey = await storeUpload(valid.value.dataUri, {
     mime: valid.value.mime,
-    siteId,
+    siteId: storeId,
     id: mediaId,
   });
 
   const created = await prisma.media.create({
     data: {
       id: mediaId,
-      siteId,
+      siteId: storeId,
       storageKey,
       mime: valid.value.mime,
       sizeBytes: valid.value.sizeBytes,
@@ -98,7 +103,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   });
 
   await logActivity({
-    siteId,
+    // Logged on the store site — that's whose library the image landed in.
+    siteId: storeId,
     userId,
     actorName: auth.user.name,
     action: "media.uploaded",
