@@ -613,19 +613,33 @@ export interface PagePlanItem {
   blocks: PageNode[];
 }
 
+/** What the copilot is told about one existing section: its type AND its words. */
+export interface PageSectionSummary {
+  type: string;
+  /** First meaningful text of the section, so suggestions ground in the actual business. */
+  text: string;
+}
+
 /**
  * The agentic builder's brain: look at what's already on a page and plan the
- * sections it still NEEDS to be a complete, high-converting page of its kind —
- * in order, each with a reason and real composed copy. It's context-aware (it
- * won't re-suggest a hero if there's already one) and, like every other AI path
- * here, bounded to the registry: a recommendation can only ever be valid blocks.
+ * sections it still NEEDS — in order, each with a reason and real composed copy.
+ *
+ * Context is the whole game here, and it takes two inputs to be genuinely
+ * context-aware rather than generically plausible:
+ *   - `sections` carries the page's actual CONTENT (type + first text per
+ *     section), so a suggestion can reference the real business instead of
+ *     inventing one from the site name;
+ *   - `avoid` carries every title this session has already suggested, so asking
+ *     twice produces NEW ideas instead of the same four again.
+ * Bounded to the registry like every AI path: only valid blocks come back.
  */
 export async function planPage(
-  existingTypes: string[],
+  sections: PageSectionSummary[],
   siteName?: string,
   pageTitle?: string,
+  avoid: string[] = [],
 ): Promise<PagePlanItem[]> {
-  const system = `You are an expert web designer and conversion copywriter helping build ONE page. Given what's already on the page and the site, recommend the NEXT sections this page needs to be complete, professional and high-converting — in the order they should appear.
+  const system = `You are an expert web designer and conversion copywriter helping build ONE page. Given the page's current sections — their types AND their actual copy — recommend the NEXT sections this page needs to be complete, professional and high-converting, in the order they should appear.
 
 Compose the section from these block types and their listed prop keys ONLY:
 ${catalogue()}
@@ -635,15 +649,30 @@ Return a JSON object of exactly this shape:
 
 Rules:
 - Recommend 3 to 4 sections, each genuinely useful for THIS page's purpose, in the order they should appear down the page.
-- Recommend sections that are MISSING. Do NOT re-suggest a section type the page already has, unless a great page of this kind clearly needs a second one.
+- Recommend only what is MISSING. Never duplicate a section the page already has (by type OR by purpose — a second pricing section is a duplicate even as different blocks), unless a great page of this kind clearly needs a second one, and say why.
+- GROUND every suggestion in the page's existing copy: reuse its product names, its tone, its claims. The reader must believe the same person wrote the whole page.
+- If a list of previously-made suggestions is given, do NOT repeat or rephrase ANY of them — bring genuinely different ideas or fewer ideas.
 - Each recommendation is 1 to 4 blocks with REAL, specific copy for this exact business — real headings and full sentences, never placeholders.
 - Set ONLY the listed props. Never set sizes, spacing, colours or widths, and never set an image/media prop. For links use "#" or a path.
 - Only blocks marked "[accepts child blocks]" may have "children".
 - Output ONLY the JSON object. No prose, no code fences.`;
 
-  const user = `Site: "${siteName ?? "this business"}". Page: "${pageTitle ?? "a page"}". Already on the page, in order: [${
-    existingTypes.length ? existingTypes.join(", ") : "nothing yet — an empty page"
-  }].`;
+  const pageOutline = sections.length
+    ? sections
+        .map((s, i) => `${i + 1}. ${s.type}${s.text ? ` — "${s.text.slice(0, 120)}"` : ""}`)
+        .join("\n")
+    : "(empty page — nothing on it yet)";
+  const user = `Site: "${siteName ?? "this business"}". Page: "${pageTitle ?? "a page"}".
+
+Current sections, in order:
+${pageOutline}
+${
+  avoid.length
+    ? `\nPreviously suggested this session (do NOT repeat or rephrase these): ${avoid
+        .map((a) => `"${a}"`)
+        .join(", ")}`
+    : ""
+}`;
 
   const content = await chat({
     temperature: 0.7,

@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { AiFailedError, AiNotConfiguredError, planPage } from "@/lib/ai";
+import { AiFailedError, AiNotConfiguredError, planPage, type PageSectionSummary } from "@/lib/ai";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +15,41 @@ export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  let payload: { existingTypes?: unknown; siteName?: unknown; pageTitle?: unknown };
+  let payload: {
+    sections?: unknown;
+    existingTypes?: unknown;
+    avoid?: unknown;
+    siteName?: unknown;
+    pageTitle?: unknown;
+  };
   try {
     payload = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const existingTypes = Array.isArray(payload.existingTypes)
-    ? payload.existingTypes.filter((t): t is string => typeof t === "string").slice(0, 40)
+  // Rich shape: [{type, text}] — the page's actual content. The old bare
+  // `existingTypes` list still works (text-less) so nothing external breaks.
+  const sections: PageSectionSummary[] = Array.isArray(payload.sections)
+    ? payload.sections
+        .filter(
+          (s): s is { type: string; text?: unknown } =>
+            !!s && typeof s === "object" && typeof (s as { type?: unknown }).type === "string",
+        )
+        .slice(0, 40)
+        .map((s) => ({
+          type: s.type.slice(0, 40),
+          text: typeof s.text === "string" ? s.text.slice(0, 160) : "",
+        }))
+    : Array.isArray(payload.existingTypes)
+      ? payload.existingTypes
+          .filter((t): t is string => typeof t === "string")
+          .slice(0, 40)
+          .map((type) => ({ type: type.slice(0, 40), text: "" }))
+      : [];
+
+  const avoid = Array.isArray(payload.avoid)
+    ? payload.avoid.filter((a): a is string => typeof a === "string").slice(0, 20).map((a) => a.slice(0, 60))
     : [];
   const siteName =
     typeof payload.siteName === "string" && payload.siteName.trim()
@@ -40,7 +66,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const recommendations = await planPage(existingTypes, siteName, pageTitle);
+    const recommendations = await planPage(sections, siteName, pageTitle, avoid);
     return NextResponse.json({ recommendations });
   } catch (err) {
     if (err instanceof AiNotConfiguredError) {

@@ -70,27 +70,48 @@ export function Palette({
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  // Every title this session has already suggested — sent back so asking again
+  // yields NEW ideas instead of the same four. The fix for "it keeps giving me
+  // the same thing": the model can only avoid what it is told about.
+  const [suggestedBefore, setSuggestedBefore] = useState<string[]>([]);
+
+  /** First meaningful text inside a node's subtree, for the page outline. */
+  function firstTextOf(node: PageNode): string {
+    for (const v of Object.values(node.props ?? {})) {
+      if (typeof v === "string" && v.trim().length >= 8 && !v.startsWith("data:")) return v.trim();
+    }
+    for (const child of node.children ?? []) {
+      const found = firstTextOf(child);
+      if (found) return found;
+    }
+    return "";
+  }
 
   async function runCopilot() {
     if (planBusy) return;
     setPlanBusy(true);
     setPlanError(null);
-    setPlan(null);
     try {
-      // The section types already on the page, in order (unwrap component refs).
-      const existingTypes = (body.root ?? [])
-        .map((n) => (n.type === "@component" ? (n.children?.[0]?.type ?? n.type) : n.type))
-        .filter((t) => t && t !== "@component");
+      // The page as the model should see it: each section's TYPE and its actual
+      // WORDS, in order (unwrap component refs). Types alone made every
+      // suggestion generic — the model was planning a page it had never read.
+      const sections = (body.root ?? [])
+        .map((n) => {
+          const real = n.type === "@component" ? (n.children?.[0] ?? n) : n;
+          return { type: real.type, text: firstTextOf(real) };
+        })
+        .filter((s) => s.type && s.type !== "@component");
       const res = await fetch("/api/ai/plan", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ existingTypes, siteName }),
+        body: JSON.stringify({ sections, siteName, avoid: suggestedBefore }),
       });
       const data = (await res.json().catch(() => ({}))) as { recommendations?: unknown; error?: string };
       if (!res.ok) throw new Error(data.error || "The copilot couldn't plan that.");
       const recs = Array.isArray(data.recommendations) ? (data.recommendations as PlanItem[]) : [];
       if (!recs.length) throw new Error("No suggestions came back — try again.");
       setPlan(recs);
+      setSuggestedBefore((prev) => [...new Set([...prev, ...recs.map((r) => r.title)])].slice(-20));
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
