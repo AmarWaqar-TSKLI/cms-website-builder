@@ -40,9 +40,11 @@ export interface BuildOutcome {
   files: string[];
   artifactUrl: string;
   durationMs: number;
-  /** For the worker's warm-up step. Not part of the build itself. */
+  /** For the worker's after-care (warming, publish webhooks). Not the build itself. */
   slug: string;
   paths: string[];
+  siteId: string;
+  versionNo: number;
 }
 
 export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
@@ -257,6 +259,8 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     artifactUrl,
     slug: release.site.slug,
     paths: revisions.map((r) => r.page.path),
+    siteId: release.siteId,
+    versionNo: release.versionNo,
     durationMs: Date.now() - startedAt,
   };
 }

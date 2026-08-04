@@ -225,8 +225,32 @@ model Site {
   formSubmissions FormSubmission[]
   apiKeys   ApiKey[]
   baseline  BranchBaseline?
+  webhooks  Webhook[]
 
   @@map("sites")
+}
+
+/// An outbound publish webhook — how a headless consumer LEARNS the live
+/// release moved instead of polling for it. Fired (best-effort, HMAC-signed)
+/// after the pointer flips: on a finished build and on a rollback, because to a
+/// consumer both are the same event — "what's live changed, refetch".
+///
+/// The signing secret is stored as written: unlike an API key it is never used
+/// to authenticate INTO us, only to sign what we send out, so a hash would make
+/// signing impossible without protecting anything we hold.
+model Webhook {
+  id         String    @id @default(uuid())
+  siteId     String    @map("site_id")
+  url        String
+  secret     String
+  createdBy  String?   @map("created_by")
+  disabledAt DateTime? @map("disabled_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("webhooks")
 }
 
 /// THE FORK POINT — what the parent looked like the moment a branch was created.

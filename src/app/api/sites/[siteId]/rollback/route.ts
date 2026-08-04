@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 import { checkReleaseDependencies } from "@/lib/dependencies";
 import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
+import { fireLiveChanged } from "@/lib/publish-webhooks";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
   // request simply reads a different pointer. That is why this is instant no
   // matter how large the site is or how many servers are running.
   // ─────────────────────────────────────────────────────────────────────────
+
+  // Headless consumers get the same signal as on publish — to them a rollback
+  // IS a publish: what's live changed, refetch. Fire-and-forget.
+  void fireLiveChanged(siteId, release.id, release.versionNo, "rollback").catch(() => {});
 
   await logActivity({
     siteId,

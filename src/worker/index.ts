@@ -20,6 +20,7 @@ loadEnv();
 import { prisma } from "../lib/db";
 import { buildRelease } from "../lib/build";
 import { warmRelease } from "../lib/runtime/warm";
+import { fireLiveChanged } from "../lib/publish-webhooks";
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS || 250);
 const WORKER_ID = `worker-${process.pid}`;
@@ -79,6 +80,12 @@ async function handle(job: ClaimedJob) {
     const warm = await warmRelease(outcome.slug, outcome.paths);
     if (warm.warmed.length) log(`warmed ${warm.warmed.length} path(s) on the runtime`);
     if (warm.failed.length) log(`could not warm: ${warm.failed.join(", ")} (harmless)`);
+
+    // Tell headless consumers the live release moved. Best-effort, like warming.
+    const hooks = await fireLiveChanged(outcome.siteId, outcome.releaseId, outcome.versionNo, "publish");
+    if (hooks.delivered || hooks.failed) {
+      log(`publish webhooks: ${hooks.delivered} delivered, ${hooks.failed} failed`);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log(`FAILED job ${short(job.id)} after ${Date.now() - started}ms: ${message}`);
