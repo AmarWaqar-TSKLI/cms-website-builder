@@ -16,6 +16,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { storeSiteId } from "@/lib/store-site";
+import { createCheckoutSession, paymentsConfigured } from "@/lib/payments";
+import { captureError } from "@/lib/monitor";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,7 @@ interface CartItem {
 }
 
 export async function POST(req: Request) {
-  let payload: { siteId?: string; releaseId?: string; items?: CartItem[] };
+  let payload: { siteId?: string; releaseId?: string; items?: CartItem[]; returnUrl?: string };
   try {
     payload = await req.json();
   } catch {
@@ -94,7 +96,42 @@ export async function POST(req: Request) {
 
   const totalCents = lines.reduce((sum, l) => sum + l.qty * l.priceAtPurchaseCents, 0);
 
-  // FAKED: no payment processor. The order is written as `paid` immediately.
+  // ── Real payments (env-gated) ────────────────────────────────────────────
+  // The order starts `pending` and inventory is NOT touched: only the
+  // signature-verified Stripe webhook may declare that money moved. A pending
+  // order that never pays is inert history, not reserved stock.
+  if (paymentsConfigured()) {
+    const order = await prisma.order.create({
+      data: { siteId: storeId, status: "pending", totalCents, lineItems: { create: lines } },
+      select: { id: true },
+    });
+    const back =
+      typeof payload.returnUrl === "string" && /^https?:\/\//.test(payload.returnUrl)
+        ? payload.returnUrl.slice(0, 500)
+        : new URL(req.url).origin;
+    try {
+      const session = await createCheckoutSession({
+        orderId: order.id,
+        lines: lines.map((l) => ({ title: l.titleAtPurchase, qty: l.qty, priceCents: l.priceAtPurchaseCents })),
+        successUrl: `${back}${back.includes("?") ? "&" : "?"}order=paid`,
+        cancelUrl: `${back}${back.includes("?") ? "&" : "?"}order=cancelled`,
+      });
+      return NextResponse.json(
+        { ok: true, orderId: order.id, checkoutUrl: session.url, totalCents },
+        { headers: CORS },
+      );
+    } catch (err) {
+      captureError(err, { scope: "orders.checkout", siteId: storeId });
+      await prisma.order.update({ where: { id: order.id }, data: { status: "cancelled" } });
+      return NextResponse.json(
+        { error: "Couldn't start the payment. Try again shortly." },
+        { status: 502, headers: CORS },
+      );
+    }
+  }
+
+  // ── Demo mode: no payment processor configured ───────────────────────────
+  // The order is written as `paid` immediately, exactly as before.
   const order = await prisma.order.create({
     data: {
       siteId: storeId,

@@ -49,9 +49,17 @@ export function CartBar({
           siteId,
           releaseId,
           items: lines.map((l) => ({ variantId: l.variantId, qty: l.qty })),
+          returnUrl: window.location.href,
         }),
       });
       const data = await res.json();
+      if (data?.ok && data.checkoutUrl) {
+        // Real payments are on: hand the visitor to the hosted checkout. The
+        // cart survives until the webhook confirms — a cancelled payment
+        // shouldn't have emptied it.
+        window.location.assign(data.checkoutUrl as string);
+        return;
+      }
       if (data?.ok) {
         clearCart(siteId);
         setNote(`Order ${String(data.orderId).slice(0, 8)} placed — written to the orders table.`);
