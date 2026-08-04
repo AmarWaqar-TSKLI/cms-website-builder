@@ -17,113 +17,115 @@ import Link from "next/link";
 import { Reveal } from "./Reveal";
 
 /* ── the circuit ───────────────────────────────────────────────────────────── */
+/*
+ * Performance is the design constraint here. The first version animated a
+ * drop-shadow FILTER on every pulse — Chrome repaints an SVG filter every
+ * frame per path, and it froze the renderer outright. This one animates only
+ * stroke-dashoffset (cheap), fakes the glow with a wide low-opacity under-
+ * stroke travelling the same dash, and draws the dot grid as ONE cached
+ * <pattern> instead of hundreds of nodes.
+ */
 
-/** Orthogonal traces, hero-wide. Base rails are faint; pulse copies travel. */
+/** Traces composed for a 600×500 panel: EDIT → v12 → LIVE, plus taps. */
 const TRACES = [
-  // main artery: edit → version → live
-  "M 40 210 H 300 Q 312 210 312 222 V 300 Q 312 312 324 312 H 560",
-  "M 640 312 H 880 Q 892 312 892 300 V 222 Q 892 210 904 210 H 1160",
-  // side taps
-  "M 160 60 V 150 Q 160 162 172 162 H 300 Q 312 162 312 174 V 198",
-  "M 1040 480 V 372 Q 1040 360 1028 360 H 916 Q 904 360 904 348 V 324",
-  "M 480 480 V 400 Q 480 388 492 388 H 560",
-  "M 720 60 V 140 Q 720 152 708 152 H 640",
+  "M 84 84 H 200 Q 214 84 214 98 V 196 Q 214 210 228 210 H 252",
+  "M 388 240 H 452 Q 466 240 466 254 V 356 Q 466 370 480 370 H 500",
+  "M 60 300 V 220 Q 60 206 74 206 H 160",
+  "M 540 60 V 140 Q 540 154 526 154 H 420 Q 406 154 406 168 V 196",
 ] as const;
 
-/** The rollback rail — drawn right-to-left so its pulse flows BACKWARDS. */
-const ROLLBACK = "M 1160 258 H 720 Q 708 258 708 270 V 388 Q 708 400 696 400 H 40";
+/** The rollback rail — LIVE back to EDIT; its pulse runs in reverse. */
+const ROLLBACK = "M 500 430 H 120 Q 106 430 106 416 V 132";
+
+function Pulse({ d, color, duration, delay = 0, reverse }: {
+  d: string;
+  color: string;
+  duration: number;
+  delay?: number;
+  reverse?: boolean;
+}) {
+  const cls = reverse ? "cir-pulse cir-reverse" : "cir-pulse";
+  const style = (width: number, opacity: number) => ({
+    animationDuration: `${duration}s`,
+    animationDelay: `${delay}s`,
+    stroke: color,
+    strokeWidth: width,
+    opacity,
+  });
+  return (
+    <>
+      {/* the cheap glow: same dash, wider and fainter */}
+      <path d={d} fill="none" strokeLinecap="round" className={cls} style={style(7, 0.25)} />
+      <path d={d} fill="none" strokeLinecap="round" className={cls} style={style(2.5, 1)} />
+    </>
+  );
+}
 
 function Circuit() {
   return (
     <svg
-      viewBox="0 0 1200 520"
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      preserveAspectRatio="xMidYMid slice"
+      viewBox="0 0 600 500"
+      className="pointer-events-none h-full w-full"
+      preserveAspectRatio="xMidYMid meet"
       aria-hidden
     >
       <defs>
-        <radialGradient id="cir-fade" cx="50%" cy="45%" r="65%">
-          <stop offset="0%" stopColor="white" stopOpacity="1" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </radialGradient>
-        <mask id="cir-mask">
-          <rect width="1200" height="520" fill="url(#cir-fade)" />
-        </mask>
+        <pattern id="cir-dots" width="36" height="36" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="2" r="1.2" fill="rgba(255,255,255,0.10)" />
+        </pattern>
       </defs>
 
-      <g mask="url(#cir-mask)">
-        {/* dotted board */}
-        {Array.from({ length: 14 }, (_, r) =>
-          Array.from({ length: 30 }, (_, c) => (
-            <circle key={`${r}-${c}`} cx={20 + c * 40} cy={20 + r * 36} r="1" fill="rgba(255,255,255,0.07)" />
-          )),
-        )}
+      <rect width="600" height="500" fill="url(#cir-dots)" />
 
-        {/* base rails */}
-        {[...TRACES, ROLLBACK].map((d, i) => (
-          <path key={i} d={d} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1.5" />
-        ))}
+      {/* base rails — visible even before any pulse arrives */}
+      {[...TRACES, ROLLBACK].map((d, i) => (
+        <path key={i} d={d} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="1.5" />
+      ))}
 
-        {/* travelling pulses — violet forward */}
-        {TRACES.map((d, i) => (
-          <path
-            key={`p${i}`}
-            d={d}
-            fill="none"
-            stroke="var(--color-flux-400)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            className="cir-pulse"
-            style={{ animationDelay: `${i * 0.9}s`, animationDuration: `${5 + (i % 3)}s` }}
-          />
-        ))}
-        {/* the rollback pulse — amber, flowing back */}
-        <path
-          d={ROLLBACK}
-          fill="none"
-          stroke="var(--color-pop-yellow)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          className="cir-pulse cir-reverse"
-          style={{ animationDuration: "7s" }}
-        />
+      {/* forward pulses — violet */}
+      {TRACES.map((d, i) => (
+        <Pulse key={i} d={d} color="#a78bfa" duration={3.5 + (i % 3)} delay={i * 0.8} />
+      ))}
+      {/* the rollback pulse — amber, flowing the other way */}
+      <Pulse d={ROLLBACK} color="#ffd02f" duration={5} reverse />
 
-        {/* nodes */}
-        <g fontFamily="var(--font-mono)" fontSize="11" fontWeight="600">
-          <g>
-            <rect x="560" y="286" width="80" height="52" rx="10" fill="var(--color-ink-900)" stroke="var(--color-flux-500)" strokeWidth="2" />
-            <text x="600" y="308" textAnchor="middle" fill="var(--color-flux-300)">v12</text>
-            <text x="600" y="324" textAnchor="middle" fill="rgba(255,255,255,0.45)" fontSize="9">
-              immutable
-            </text>
-          </g>
-          <g>
-            <rect x="40" y="186" width="64" height="34" rx="8" fill="var(--color-ink-900)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-            <text x="72" y="207" textAnchor="middle" fill="rgba(255,255,255,0.75)">EDIT</text>
-          </g>
-          <g className="cir-glow">
-            <rect x="1096" y="186" width="64" height="34" rx="8" fill="var(--color-live-500)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-            <text x="1128" y="207" textAnchor="middle" fill="#04120c">LIVE</text>
-          </g>
-          <text x="46" y="394" fill="var(--color-pop-yellow)" fontSize="10">
-            ← rollback: move one pointer
+      {/* nodes */}
+      <g fontFamily="var(--font-mono)" fontSize="12" fontWeight="700">
+        <rect x="20" y="66" width="66" height="36" rx="9" fill="#131120" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
+        <text x="53" y="89" textAnchor="middle" fill="rgba(255,255,255,0.85)">EDIT</text>
+
+        <g className="cir-breathe">
+          <rect x="252" y="182" width="136" height="86" rx="14" fill="#131120" stroke="#7c5cff" strokeWidth="2.5" />
+          <text x="320" y="218" textAnchor="middle" fill="#b3a1ff" fontSize="20">v12</text>
+          <text x="320" y="242" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="10" fontWeight="500">
+            immutable release
           </text>
         </g>
+
+        <g className="cir-breathe" style={{ animationDelay: "1.2s" }}>
+          <rect x="500" y="412" width="72" height="36" rx="9" fill="#0e9f6e" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+          <text x="536" y="435" textAnchor="middle" fill="#04120c">LIVE</text>
+        </g>
+
+        <text x="120" y="472" fill="#ffd02f" fontSize="11" fontWeight="600">
+          ← rollback = move one pointer
+        </text>
       </g>
 
       <style>{`
         .cir-pulse {
-          stroke-dasharray: 70 1400;
-          stroke-dashoffset: 1470;
-          animation: cir-dash linear infinite;
-          filter: drop-shadow(0 0 6px currentColor);
+          stroke-dasharray: 90 1000;
+          stroke-dashoffset: 1090;
+          animation-name: cir-dash;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
         }
         .cir-reverse { animation-direction: reverse; }
         @keyframes cir-dash { to { stroke-dashoffset: 0; } }
-        .cir-glow { animation: cir-breathe 2.4s ease-in-out infinite; }
+        .cir-breathe { animation: cir-breathe 2.6s ease-in-out infinite; }
         @keyframes cir-breathe {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.75; }
+          50% { opacity: 0.7; }
         }
       `}</style>
     </svg>
@@ -279,12 +281,9 @@ export default function Home() {
         </nav>
       </header>
 
-      {/* hero + circuit */}
-      <section className="relative mx-auto max-w-6xl px-6 pb-10 pt-14 sm:pt-20">
-        <div className="absolute inset-0 -z-0">
-          <Circuit />
-        </div>
-        <div className="relative z-10 max-w-[640px]">
+      {/* hero: text left, the living circuit in its own column right */}
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-16 pt-14 sm:pt-20 lg:grid-cols-[1fr_520px]">
+        <div className="max-w-[640px]">
           <Reveal>
             <span className="sticker inline-block -rotate-1 rounded-lg border-2 border-white/25 bg-pop-yellow px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink-950 shadow-punch-sm">
               git for websites
@@ -319,8 +318,9 @@ export default function Home() {
             </Link>
           </Reveal>
         </div>
-        {/* breathing room for the circuit to read on wide screens */}
-        <div className="h-40 sm:h-52" aria-hidden />
+        <Reveal delay={200} className="h-[340px] sm:h-[420px] lg:h-[500px]">
+          <Circuit />
+        </Reveal>
       </section>
 
       {/* marquee */}
