@@ -15,7 +15,7 @@
  * asynchronous: a build finishing has to update the headline, the history list
  * and the export links at the same moment.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Dot, cx } from "../ui";
 import { Ago } from "./Ago";
@@ -855,8 +855,8 @@ export function DashboardShell({
       )}
 
       {/* ── ZONE 1 · SHIP — the daily loop: edit pages, publish versions ── */}
-      <Zone label="Ship it" pop="yellow" hint="Edit, publish, roll back — the daily loop." />
-      <div className="mt-4 grid items-start gap-5 lg:grid-cols-5">
+      <Zone label="Ship it" pop="yellow" hint="Edit, publish, roll back — the daily loop.">
+      <div className="grid items-start gap-5 lg:grid-cols-5">
         <PagesPanel
           pages={pages}
           lastPublishedAt={lastPublishedAt}
@@ -885,13 +885,11 @@ export function DashboardShell({
           firstTime={loaded && lastPublishedAt === null}
         />
       </div>
+      </Zone>
 
-      {/* ── ZONE 2 · GROW — branches and the AI suite, side by side ──────
-          The experiments live together: fork-and-merge on the left, one-shot
-          AI transformations stacked on the right. No more scrolling through
-          three full-width sections to find one button. */}
-      <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo." />
-      <div className="mt-4 grid items-start gap-5 xl:grid-cols-2">
+      {/* ── ZONE 2 · GROW — branching full-width (the diff review needs the
+          room), then the two one-shot AI moves side by side beneath it. */}
+      <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo.">
       <section className="min-w-0 overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           <span aria-hidden>⑂</span> Branches
@@ -1174,8 +1172,8 @@ export function DashboardShell({
         )}
       </section>
 
-      {/* The one-shot AI moves, stacked beside branching. */}
-      <div className="flex min-w-0 flex-col gap-5">
+      {/* The one-shot AI moves, side by side under branching. */}
+      <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
       <section className="overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>✨</span> AI rebrand
@@ -1334,13 +1332,13 @@ export function DashboardShell({
         </div>
       </section>
       </div>
-      </div>
+      </Zone>
 
       {/* ── ZONE 3 · WIRE — the connections to the outside world ─────────
           Domain, API, team, export, store: infrastructure reads as a grid of
           equal utilities, not a queue you scroll through. */}
-      <Zone label="Wire it up" pop="violet" hint="Domains, teammates, the API, exports — how this site meets the world." />
-      <div className="mt-4 grid items-start gap-5 xl:grid-cols-2">
+      <Zone label="Wire it up" pop="violet" hint="Domains, teammates, the API, exports — how this site meets the world.">
+      <div className="grid items-start gap-5 xl:grid-cols-2">
         <CustomDomainCard className="min-w-0" siteId={site.id} initialDomain={site.customDomain} />
         <div className="flex min-w-0 flex-col gap-5">
           <TeamCard siteId={site.id} />
@@ -1357,6 +1355,7 @@ export function DashboardShell({
         <ContentApiCard className="min-w-0" siteId={site.id} slug={site.slug} />
         <CommercePanel className="min-w-0" commerce={commerce} modules={site.modules} />
       </div>
+      </Zone>
 
       {/* ── 6. the internals, on request ─────────────────────────────────── */}
       <div className="mt-5">
@@ -2328,21 +2327,25 @@ function StructureGroup({
   );
 }
 
-/* ── zone dividers ────────────────────────────────────────────────────────── */
+/* ── zone bands ───────────────────────────────────────────────────────────── */
 
 /**
- * A loud section boundary: rotated sticker label, one-line promise, hard rule.
- * The dashboard reads as three zones — Ship / Grow / Wire — instead of an
- * undifferentiated scroll; the sticker colour is the zone's identity.
+ * A zone is a REGION, not a divider: a tinted, bordered band that physically
+ * contains its cards, with the sticker label stitched over its top edge. The
+ * dashboard reads as three colour-keyed neighbourhoods — Ship / Grow / Wire —
+ * and the white cards pop against each band's wash instead of drowning in an
+ * undifferentiated scroll of identical panels.
  */
 function Zone({
   label,
   hint,
   pop,
+  children,
 }: {
   label: string;
   hint: string;
   pop: "yellow" | "pink" | "violet";
+  children: ReactNode;
 }) {
   const chip =
     pop === "yellow"
@@ -2350,18 +2353,24 @@ function Zone({
       : pop === "pink"
         ? "bg-pop-pink text-ink-100"
         : "bg-flux-500 text-white";
+  const wash =
+    pop === "yellow"
+      ? "bg-pop-yellow/[0.07]"
+      : pop === "pink"
+        ? "bg-pop-pink/[0.05]"
+        : "bg-flux-500/[0.05]";
   return (
-    <div className="mt-12 flex flex-wrap items-center gap-3">
+    <section className={cx("relative mt-12 rounded-3xl border-2 border-ink-800 p-4 sm:p-6", wash)}>
       <span
         className={cx(
-          "sticker inline-block -rotate-1 rounded-lg border-2 border-ink-100 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
+          "sticker absolute -top-3.5 left-5 inline-block -rotate-1 rounded-lg border-2 border-ink-100 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
           chip,
         )}
       >
         {label}
       </span>
-      <span className="text-[12.5px] font-medium text-ink-500">{hint}</span>
-      <span className="h-0 min-w-8 flex-1 border-t-2 border-ink-800" aria-hidden />
-    </div>
+      <p className="mb-4 mt-1 text-[12.5px] font-medium text-ink-500">{hint}</p>
+      {children}
+    </section>
   );
 }
