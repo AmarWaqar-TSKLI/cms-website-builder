@@ -815,7 +815,7 @@ export function DashboardShell({
         editHref={editHref}
       />
 
-      <div className="mb-6">
+      <div className="mb-6 mt-5">
         {showSetup ? (
           <SetupChecklist steps={setupSteps} onDismiss={dismissSetup} publishing={busy === "publish"} />
         ) : (
