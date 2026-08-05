@@ -319,9 +319,11 @@ function Methods({ state, domain }: { state: DomainState | null; domain: string 
                 {records.map((r, i) => (
                   <tr key={i}>
                     <td className="pr-4 align-top">{r.type}</td>
-                    <td className="pr-4 align-top break-all">{r.name}</td>
-                    <td className="break-all">
-                      <CopyRow value={r.value} bare />
+                    <td className="pr-4 align-top">{r.name}</td>
+                    {/* One line always — a split IP reads as three broken numbers;
+                        the wrapper scrolls sideways if a long CNAME needs it. */}
+                    <td className="whitespace-nowrap">
+                      <CopyRow value={r.value} bare nowrap />
                     </td>
                   </tr>
                 ))}
@@ -378,7 +380,7 @@ function MethodBox({
 }
 
 /** A click-to-copy value; `bare` renders without the boxed chrome (table cells). */
-function CopyRow({ value, bare }: { value: string; bare?: boolean }) {
+function CopyRow({ value, bare, nowrap }: { value: string; bare?: boolean; nowrap?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -399,7 +401,7 @@ function CopyRow({ value, bare }: { value: string; bare?: boolean }) {
         title="Click to copy"
         className="group inline-flex max-w-full items-baseline gap-2 text-left"
       >
-        <span className="break-all">{value}</span>
+        <span className={nowrap ? "whitespace-nowrap" : "break-all"}>{value}</span>
         <span className="shrink-0 text-[10.5px] text-ink-500 group-hover:text-flux-300">
           {copied ? "Copied" : "Copy"}
         </span>
