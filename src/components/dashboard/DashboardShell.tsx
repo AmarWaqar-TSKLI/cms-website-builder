@@ -785,7 +785,7 @@ export function DashboardShell({
           liveUrl={site.customDomain ? `https://${site.customDomain}` : `/s/${site.slug}`}
         />
         <main className="min-w-0 flex-1 px-5 pb-20 pt-8 sm:px-8">
-          <div className="mx-auto w-full max-w-[1040px]">
+          <div className="mx-auto w-full max-w-[1240px]">
 
       {/* Who is in the building. Only shown when it is somebody else — telling
           you that you are editing your own page is noise. */}
@@ -1338,8 +1338,13 @@ export function DashboardShell({
           Domain, API, team, export, store: infrastructure reads as a grid of
           equal utilities, not a queue you scroll through. */}
       <Zone label="Wire it up" pop="violet" hint="Domains, teammates, the API, exports — how this site meets the world.">
+      {/* Two explicit column stacks, not a row grid: cards of any height pack
+          tightly under each other instead of leaving voids beside tall rows. */}
       <div className="grid items-start gap-5 xl:grid-cols-2">
-        <CustomDomainCard className="min-w-0" siteId={site.id} initialDomain={site.customDomain} />
+        <div className="flex min-w-0 flex-col gap-5">
+          <CustomDomainCard siteId={site.id} initialDomain={site.customDomain} />
+          <ContentApiCard siteId={site.id} slug={site.slug} />
+        </div>
         <div className="flex min-w-0 flex-col gap-5">
           <TeamCard siteId={site.id} />
           <ExportPanel
@@ -1351,9 +1356,8 @@ export function DashboardShell({
             publishing={busy === "publish"}
             building={building}
           />
+          <CommercePanel commerce={commerce} modules={site.modules} />
         </div>
-        <ContentApiCard className="min-w-0" siteId={site.id} slug={site.slug} />
-        <CommercePanel className="min-w-0" commerce={commerce} modules={site.modules} />
       </div>
       </Zone>
 
@@ -2113,7 +2117,9 @@ function ExportPanel({
         </div>
       ) : (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* 2×2, never 4-across: this panel lives in a half-width column, and
+              four columns there shreds every sentence into one-word lines. */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <ExportCard
               title="Open it here"
               detail="Your site, served from this app. The address you'd hand to anyone."
@@ -2227,7 +2233,7 @@ function CommercePanel({
         }
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3">
         <Tile
           label="Products"
           value={commerce.productCount}

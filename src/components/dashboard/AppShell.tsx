@@ -48,7 +48,7 @@ export function AppShell({
           liveUrl={site.customDomain ? `https://${site.customDomain}` : `/s/${site.slug}`}
         />
         <main className="min-w-0 flex-1 px-5 pb-20 pt-8 sm:px-8">
-          <div className="mx-auto w-full max-w-[1040px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1240px]">{children}</div>
         </main>
       </div>
     </TechnicalDetails>

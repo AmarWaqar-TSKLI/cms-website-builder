@@ -127,7 +127,9 @@ export function ContentApiCard({
             className={cx(MONO, "flex w-full items-center justify-between gap-3 text-left hover:border-ink-600")}
             title="Click to copy"
           >
-            <span className="break-all">
+            {/* A URL split mid-word reads as broken; keep it one line and let it
+                scroll sideways under the finger/wheel instead. */}
+            <span className="overflow-x-auto whitespace-nowrap">
               <span className="text-live-500">GET</span> {endpoint || "/api/v1/sites/…/content"}
             </span>
             <span className="shrink-0 text-[11px] text-ink-500">
