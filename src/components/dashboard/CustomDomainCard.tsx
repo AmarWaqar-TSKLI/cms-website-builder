@@ -5,14 +5,16 @@
  *
  * The serving half is already real (the request path matches the Host header
  * against sites.custom_domain). This is the screen a non-technical owner uses to
- * register one: type golotto.com, get the exact DNS record to add, and watch it
- * flip to "connected" once the internet agrees.
+ * register one: type golotto.com, get the exact DNS setup, and watch it flip to
+ * "connected" once the internet agrees.
  *
- * Honest about the one thing it can't fake: until the builder itself is on a
- * public server, there's nothing to point a domain AT, so the panel says so and
- * offers the local preview link instead of pretending.
+ * The two ways to point a domain are ALWAYS on screen — before you connect
+ * (so you know what you're signing up for), while DNS propagates, and tucked
+ * into a disclosure once it's live. A domain that was already pointing at us
+ * connects instantly, and previously that skipped the instructions entirely —
+ * leaving the owner staring at "Connected" with no idea what just happened.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge, Dot, cx } from "../ui";
 import { Btn, Card, CardHead } from "./dash-ui";
 import type { DomainTarget } from "@/lib/domains";
@@ -129,7 +131,7 @@ export function CustomDomainCard({
       />
 
       {!domain ? (
-        /* ── Not connected: the add form ─────────────────────────────────── */
+        /* ── Not connected: the add form, with both methods in plain sight ── */
         <div className="mt-4">
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -158,25 +160,16 @@ export function CustomDomainCard({
             </Btn>
           </div>
           {error && <p className="mt-2 text-[12px] text-fail-500">{error}</p>}
+          <div className="mt-4">
+            <Methods state={state} domain={input.trim() || null} />
+          </div>
           <p className="mt-3 text-[11.5px] leading-relaxed text-ink-500">
-            {state?.managed?.active ? (
-              <>
-                Point your domain's nameservers at ours once and we run its DNS from then on — the
-                certificate and every record included. Prefer not to delegate? You'll also get a
-                single record to add instead.
-              </>
-            ) : (
-              <>
-                You'll get the exact DNS record to add at your domain provider (GoDaddy, Namecheap,
-                Cloudflare…).
-              </>
-            )}{" "}
-            Don't own one yet? You can still connect it — nothing breaks, and your site keeps working
-            at its <span className="font-mono text-ink-400">/s/</span> address.
+            Don't own a domain yet? You can still connect one — nothing breaks, and your site keeps
+            working at its <span className="font-mono text-ink-400">/s/</span> address.
           </p>
         </div>
       ) : (
-        /* ── Connected: the domain, DNS steps, and controls ──────────────── */
+        /* ── Connected: the domain, DNS setup, and controls ──────────────── */
         <div className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <a
@@ -209,23 +202,21 @@ export function CustomDomainCard({
             </p>
           )}
 
-          {state?.status !== "connected" &&
-            (state?.managed?.active && state.managed.nameservers.length ? (
-              <NameserverInstructions
-                nameservers={state.managed.nameservers}
-                fallback={
-                  state?.railway?.dnsRecords?.length ? (
-                    <RailwayRecords records={state.railway.dnsRecords} />
-                  ) : (
-                    <DnsInstructions domain={domain} target={state?.target} />
-                  )
-                }
-              />
-            ) : state?.railway?.dnsRecords?.length ? (
-              <RailwayRecords records={state.railway.dnsRecords} />
-            ) : (
-              <DnsInstructions domain={domain} target={state?.target} />
-            ))}
+          {state?.status === "connected" ? (
+            /* Live: the setup collapses into a disclosure, but never vanishes —
+               "how is this wired?" must always have an answer on this card. */
+            <details className="group rounded-xl border border-ink-800 bg-ink-950/40">
+              <summary className="cursor-pointer list-none rounded-xl px-4 py-2.5 text-[12px] font-medium text-ink-400 transition-colors hover:text-ink-100">
+                <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
+                How this domain is wired — the DNS setup
+              </summary>
+              <div className="border-t border-ink-800 p-4">
+                <Methods state={state} domain={domain} />
+              </div>
+            </details>
+          ) : (
+            <Methods state={state} domain={domain} />
+          )}
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Btn variant="secondary" size="sm" onClick={() => void recheck()} disabled={busy === "check"}>
@@ -269,170 +260,164 @@ function StatusBadge({ status, busy }: { status: Status; busy: boolean }) {
   );
 }
 
+/* ── the two ways to point a domain, side by side ────────────────────────── */
+
 /**
- * The premium path: hand the customer our nameservers. They change them ONCE at
- * their registrar and we own every record from then on — apex, www, subdomains,
- * the certificate, all of it. This is what "we host your domain" means, and it's
- * strictly less error-prone than copy-pasting a record, so it leads. The
- * single-record method stays one click away for people who'd rather not delegate.
+ * Option A — delegate your nameservers to us; we run every record and the
+ * certificate from then on (the Vercel/Netlify model). Option B — keep your
+ * DNS provider and add a single record. Both are always rendered so the choice
+ * is visible BEFORE connecting, not discovered afterwards.
  */
-function NameserverInstructions({
-  nameservers,
-  fallback,
-}: {
-  nameservers: string[];
-  fallback: ReactNode;
-}) {
-  const [showFallback, setShowFallback] = useState(false);
-  const [copied, setCopied] = useState<number | null>(null);
+function Methods({ state, domain }: { state: DomainState | null; domain: string | null }) {
+  const nameservers = state?.managed?.active ? state.managed.nameservers : [];
+  const records = recordRows(state, domain);
 
-  const copy = async (value: string, i: number) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(i);
-      setTimeout(() => setCopied((c) => (c === i ? null : c)), 1200);
-    } catch {
-      /* clipboard blocked — the value is right there to select by hand */
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-ink-800 bg-ink-950/50 p-4">
-        <div className="flex items-center gap-2">
-          <Badge tone="neutral">Recommended</Badge>
-          <span className="text-[12.5px] font-medium text-ink-200">Point your nameservers to us</span>
-        </div>
-        <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">
-          At your domain provider, replace the nameservers with the two below. That's the only
-          change you make — we handle every record and the certificate from here, and it keeps
-          working even if our servers move.
-        </p>
-        <div className="mt-3 space-y-1.5">
-          {nameservers.map((ns, i) => (
-            <button
-              key={ns}
-              type="button"
-              onClick={() => void copy(ns, i)}
-              className="group flex w-full items-center justify-between gap-3 rounded-lg border border-ink-800 bg-ink-950/70 px-3 py-2 text-left font-mono text-[13px] text-ink-100 hover:border-ink-600"
-              title="Click to copy"
-            >
-              <span className="break-all">{ns}</span>
-              <span className="shrink-0 text-[11px] text-ink-500 group-hover:text-flux-300">
-                {copied === i ? "Copied" : "Copy"}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="mt-2.5 text-[11px] leading-relaxed text-ink-600">
-          Nameserver changes can take a few minutes to a few hours to propagate. This flips to{" "}
-          <span className="text-ink-400">Connected</span> automatically once it does.
-        </p>
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowFallback((v) => !v)}
-          className="text-[11.5px] text-ink-500 underline decoration-ink-700 underline-offset-2 hover:text-flux-300"
-        >
-          {showFallback ? "Hide the single-record method" : "Prefer to add just one DNS record instead?"}
-        </button>
-        {showFallback && (
-          <div className="mt-2.5">
-            <p className="mb-2 text-[11.5px] leading-relaxed text-ink-500">
-              If you'd rather keep your current nameservers, add this one record instead. Either
-              method works — you only need one.
-            </p>
-            {fallback}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** The exact DNS record(s) the host handed back — the self-serve path. */
-function RailwayRecords({ records }: { records: RailwayDnsRecord[] }) {
-  return (
-    <div className="rounded-xl border border-ink-800 bg-ink-950/50 p-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-[12px]">
-          <thead>
-            <tr className="text-ink-500">
-              <th className="pb-1.5 pr-4 font-medium">Type</th>
-              <th className="pb-1.5 pr-4 font-medium">Name / Host</th>
-              <th className="pb-1.5 font-medium">Value</th>
-            </tr>
-          </thead>
-          <tbody className="font-mono text-ink-200">
-            {records.map((r, i) => (
-              <tr key={i}>
-                <td className="pr-4">{r.type}</td>
-                <td className="pr-4 break-all">{r.name}</td>
-                <td className="break-all">{r.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">
-        Add this at your domain provider (GoDaddy, Namecheap, Cloudflare…). The certificate is
-        issued automatically — it usually goes live within an hour.
-      </p>
-    </div>
-  );
-}
-
-/** The one DNS record to add, in the plainest terms the target allows. */
-function DnsInstructions({ domain, target }: { domain: string; target?: DomainTarget }) {
-  const isSub = domain.split(".").length > 2 && !domain.startsWith("www.");
-  const host = isSub ? domain.split(".")[0] : "@";
-
-  let rows: { type: string; name: string; value: string }[];
-  let note: string;
-
-  if (target?.kind === "a") {
-    rows = [{ type: "A", name: host, value: target.value }];
-    note = "Add this record at your domain provider. It usually goes live within an hour.";
-  } else if (target?.kind === "cname") {
-    rows = [{ type: "CNAME", name: host, value: target.value }];
-    note = "Add this record at your domain provider. It usually goes live within an hour.";
-  } else {
+  if (!nameservers.length && !records) {
     // No public target yet (local dev). Be honest instead of inventing an IP.
     return (
       <div className="rounded-xl border border-dashed border-ink-700 bg-ink-950/40 px-4 py-3 text-[12px] leading-relaxed text-ink-400">
-        This builder isn't on a public server yet, so there's no address to point{" "}
-        <span className="font-mono text-ink-300">{domain}</span> at. Once it's deployed, the exact
-        DNS record shows up right here. For now, use <strong className="text-ink-200">Test it</strong>{" "}
-        above to see the domain resolve.
+        This builder isn't on a public server yet, so there's no address to point a domain at. Once
+        it's deployed, the exact DNS setup shows up right here.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-ink-800 bg-ink-950/50 p-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-[12px]">
-          <thead>
-            <tr className="text-ink-500">
-              <th className="pb-1.5 pr-4 font-medium">Type</th>
-              <th className="pb-1.5 pr-4 font-medium">Name / Host</th>
-              <th className="pb-1.5 font-medium">Value</th>
-            </tr>
-          </thead>
-          <tbody className="font-mono text-ink-200">
-            {rows.map((r) => (
-              <tr key={r.type + r.name}>
-                <td className="pr-4">{r.type}</td>
-                <td className="pr-4">{r.name}</td>
-                <td className="break-all">{r.value}</td>
-              </tr>
+    <div className={cx("grid gap-3", nameservers.length && records ? "lg:grid-cols-2" : "")}>
+      {nameservers.length > 0 && (
+        <MethodBox
+          badge="Option A · Recommended"
+          title="We run your DNS"
+          blurb="At your registrar, replace the nameservers with these two. That's the only change you ever make — every record and the certificate are handled from here."
+          note="Nameserver changes can take a few minutes to a few hours. This flips to Connected on its own."
+        >
+          <div className="space-y-1.5">
+            {nameservers.map((ns) => (
+              <CopyRow key={ns} value={ns} />
             ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">{note}</p>
+          </div>
+        </MethodBox>
+      )}
+
+      {records && (
+        <MethodBox
+          badge={nameservers.length ? "Option B" : "One record"}
+          title="Keep your DNS — add one record"
+          blurb="Prefer to stay with your current provider (GoDaddy, Namecheap, Cloudflare…)? Add this single record instead. Either method works — you only need one."
+          note="Records usually go live within the hour. The certificate is issued automatically on the first visit."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead>
+                <tr className="text-ink-500">
+                  <th className="pb-1.5 pr-4 font-medium">Type</th>
+                  <th className="pb-1.5 pr-4 font-medium">Name / Host</th>
+                  <th className="pb-1.5 font-medium">Value</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono text-ink-200">
+                {records.map((r, i) => (
+                  <tr key={i}>
+                    <td className="pr-4 align-top">{r.type}</td>
+                    <td className="pr-4 align-top break-all">{r.name}</td>
+                    <td className="break-all">
+                      <CopyRow value={r.value} bare />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </MethodBox>
+      )}
     </div>
+  );
+}
+
+/** The record(s) for the single-record path: the platform's own if the host
+ * integration is wired, otherwise computed from the configured target. */
+function recordRows(
+  state: DomainState | null,
+  domain: string | null,
+): { type: string; name: string; value: string }[] | null {
+  if (state?.railway?.dnsRecords?.length) return state.railway.dnsRecords;
+
+  const target = state?.target;
+  if (!target || target.kind === "none" || !target.value) return null;
+
+  // "@" is registrar-speak for the bare domain; a subdomain uses its own label.
+  const isSub = !!domain && domain.split(".").length > 2 && !domain.startsWith("www.");
+  const host = isSub && domain ? domain.split(".")[0] : "@";
+  return [{ type: target.kind === "a" ? "A" : "CNAME", name: host, value: target.value }];
+}
+
+function MethodBox({
+  badge,
+  title,
+  blurb,
+  note,
+  children,
+}: {
+  badge: string;
+  title: string;
+  blurb: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col rounded-xl border border-ink-800 bg-ink-950/50 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="neutral">{badge}</Badge>
+        <span className="text-[12.5px] font-semibold text-ink-200">{title}</span>
+      </div>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">{blurb}</p>
+      <div className="mt-3">{children}</div>
+      <p className="mt-2.5 text-[11px] leading-relaxed text-ink-600">{note}</p>
+    </div>
+  );
+}
+
+/** A click-to-copy value; `bare` renders without the boxed chrome (table cells). */
+function CopyRow({ value, bare }: { value: string; bare?: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard blocked — the value is right there to select by hand */
+    }
+  };
+
+  if (bare) {
+    return (
+      <button
+        type="button"
+        onClick={() => void copy()}
+        title="Click to copy"
+        className="group inline-flex max-w-full items-baseline gap-2 text-left"
+      >
+        <span className="break-all">{value}</span>
+        <span className="shrink-0 text-[10.5px] text-ink-500 group-hover:text-flux-300">
+          {copied ? "Copied" : "Copy"}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      title="Click to copy"
+      className="group flex w-full items-center justify-between gap-3 rounded-lg border border-ink-800 bg-ink-950/70 px-3 py-2 text-left font-mono text-[13px] text-ink-100 hover:border-ink-600"
+    >
+      <span className="break-all">{value}</span>
+      <span className="shrink-0 text-[11px] text-ink-500 group-hover:text-flux-300">
+        {copied ? "Copied" : "Copy"}
+      </span>
+    </button>
   );
 }
