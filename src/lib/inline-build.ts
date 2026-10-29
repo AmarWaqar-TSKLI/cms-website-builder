@@ -25,8 +25,30 @@ function log(msg: string) {
   console.log(`[${new Date().toISOString()}] [inline-build] ${msg}`);
 }
 
+/**
+ * Where the drain endpoint lives. The production alias, not VERCEL_URL: the
+ * per-deployment URL sits behind Vercel's deployment protection.
+ */
+function drainUrl(): string | null {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const origin = host ? `https://${host}` : process.env.NEXT_PUBLIC_RUNTIME_API;
+  return origin && process.env.BUILD_DRAIN_SECRET ? `${origin}/api/internal/build-drain` : null;
+}
+
 async function drain() {
   try {
+    // Builds render "use client" islands to static HTML, which an App Router
+    // handler cannot do (see pages/api/internal/build-drain.ts). Hand the
+    // drain to that route when we can reach it; otherwise run it here.
+    const url = drainUrl();
+    if (url) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "x-drain-secret": process.env.BUILD_DRAIN_SECRET! },
+      });
+      if (!res.ok) log(`drain endpoint answered ${res.status}`);
+      return;
+    }
     await drainBuildJobs(log);
   } catch (err) {
     log(`drain error: ${err instanceof Error ? err.message : String(err)}`);

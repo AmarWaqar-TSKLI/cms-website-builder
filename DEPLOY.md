@@ -27,7 +27,10 @@ when `VERCEL` is set; `INLINE_BUILD=1|0` overrides.
    DATABASE_URL="postgresql://…-pooler…/neondb?sslmode=require&pgbouncer=true"
    DATABASE_URL_UNPOOLED="postgresql://…/neondb?sslmode=require"    # migrations
    NEXT_PUBLIC_RUNTIME_API="https://<project>.vercel.app"  # public origin
+   BUILD_DRAIN_SECRET="<long random string>"   # guards /api/internal/build-drain
    ```
+   Set the function region to the database's (Settings → Functions); a build
+   makes dozens of sequential queries, so a cross-ocean hop costs seconds.
 3. **Deploy.** The `vercel-build` script runs `prisma generate`,
    `prisma migrate deploy`, then `next build`.
 4. **Seed and publish the demo once** from your machine, pointed at Neon:
