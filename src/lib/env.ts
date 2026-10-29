@@ -6,7 +6,13 @@ import path from "node:path";
  * the seed script, the verifier and the test suite. Existing environment
  * variables always win, so docker-compose's settings are never clobbered.
  */
-export function loadEnv(file = ".env") {
+export function loadEnv(...files: string[]) {
+  // `neon deploy` writes its connection strings to .env.local; .env is the
+  // hand-written local setup. Earlier files win, like Next's own loading order.
+  for (const file of files.length ? files : [".env.local", ".env"]) loadFile(file);
+}
+
+function loadFile(file: string) {
   const p = path.resolve(process.cwd(), file);
   if (!existsSync(p)) return;
   for (const raw of readFileSync(p, "utf8").split(/\r?\n/)) {

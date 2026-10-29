@@ -12,6 +12,8 @@ import { captureError } from "@/lib/monitor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Room for an inline build (see lib/inline-build.ts) to finish after the response.
+export const maxDuration = 60;
 
 export async function GET() {
   return NextResponse.json({ locales: LOCALES });

@@ -19,7 +19,7 @@ const TONES = {
   accent: "border-flux-500 bg-flux-500/12 text-flux-300",
 } as const;
 
-/** Sticker-style status chip: solid border, loud caps, wiggles on hover. */
+/** Status chip: thin border, small caps. */
 export function Badge({
   tone = "neutral",
   children,
@@ -32,7 +32,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        "sticker inline-flex items-center gap-1.5 rounded-lg border-[1.5px] px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
+        "sticker inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
         TONES[tone],
         className,
       )}

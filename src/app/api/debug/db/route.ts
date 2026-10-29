@@ -98,6 +98,9 @@ export async function GET(req: Request) {
   const [drafts, revs, rels, items, deps, jobs, products, orders] = counts;
 
   return NextResponse.json({
+    // Serverless hosts keep build files in per-instance /tmp, so listing them
+    // would show a random subset. The inspector says so instead.
+    serverless: Boolean(process.env.VERCEL),
     site: {
       id: site.id,
       name: site.name,

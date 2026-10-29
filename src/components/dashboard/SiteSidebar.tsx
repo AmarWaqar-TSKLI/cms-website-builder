@@ -135,18 +135,18 @@ export function SiteSidebar({
     cx(
       "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
       active
-        ? "border-[1.5px] border-ink-100 bg-flux-500/10 font-bold text-ink-100"
-        : "border-[1.5px] border-transparent text-ink-400 hover:bg-ink-850 hover:text-ink-100",
+        ? "border border-ink-800 bg-flux-500/10 font-bold text-ink-100"
+        : "border border-transparent text-ink-400 hover:bg-ink-850 hover:text-ink-100",
     );
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col border-r-2 border-ink-800 bg-ink-900 px-3 py-4 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col border-r border-ink-800 bg-ink-900 px-3 py-4 lg:flex">
       {/* Workspace + site switcher */}
       <Link
         href="/sites"
         className="group mx-1 flex items-center gap-2 text-[13px] font-bold tracking-tight text-ink-100"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-lg border-2 border-ink-100 bg-flux-500 text-[11px] text-white shadow-punch-sm transition-transform group-hover:-rotate-6">
+        <span className="grid h-7 w-7 place-items-center rounded-lg border border-ink-800 bg-flux-500 text-[11px] text-white shadow-punch-sm transition-transform">
           ◆
         </span>
         Workspace
@@ -158,7 +158,7 @@ export function SiteSidebar({
             value={currentSiteId}
             onChange={(e) => router.push(`/dashboard?site=${e.target.value}`)}
             aria-label="Switch site"
-            className="w-full rounded-lg border-2 border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-100 outline-none transition-colors focus:border-flux-500"
+            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-100 outline-none transition-colors focus:border-flux-500"
           >
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
@@ -167,7 +167,7 @@ export function SiteSidebar({
             ))}
           </select>
         ) : (
-          <div className="rounded-lg border-2 border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-100">
+          <div className="rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-100">
             {currentSiteName}
           </div>
         )}
@@ -178,7 +178,7 @@ export function SiteSidebar({
       <div className="mt-3 flex gap-1.5 px-1">
         <Link
           href={editHref}
-          className="punchable flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-ink-100 bg-flux-500 px-3 py-2 text-[13px] font-bold text-white hover:bg-flux-400 hover:shadow-punch-sm"
+          className="punchable flex flex-1 items-center justify-center gap-2 rounded-xl border border-ink-800 bg-flux-500 px-3 py-2 text-[13px] font-bold text-white hover:bg-flux-400 hover:shadow-punch-sm"
         >
           <Icon d={PATHS.edit} />
           Edit site
@@ -188,7 +188,7 @@ export function SiteSidebar({
           target="_blank"
           rel="noreferrer"
           title="View live site"
-          className="punchable grid w-10 place-items-center rounded-xl border-2 border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-100 hover:text-ink-100 hover:shadow-punch-sm"
+          className="punchable grid w-10 place-items-center rounded-xl border border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-600 hover:text-ink-100 hover:shadow-punch-sm"
         >
           <Icon d={PATHS.live} />
         </a>

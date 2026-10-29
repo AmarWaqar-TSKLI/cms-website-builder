@@ -11,7 +11,6 @@
  * state. It renders one immutable release, or it renders nothing.
  */
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { SiteBody } from "../../components/site/SiteBody";
 import type { PageNode, RenderContext, ThemeLayout } from "../registry/types";
 import { cartMarkup, runtimeScript } from "./runtime";
@@ -25,6 +24,19 @@ export interface RenderPageInput {
   /** Stamped into the HTML so you can prove which release a served page came from. */
   releaseVersion: number;
   builtAt: string;
+}
+
+/**
+ * react-dom/server is loaded at call time, not imported: the build is reachable
+ * from app routes (inline builds on serverless, see lib/inline-build.ts), and a
+ * STATIC import of react-dom/server anywhere in that graph fails the Next build.
+ * Same pattern as lib/export-next.ts.
+ */
+type RenderFn = (el: React.ReactElement) => string;
+let _render: RenderFn | null = null;
+async function getRenderer(): Promise<RenderFn> {
+  if (!_render) _render = (await import("react-dom/server")).renderToStaticMarkup as RenderFn;
+  return _render;
 }
 
 /**
@@ -42,8 +54,9 @@ export interface RenderPageInput {
  * is one implementation, so "the export matches the hosted site" is structural
  * rather than something a test has to keep catching.
  */
-export function renderPageHtml(input: RenderPageInput): string {
+export async function renderPageHtml(input: RenderPageInput): Promise<string> {
   const { ctx } = input;
+  const renderToStaticMarkup = await getRenderer();
   const t = ctx.tokens;
 
   const document = renderToStaticMarkup(

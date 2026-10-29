@@ -10,6 +10,7 @@
  * anywhere" would be marketing rather than a property.
  */
 import archiver from "archiver";
+import { existsSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { prisma } from "./db";
 import { releaseDir } from "./paths";
@@ -34,6 +35,16 @@ export async function buildExport(releaseId: string, kind: ExportKind): Promise<
   }
 
   const dir = releaseDir(release.siteId, release.id);
+  if (!existsSync(dir)) {
+    // On serverless hosts the build's files live in one instance's /tmp and are
+    // gone by the time another instance handles this download. The hosted site
+    // is unaffected (it renders from the database); only this zip needs a disk.
+    throw new Error(
+      process.env.VERCEL
+        ? "Static and container exports need the build machine's disk, which this serverless demo does not keep. The Next.js export works here; run the project locally (make demo) for the other two."
+        : `The files for v${release.versionNo} are not on this machine (${dir}).`,
+    );
+  }
   const archive = archiver("zip", { zlib: { level: 9 } });
   const sink = new PassThrough();
   const chunks: Buffer[] = [];

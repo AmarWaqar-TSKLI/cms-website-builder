@@ -30,8 +30,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://cms:cms@localhost:5432/cms?schema=public
-      # Local Postgres runs migrations directly, so DIRECT_URL == DATABASE_URL.
-      DIRECT_URL: postgresql://cms:cms@localhost:5432/cms?schema=public
+      # Local Postgres runs migrations directly, so DATABASE_URL_UNPOOLED == DATABASE_URL.
+      DATABASE_URL_UNPOOLED: postgresql://cms:cms@localhost:5432/cms?schema=public
       ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
       NEXT_PUBLIC_RUNTIME_API: http://localhost:3000
       APP_URL: http://localhost:3000

@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { scheduleInlineBuild } from "./inline-build";
 import { expandCollectionRefs, extractRefsFromBody, mergeRefs, type Ref } from "./refs";
 import { describeCycle, detectComponentCycles, displayNameOf } from "./shared-components";
 import type { PageBody } from "./registry/types";
@@ -48,7 +49,7 @@ export async function publishSite(
   userId: string | null,
   notes?: string,
 ): Promise<PublishResult> {
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
       // ── 1. Everything this release will pin ────────────────────────────────
       const pages = await tx.page.findMany({
@@ -269,4 +270,9 @@ export async function publishSite(
   // NOTE: sites.live_release_id is deliberately NOT touched here. A release
   // becomes live only once an artifact exists on disk. If the build never
   // succeeds, visitors keep getting the previous release, forever if need be.
+  //
+  // Where no worker process can run (Vercel), drain the queue after the
+  // response is sent. A no-op wherever the worker owns the queue.
+  scheduleInlineBuild();
+  return result;
 }

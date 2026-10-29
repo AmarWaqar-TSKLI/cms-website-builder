@@ -21,7 +21,7 @@ jobs:
       # in typecheck/unit/build actually connects, so a dummy is enough and no
       # secret is required for CI.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
-      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/ci?schema=public
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4

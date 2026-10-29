@@ -12,6 +12,39 @@ internet, and which parts only you can do.
 
 ---
 
+## Vercel + Neon (the hosted demo)
+
+No container and no worker process. Builds run **inline**: the request that
+publishes drains the job queue after its response is sent (Next's `after()`),
+using the same claim query and job handler as the worker
+(`src/lib/jobs.ts`, `src/lib/inline-build.ts`). It switches on automatically
+when `VERCEL` is set; `INLINE_BUILD=1|0` overrides.
+
+1. **Database.** Create a Neon project. Copy the *pooled* connection string
+   (host contains `-pooler`) and the *direct* one.
+2. **Env vars** on the Vercel project (Production):
+   ```bash
+   DATABASE_URL="postgresql://…-pooler…/neondb?sslmode=require&pgbouncer=true"
+   DATABASE_URL_UNPOOLED="postgresql://…/neondb?sslmode=require"    # migrations
+   NEXT_PUBLIC_RUNTIME_API="https://<project>.vercel.app"  # public origin
+   ```
+3. **Deploy.** The `vercel-build` script runs `prisma generate`,
+   `prisma migrate deploy`, then `next build`.
+4. **Seed and publish the demo once** from your machine, pointed at Neon:
+   ```bash
+   DATABASE_URL="<direct url>" DATABASE_URL_UNPOOLED="<direct url>" npm run demo:reset
+   ```
+   That truncates, re-seeds, publishes every site and builds the releases in
+   process, so `/s/acme-store` is live immediately. Run it again any time to
+   reset the shared demo.
+
+What differs on Vercel: build files go to per-instance `/tmp` (serving never
+reads them), so the **static** and **container** zip exports explain they need a
+real disk; the **Next.js** export works. Custom domains still route, and
+`?host=acme.test` demonstrates it.
+
+---
+
 ## What you need
 
 - **A Linux host** (a $5–10/mo VPS is plenty to start) with Docker installed, or
@@ -169,9 +202,9 @@ connection strings and use the **session pooler (port `5432`)** for BOTH:
   session pooler keeps one stable connection, which is what a long-running server
   wants. **Avoid the transaction pooler (`6543`) here** — it's built for
   serverless and reconnects per query, ~4–5× slower for a persistent server.
-- `DIRECT_URL` = the same session pooler string (Prisma uses it for migrations,
+- `DATABASE_URL_UNPOOLED` = the same session pooler string (Prisma uses it for migrations,
   which a transaction pooler can't run). `schema.prisma` has a
-  `directUrl = env("DIRECT_URL")` line; locally the two are identical.
+  `directUrl = env("DATABASE_URL_UNPOOLED")` line; locally the two are identical.
 
 **Region.** Put the Railway `app` and `worker` in the same region as Supabase:
 `railway service scale --service app <region>=1 <old-region>=0` (regions:
@@ -184,14 +217,14 @@ Dockerfile). Then:
 - **Start command:** `sh -c "npx prisma migrate deploy && npm start"` (migrate, then serve).
 - **Build arg** `NEXT_PUBLIC_RUNTIME_API` = the app's public URL (its
   `*.up.railway.app`, or the custom domain) — it's inlined at build, so set it and redeploy.
-- **Variables:** `DATABASE_URL`, `DIRECT_URL`, `ARTIFACTS_DIR=/app/artifacts`,
+- **Variables:** `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `ARTIFACTS_DIR=/app/artifacts`,
   `APP_INTERNAL_URL` = the app's own internal URL, and the `CUSTOM_DOMAIN_CNAME`
   (point customers at the app's Railway domain) once known.
 
 **Railway service 2 — `worker`.** Same repo/image, one override:
 
 - **Start command:** `npm run worker:once` (the persistent poll loop).
-- **Variables:** the same `DATABASE_URL`/`DIRECT_URL`/`ARTIFACTS_DIR`/`APP_INTERNAL_URL`.
+- **Variables:** the same `DATABASE_URL`/`DATABASE_URL_UNPOOLED`/`ARTIFACTS_DIR`/`APP_INTERNAL_URL`.
 
 **First run:** once `app` is up, run the seed once to create an admin +
 demo data — Railway's shell: `npx tsx prisma/seed.ts` — or skip it and use `/signup`.

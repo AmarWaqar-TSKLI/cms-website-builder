@@ -9,7 +9,10 @@ import path from "node:path";
  * by accident — the module graph enforces non-negotiable #7.
  */
 export function artifactsRoot(): string {
-  return path.resolve(process.env.ARTIFACTS_DIR || "./artifacts");
+  // Serverless (Vercel): only /tmp is writable, and it is per-instance scratch.
+  // Fine for the build's smoke-render; serving never reads these files.
+  const fallback = process.env.VERCEL ? "/tmp/artifacts" : "./artifacts";
+  return path.resolve(process.env.ARTIFACTS_DIR || fallback);
 }
 
 export function releaseDir(siteId: string, releaseId: string): string {

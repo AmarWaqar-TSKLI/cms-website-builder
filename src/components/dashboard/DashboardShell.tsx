@@ -59,6 +59,7 @@ export interface DashSite {
 /** The three-way diff and merge shapes come straight from the lib (type-only —
  * erased at build, so no server code reaches the client bundle). */
 import type { BranchDiff, MergeResult } from "@/lib/branch";
+import { DISK_EXPORTS } from "@/lib/disk-exports";
 
 export interface DashPage {
   id: string;
@@ -206,7 +207,7 @@ function SiteTitle({ siteId, name }: { siteId: string; name: string }) {
           }}
           onBlur={() => void save()}
           aria-label="Site name"
-          className="display-mega w-full max-w-[22ch] rounded-xl border-2 border-ink-700 bg-ink-950 px-2.5 py-1 text-[30px] text-ink-100 outline-none focus:border-flux-500 disabled:opacity-60 sm:text-[40px]"
+          className="display-mega w-full max-w-[22ch] rounded-xl border border-ink-700 bg-ink-950 px-2.5 py-1 text-[30px] text-ink-100 outline-none focus:border-flux-500 disabled:opacity-60 sm:text-[40px]"
         />
         {error ? <span className="mt-1 block text-[12px] text-red-400">{error}</span> : null}
       </div>
@@ -890,7 +891,7 @@ export function DashboardShell({
       {/* ── ZONE 2 · GROW — branching full-width (the diff review needs the
           room), then the two one-shot AI moves side by side beneath it. */}
       <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo.">
-      <section className="min-w-0 overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           <span aria-hidden>⑂</span> Branches
         </div>
@@ -1174,7 +1175,7 @@ export function DashboardShell({
 
       {/* The one-shot AI moves, side by side under branching. */}
       <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
-      <section className="overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
+      <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>✨</span> AI rebrand
         </div>
@@ -1253,7 +1254,7 @@ export function DashboardShell({
       </section>
 
       {/* ── 4a-ii. AI translate ──────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-2xl border-2 border-ink-800 bg-ink-900 p-6">
+      <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           <span aria-hidden>🌍</span> AI translate
         </div>
@@ -2039,6 +2040,7 @@ function ReleaseCard({
                 Open ↗
               </LinkBtn>
             )}
+            {DISK_EXPORTS && (
             <LinkBtn
               href={`/api/releases/${r.id}/export/static`}
               download
@@ -2048,6 +2050,7 @@ function ReleaseCard({
             >
               .zip
             </LinkBtn>
+            )}
             <LinkBtn
               href={`/api/releases/${r.id}/export/nextjs`}
               download
@@ -2057,6 +2060,7 @@ function ReleaseCard({
             >
               Code
             </LinkBtn>
+            {DISK_EXPORTS && (
             <LinkBtn
               href={`/api/releases/${r.id}/export/container`}
               download
@@ -2066,6 +2070,7 @@ function ReleaseCard({
             >
               Container
             </LinkBtn>
+            )}
           </>
         )}
       </div>
@@ -2128,6 +2133,7 @@ function ExportPanel({
               external
               tech="Static files read from disk, never re-rendered per request."
             />
+            {DISK_EXPORTS && (
             <ExportCard
               title="Download a .zip"
               detail="Plain HTML and CSS. Put it on any static host, or just open it from your desktop."
@@ -2135,6 +2141,7 @@ function ExportPanel({
               href={`/api/releases/${releaseId}/export/static`}
               tech="The build output copied verbatim; it runs from file:// with no server."
             />
+            )}
             <ExportCard
               title="Export to code"
               detail="A real Next.js + TypeScript project — one component per section, your theme, ready to edit."
@@ -2143,6 +2150,7 @@ function ExportPanel({
               tech="Every block rendered by the same engine, emitted as React components. npm i && npm run dev."
               accent
             />
+            {DISK_EXPORTS && (
             <ExportCard
               title="Run it yourself"
               detail="A ready-to-run container: nginx, a Dockerfile and a compose file."
@@ -2150,6 +2158,7 @@ function ExportPanel({
               href={`/api/releases/${releaseId}/export/container`}
               tech="Same artifact, wrapped for `docker compose up`."
             />
+            )}
           </div>
 
           {customDomain && (
@@ -2366,10 +2375,10 @@ function Zone({
         ? "bg-pop-pink/[0.05]"
         : "bg-flux-500/[0.05]";
   return (
-    <section className={cx("relative mt-12 rounded-3xl border-2 border-ink-800 p-4 sm:p-6", wash)}>
+    <section className={cx("relative mt-12 rounded-3xl border border-ink-800 p-4 sm:p-6", wash)}>
       <span
         className={cx(
-          "sticker absolute -top-3.5 left-5 inline-block -rotate-1 rounded-lg border-2 border-ink-100 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
+          "sticker absolute -top-3.5 left-5 inline-block rounded-lg border border-ink-800 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
           chip,
         )}
       >

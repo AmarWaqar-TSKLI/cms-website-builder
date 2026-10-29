@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * The auth family's split-screen shell: a loud violet brand panel with the
+ * The auth family's split-screen shell: a tomato poster panel with the
  * product's promise and a marquee of block names (its own vocabulary), and a
  * calm paper panel where the form does its one job. Small screens drop the
  * brand half — there, the form IS the page.
@@ -16,31 +16,29 @@ export function AuthSplit({
   children: ReactNode;
 }) {
   return (
-    <main className="grid min-h-screen bg-ink-950 lg:grid-cols-[1fr_1.1fr]">
-      <aside className="relative hidden overflow-hidden border-r-2 border-ink-100 bg-flux-500 lg:flex lg:flex-col lg:justify-between">
+    <main className="grid min-h-screen bg-paper text-coal lg:grid-cols-[1fr_1.1fr]">
+      <aside className="relative hidden overflow-hidden border-r-2 border-coal bg-tomato text-paper lg:flex lg:flex-col lg:justify-between">
         <a
           href="/"
-          className="m-8 inline-grid h-12 w-12 place-items-center rounded-2xl border-2 border-ink-100 bg-ink-900 text-[20px] font-semibold text-ink-100 shadow-punch-sm transition-transform hover:-rotate-6"
+          className="m-8 self-start font-[family-name:var(--font-display)] text-[22px] font-extrabold tracking-tight"
           aria-label="Back to home"
         >
-          ◈
+          cms<span className="text-coal">/</span>builder
         </a>
-        <div className="px-8 pb-6">
-          <h2 className="display-mega text-[clamp(30px,3.6vw,46px)] leading-[1.08] text-white">
+        <div className="px-8 pb-10">
+          <h2 className="display-mega text-[clamp(44px,5vw,76px)]">
             Build it.
             <br />
             Publish it.
             <br />
-            <span className="inline-block -rotate-1 rounded-xl border-2 border-ink-100 bg-pop-yellow px-3 text-ink-100 shadow-punch-sm">
-              Undo it.
-            </span>
+            <span className="text-sun">Undo it.</span>
           </h2>
-          <p className="mt-4 max-w-[34ch] text-[14px] leading-relaxed text-white/80">
+          <p className="mt-6 max-w-[34ch] text-[16px] leading-relaxed text-paper/90">
             Every publish is a version. Every version is one click away, forever.
           </p>
         </div>
-        <div className="border-t-2 border-ink-100 bg-ink-900 py-3" aria-hidden>
-          <div className="marquee-track gap-8 whitespace-nowrap font-mono text-[12px] font-medium uppercase tracking-[0.14em] text-ink-400">
+        <div className="border-t-2 border-coal bg-coal py-3" aria-hidden>
+          <div className="marquee-track gap-8 whitespace-nowrap font-mono text-[12px] font-medium uppercase tracking-[0.14em] text-paper/80">
             {[0, 1].map((half) => (
               <span key={half} className="flex gap-8">
                 {"Hero · Pricing · FAQ · Testimonial · Gallery · Cta · Columns · Stat · Products · Blog · Form ·"
@@ -59,13 +57,13 @@ export function AuthSplit({
           <div className="mb-8">
             <a
               href="/"
-              className="mb-6 inline-grid h-12 w-12 place-items-center rounded-2xl border-2 border-ink-100 bg-flux-500 text-[20px] font-semibold text-white shadow-punch-sm transition-transform hover:-rotate-6 lg:hidden"
+              className="mb-8 inline-block font-[family-name:var(--font-display)] text-[20px] font-extrabold tracking-tight lg:hidden"
               aria-label="Back to home"
             >
-              ◈
+              cms<span className="text-tomato">/</span>builder
             </a>
-            <h1 className="display-mega text-[clamp(28px,4vw,36px)] text-ink-100">{heading}</h1>
-            <p className="mt-2.5 max-w-xs text-[14.5px] leading-relaxed text-ink-400">{sub}</p>
+            <h1 className="display-mega text-[clamp(36px,4.4vw,52px)]">{heading}</h1>
+            <p className="mt-3 max-w-xs text-[15px] leading-relaxed text-coal/75">{sub}</p>
           </div>
           {children}
         </div>

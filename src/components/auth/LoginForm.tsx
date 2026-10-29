@@ -58,9 +58,9 @@ export function LoginForm({ next }: { next?: string }) {
   return (
     <form
       onSubmit={submit}
-      className="rounded-2xl border border-ink-800 bg-ink-900 p-6 shadow-2xl shadow-black/40"
+      className="border-2 border-coal bg-white p-6 shadow-[6px_6px_0_var(--color-coal)]"
     >
-      <label className="mb-1.5 block text-[12px] font-medium text-ink-300" htmlFor="email">
+      <label className="kicker mb-1.5 block text-coal/70" htmlFor="email">
         Email
       </label>
       <input
@@ -70,11 +70,11 @@ export function LoginForm({ next }: { next?: string }) {
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="mb-4 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-[13.5px] text-ink-100 outline-none transition-colors placeholder:text-ink-600 focus:border-flux-500"
+        className="mb-4 w-full border-2 border-coal bg-paper px-3 py-2.5 text-[15px] text-coal outline-none placeholder:text-coal/40 focus:bg-white"
         placeholder="you@example.com"
       />
 
-      <label className="mb-1.5 block text-[12px] font-medium text-ink-300" htmlFor="password">
+      <label className="kicker mb-1.5 block text-coal/70" htmlFor="password">
         Password
       </label>
       <input
@@ -84,14 +84,14 @@ export function LoginForm({ next }: { next?: string }) {
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-[13.5px] text-ink-100 outline-none transition-colors placeholder:text-ink-600 focus:border-flux-500"
+        className="w-full border-2 border-coal bg-paper px-3 py-2.5 text-[15px] text-coal outline-none placeholder:text-coal/40 focus:bg-white"
         placeholder="••••••••"
       />
 
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-lg border border-fail-500/30 bg-fail-500/10 px-3 py-2 text-[12.5px] text-fail-500"
+          className="mt-4 border-2 border-tomato bg-tomato/10 px-3 py-2 text-[13.5px] text-tomato-deep"
         >
           {error}
         </p>
@@ -100,29 +100,29 @@ export function LoginForm({ next }: { next?: string }) {
       <button
         type="submit"
         disabled={busy}
-        className="mt-5 w-full rounded-lg bg-flux-500 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn-poster mt-6 w-full justify-center bg-tomato text-[15px] text-paper disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>
 
-      <p className="mt-3 text-center text-[12px] text-ink-500">
-        <a href="/forgot" className="transition-colors hover:text-ink-300">
+      <p className="mt-4 text-center text-[13px] text-coal/70">
+        <a href="/forgot" className="underline-offset-4 hover:text-tomato hover:underline">
           Forgot your password?
         </a>
       </p>
 
-      <p className="mt-5 border-t border-ink-800 pt-4 text-center text-[12.5px] text-ink-400">
+      <p className="mt-5 border-t border-coal/20 pt-4 text-center text-[13.5px] text-coal/80">
         New here?{" "}
-        <a href="/signup" className="font-medium text-flux-300 transition-colors hover:text-flux-400">
+        <a href="/signup" className="font-semibold underline decoration-2 underline-offset-4 hover:text-tomato">
           Create your site — it&rsquo;s free
         </a>
       </p>
 
-      <p className="mt-3 text-[11.5px] leading-relaxed text-ink-500">
-        Or try the demo: <span className="text-ink-300">amar@acme.test</span> and{" "}
-        <span className="text-ink-300">sara@acme.test</span>, both password{" "}
-        <span className="font-mono text-ink-300">demo1234</span>. Sign in as each in two browsers to
-        see the editing lock.
+      <p className="mt-4 bg-sun px-3 py-2.5 text-[13px] leading-relaxed text-coal">
+        <span className="font-semibold">Try the demo:</span>{" "}
+        <span className="font-mono">amar@acme.test</span> or <span className="font-mono">sara@acme.test</span>,
+        password <span className="font-mono">demo1234</span>. Sign in as each in two browsers to see the
+        editing lock.
       </p>
     </form>
   );

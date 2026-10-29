@@ -54,10 +54,19 @@ for (const raw of [
   }
 }
 
+/**
+ * Vercel serves every deployment on its own *.vercel.app host (production,
+ * previews, branch URLs), none of which is known at build time. They are always
+ * the app itself, never a customer domain.
+ */
+function isAppHost(host: string): boolean {
+  return APP_HOSTS.has(host) || host.endsWith(".vercel.app");
+}
+
 const SESSION_COOKIE = "cms_session";
 
 /** Product surfaces that require a session. */
-const PROTECTED = [/^\/dashboard(\/|$)/, /^\/editor(\/|$)/];
+const PROTECTED = [/^\/dashboard(\/|$)/, /^\/editor(\/|$)/, /^\/walkthrough(\/|$)/];
 
 // The cart island on a published page calls the app origin for cart/orders; on a
 // custom domain that is cross-origin, so connect-src must allow it explicitly.
@@ -108,7 +117,7 @@ export function middleware(req: NextRequest) {
   const host = (override ?? req.headers.get("host") ?? "").toLowerCase();
 
   // ── 1. Custom-domain routing ──────────────────────────────────────────────
-  if (host && (override || !APP_HOSTS.has(host))) {
+  if (host && (override || !isAppHost(host))) {
     const rewritten = new URL(`/site-by-host/${encodeURIComponent(host)}${url.pathname}`, url);
     rewritten.search = "";
     return harden(NextResponse.rewrite(rewritten), true);

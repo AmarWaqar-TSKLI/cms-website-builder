@@ -9,8 +9,11 @@
 import { NextResponse } from "next/server";
 import { guardRelease } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
+import { scheduleInlineBuild } from "@/lib/inline-build";
 
 export const dynamic = "force-dynamic";
+// Room for an inline build (see lib/inline-build.ts) to finish after the response.
+export const maxDuration = 60;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ releaseId: string }> }) {
   const { releaseId } = await params;
@@ -35,5 +38,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ releas
     prisma.buildJob.create({ data: { releaseId, status: "queued" } }),
   ]);
 
+  scheduleInlineBuild();
   return NextResponse.json({ ok: true, jobId: job.id, releaseId });
 }

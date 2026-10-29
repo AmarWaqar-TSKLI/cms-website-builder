@@ -7,67 +7,72 @@
   the site's own theme, so an exported zip renders from file:// with no
   stylesheet at all, and a customer's site never inherits the builder's look.
 
-  ── The direction: commercial brutalism, Notion underneath ─────────────────
-  Vibrant and loud where the product SPEAKS (page headers, primary actions,
-  the sites hub, stickers) and calm where people WORK (the editor panes, dense
-  cards, forms). One brand accent — electric violet — plus two "pop" sticker
-  colours used sparingly. Greens, ambers and reds stay reserved for STATE, so
-  colour always means the same thing.
+  ── The direction: a printed poster ────────────────────────────────────────
+  The public pages (landing, walkthrough, login) read like a Swiss editorial
+  print: warm paper, near-black ink, tomato red in big confident blocks, cobalt
+  as the second voice, a little sun yellow for highlights. The working screens
+  (dashboard, editor) share the type and the cobalt accent but stay calm, on a
+  warm white, because people work in them for hours.
 
-  The physical language: warm paper ground, warm near-black ink, chunky borders
-  on the things that matter, and hard offset "punch" shadows instead of blurs —
-  interactive things push back when touched.
+  Greens, ambers and reds stay reserved for STATE inside the tool, so colour in
+  the dashboard always means the same thing.
 
   ── The ramp ───────────────────────────────────────────────────────────────
   The scale reads by ROLE, not by lightness: 950 is the page, 900 is a card, 800
   is a border, 100 is the strongest text. Every screen resolves through these
-  eleven values, which is why this rehaul was a change HERE rather than a change
-  to every component.
+  values, which is why a restyle is a change HERE rather than to every component.
 */
 
 @theme {
-  /* Warm paper neutrals — biased toward the ink, not sterile grey. */
-  --color-ink-950: #fbf8f3; /* page ground — warm paper */
+  /* Neutrals. */
+  --color-ink-950: #faf8f4; /* page ground, a warm white */
   --color-ink-900: #ffffff; /* cards, panels, bars */
-  --color-ink-850: #f4efe6; /* hover on a surface */
-  --color-ink-800: #e9e2d6; /* hairlines and borders */
-  --color-ink-700: #d8cfc0; /* stronger borders, inputs */
-  --color-ink-600: #a89f92; /* placeholders, disabled */
-  --color-ink-500: #8c8272; /* faint labels */
-  --color-ink-400: #6b6255; /* secondary text */
-  --color-ink-300: #453f36; /* body text */
-  --color-ink-200: #211d18; /* strong body */
-  --color-ink-100: #141210; /* headings, borders that punch, shadows */
+  --color-ink-850: #f3efe7; /* hover on a surface */
+  --color-ink-800: #e6e0d4; /* hairlines and borders */
+  --color-ink-700: #d3cbbb; /* stronger borders, inputs */
+  --color-ink-600: #a69e8f; /* placeholders, disabled */
+  --color-ink-500: #776f62; /* faint labels */
+  --color-ink-400: #574f44; /* secondary text */
+  --color-ink-300: #3d362d; /* body text */
+  --color-ink-200: #29231c; /* strong body */
+  --color-ink-100: #16130f; /* headings */
 
-  /* THE brand accent: electric violet. Buttons, focus, selection — the product's
-     voice. 400 is hover, 300 is accent TEXT on the paper ground. */
-  --color-flux-500: #5b2eff;
-  --color-flux-400: #6d45ff;
-  --color-flux-300: #3d14c9;
+  /* The tool's accent: buttons, focus, selection, links. 300 is accent TEXT. */
+  --color-flux-500: #2747e8;
+  --color-flux-400: #3d5cf0;
+  --color-flux-300: #1e38c2;
 
-  /* Sticker pops — decoration with a budget. Badges, highlights, one per
-     surface at most. Never for state, never for body text. */
-  --color-pop-yellow: #ffd02f;
-  --color-pop-pink: #ff5ca8;
+  /* The poster palette, for the public pages. */
+  --color-paper: #f3eee4;
+  --color-paper-deep: #e9e1d2;
+  --color-tomato: #e5432d;
+  --color-tomato-deep: #c4331f;
+  --color-cobalt: #2747e8;
+  --color-cobalt-deep: #1b33b8;
+  --color-sun: #f6c343;
+  --color-coal: #16130f;
+
+  /* Former "sticker" colours, now quiet tints so badges stay calm. */
+  --color-pop-yellow: #eef3fe;
+  --color-pop-pink: #f4f4f5;
 
   /* State only. Never decoration, never an accent. */
   --color-live-500: #0e9f6e;
   --color-warn-500: #b45309;
   --color-fail-500: #dc2626;
 
-  /* Reuse stays distinct, but quiet, so the palette holds. */
-  --color-reuse-500: #211d18;
+  --color-reuse-500: #27272a;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mega: "Unbounded", "Bricolage Grotesque", ui-sans-serif, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* Loaded in app/(app)/layout.tsx. Each falls back to a system face. */
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", var(--font-sans);
+  --font-mega: "Bricolage Grotesque", var(--font-sans);
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Hard offset shadows — the punch. They resolve through ink-100, so the
-     dark landing film gets correct shadows for free. */
-  --shadow-punch-sm: 2px 2px 0 var(--color-ink-100);
-  --shadow-punch: 4px 4px 0 var(--color-ink-100);
-  --shadow-punch-lg: 7px 7px 0 var(--color-ink-100);
+  /* Soft shadows (the class names are kept so components need no edits). */
+  --shadow-punch-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-punch: 0 1px 3px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.04);
+  --shadow-punch-lg: 0 2px 6px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.06);
 }
 
 /*
@@ -115,7 +120,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Section and card titles: Bricolage — personality that stays legible at 17px. */
+/* Section and card titles: Bricolage, personality that stays legible at 17px. */
 .display {
   font-family: var(--font-display);
   font-weight: 700;
@@ -123,14 +128,51 @@ body {
   text-wrap: balance;
 }
 
-/* Page-hero headings ONLY — the loud voice. Unbounded is expensive to read, so
-   it appears a handful of times per screen at large sizes, never in dense UI. */
+/* Page-hero headings ONLY: the loud voice, used a handful of times per screen
+   at large sizes, never in dense UI. Tight leading and tracking are the point. */
 .display-mega {
   font-family: var(--font-mega);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.06;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
   text-wrap: balance;
+  font-variation-settings: "opsz" 96;
+}
+
+/* A small uppercase mono label: section kickers, captions, table heads. */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* The poster button: a solid block that drops onto a hard ink shadow. */
+.btn-poster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 2px solid var(--color-coal);
+  padding: 0.8em 1.3em;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 4px 4px 0 var(--color-coal);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.btn-poster:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--color-coal);
+}
+.btn-poster:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--color-coal);
+}
+
+/* Highlighter stroke behind a word: sun yellow, slightly under the baseline. */
+.mark-sun {
+  background: linear-gradient(transparent 58%, var(--color-sun) 58%, var(--color-sun) 92%, transparent 92%);
+  padding: 0 0.06em;
 }
 
 ::selection {
@@ -270,16 +312,13 @@ body {
     border-color 0.16s ease;
 }
 .punchable:hover {
-  transform: translate(-2px, -2px);
+  border-color: var(--color-ink-700);
 }
 .punchable:active {
   transform: translate(0, 0);
   box-shadow: none;
 }
 
-.sticker:hover {
-  animation: wiggle 0.4s ease-in-out;
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,

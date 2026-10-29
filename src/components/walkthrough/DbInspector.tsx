@@ -13,8 +13,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Dot, Mono, Note } from "../ui";
+import { DISK_EXPORTS } from "@/lib/disk-exports";
 
 interface Snapshot {
+  serverless?: boolean;
   site: { id: string; name: string; slug: string; customDomain: string | null; liveReleaseId: string | null };
   counts: Record<string, number>;
   pages: {
@@ -247,7 +249,13 @@ export function DbInspector() {
             </span>
             <Mono className="text-ink-600">./artifacts/</Mono>
           </div>
-          {snap.artifacts.length === 0 ? (
+          {snap.serverless ? (
+            <Note>
+              This hosted demo runs on serverless functions, so build files only exist briefly in
+              temporary storage. That doesn&apos;t matter for visitors: the live site is rendered from
+              the release stored in Postgres, never from these files. Run it locally to watch them appear.
+            </Note>
+          ) : snap.artifacts.length === 0 ? (
             <Note>Nothing built yet.</Note>
           ) : (
             <ul className="space-y-2">
@@ -340,6 +348,8 @@ export function DbInspector() {
                 Domain → {snap.site.customDomain}
               </a>
             )}
+            {DISK_EXPORTS && (
+              <>
             <a
               href={`/api/releases/${liveRelease.id}/export/static`}
               className="rounded-lg border border-ink-700 px-3 py-1.5 text-[12px] text-ink-200 hover:border-flux-500/50"
@@ -352,6 +362,8 @@ export function DbInspector() {
             >
               Container bundle
             </a>
+              </>
+            )}
           </div>
         </div>
       )}

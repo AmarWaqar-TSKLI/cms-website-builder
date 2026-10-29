@@ -28,13 +28,13 @@ const VARIANT: Record<Variant, string> = {
   // The violet voice, with the punch: lifts onto a hard ink shadow on hover,
   // sits back down on press. The button physically pushes back.
   primary:
-    "punchable border-2 border-ink-100 bg-flux-500 text-white hover:bg-flux-400 hover:shadow-punch-sm",
+    "punchable border border-ink-800 bg-flux-500 text-white hover:bg-flux-400 hover:shadow-punch-sm",
   // Paper with a firm border; earns its shadow on hover.
   secondary:
-    "punchable border-2 border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-100 hover:shadow-punch-sm",
+    "punchable border border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:shadow-punch-sm",
   ghost: "border border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100 transition-colors",
   quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-850 transition-colors",
-  danger: "border-2 border-fail-500/40 text-fail-500 hover:border-fail-500 hover:bg-fail-500/8 transition-colors",
+  danger: "border border-fail-500/40 text-fail-500 hover:border-fail-500 hover:bg-fail-500/8 transition-colors",
 };
 
 const SIZE: Record<Size, string> = {
@@ -121,7 +121,7 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-2xl border-2 bg-ink-900",
+        "rounded-2xl border bg-ink-900",
         tone === "live" ? "border-live-500/45" : "border-ink-800",
         className,
       )}
@@ -195,13 +195,13 @@ export function Tile({
       {sub && <div className="mt-0.5 text-[11px] text-ink-500">{sub}</div>}
     </>
   );
-  const cls = "block rounded-2xl border-2 border-ink-800 bg-ink-950/70 px-4 py-4";
+  const cls = "block rounded-2xl border border-ink-800 bg-ink-950/70 px-4 py-4";
   if (href) {
     return (
       <Link
         href={href}
         title={title}
-        className={cx(cls, "punchable hover:border-ink-100 hover:shadow-punch-sm", FOCUS)}
+        className={cx(cls, "punchable hover:border-ink-600 hover:shadow-punch-sm", FOCUS)}
       >
         {inner}
       </Link>

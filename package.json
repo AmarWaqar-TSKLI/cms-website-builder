@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "worker": "tsx watch src/worker/index.ts",
     "worker:once": "tsx src/worker/index.ts",
@@ -13,6 +14,8 @@
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
+    "publish:demo": "tsx scripts/publish-demo.ts",
+    "demo:reset": "npm run seed && npm run publish:demo",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test": "vitest run tests/unit tests/integration",
@@ -21,6 +24,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neon/config": "^1.9.5",
+    "@neon/env": "^1.6.6",
     "@prisma/client": "^6.1.0",
     "archiver": "^7.0.1",
     "next": "^15.1.3",

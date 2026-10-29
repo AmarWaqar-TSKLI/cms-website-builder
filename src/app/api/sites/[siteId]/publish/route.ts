@@ -14,6 +14,8 @@ import { guardSite } from "@/lib/api-auth";
 import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
+// Room for an inline build (see lib/inline-build.ts) to finish after the response.
+export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;

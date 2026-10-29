@@ -101,7 +101,7 @@ dockerised Postgres. `make up` runs everything in containers.
 ## Verification
 
 `make verify` runs a scripted walkthrough against the live stack and prints a
-PASS/FAIL line for each of the twelve non-negotiables, exiting non-zero on any
+PASS/FAIL line for each of the sixteen non-negotiables, exiting non-zero on any
 failure.
 
 | # | Non-negotiable | How it's proved |
@@ -150,7 +150,7 @@ src/worker/index.ts       the polling worker process
 src/app/(app)/            the PRODUCT: dashboard, editor, walkthrough, landing
 src/app/(site)/           PUBLISHED SITES: a second root layout that imports nothing
 src/components/site/      chrome, cart island, the components a visitor gets
-scripts/verify.ts         the twelve-check gate
+scripts/verify.ts         the sixteen-check gate
 ```
 
 `DECISIONS.md` records the reasoning chain and every implementation choice the

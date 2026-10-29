@@ -25,6 +25,8 @@ function appOrigin(): string {
     process.env.APP_INTERNAL_URL ||
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_RUNTIME_API ||
+    // On Vercel, warm through the public production hostname.
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`) ||
     "http://localhost:3000"
   );
 }

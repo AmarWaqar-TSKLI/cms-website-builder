@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushDraft } from "@/lib/editor/useAutosave";
 import { Badge, Dot, Mono } from "../ui";
 import { useTechnical } from "../technical";
+import { DISK_EXPORTS } from "@/lib/disk-exports";
 
 interface PublishResponse {
   releaseId: string;
@@ -200,6 +201,8 @@ export function PublishPanel({
                     >
                       View live ↗
                     </a>
+                    {DISK_EXPORTS && (
+                      <>
                     <a
                       className="text-flux-300 underline decoration-flux-500/40 underline-offset-2"
                       href={`/api/releases/${release.id}/export/static`}
@@ -212,6 +215,8 @@ export function PublishPanel({
                     >
                       Container
                     </a>
+                      </>
+                    )}
                   </span>
                 </>
               }

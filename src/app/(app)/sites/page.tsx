@@ -49,7 +49,7 @@ export default async function SitesHub() {
         {/* The loud voice: an oversized hero header with a sticker count. */}
         <div className="anim-rise mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-2 inline-block -rotate-1 rounded-lg border-2 border-ink-100 bg-pop-yellow px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-ink-100">
+            <p className="mb-2 inline-block rounded-lg border border-ink-800 bg-pop-yellow px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-ink-100">
               {sites.length === 0
                 ? "day one"
                 : `${sites.length} site${sites.length === 1 ? "" : "s"} in the shop`}
@@ -64,7 +64,7 @@ export default async function SitesHub() {
         </div>
 
         {sites.length === 0 ? (
-          <div className="anim-pop rounded-3xl border-2 border-dashed border-ink-700 px-6 py-20 text-center">
+          <div className="anim-pop rounded-3xl border border-dashed border-ink-700 px-6 py-20 text-center">
             <p className="display text-[22px] text-ink-100">Nothing here yet — good.</p>
             <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-ink-500">
               Blank canvas energy. Hit <span className="font-semibold text-flux-300">✨ New AI site</span>{" "}
@@ -82,15 +82,15 @@ export default async function SitesHub() {
                 key={s.id}
                 href={`/dashboard?site=${s.id}`}
                 className={cxOrder(
-                  "punchable anim-rise group flex flex-col overflow-hidden rounded-2xl border-2 border-ink-100 bg-ink-900 hover:shadow-punch",
+                  "punchable anim-rise group flex flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 hover:shadow-punch",
                   i,
                 )}
               >
                 {/* Window chrome — the card IS a website. */}
-                <div className="flex items-center gap-1.5 border-b-2 border-ink-100 bg-ink-850 px-4 py-2.5">
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-100 bg-pop-pink" />
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-100 bg-pop-yellow" />
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-100 bg-live-500" />
+                <div className="flex items-center gap-1.5 border-b border-ink-800 bg-ink-850 px-4 py-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-pop-pink" />
+                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-pop-yellow" />
+                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-live-500" />
                   <span className="ml-2 truncate font-mono text-[10.5px] text-ink-500">
                     {s.customDomain ?? `/s/${s.slug}`}
                   </span>
@@ -111,14 +111,14 @@ export default async function SitesHub() {
                     <span
                       className={
                         s.liveReleaseId
-                          ? "rounded-lg border-[1.5px] border-live-500 bg-live-500/12 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-live-500"
-                          : "rounded-lg border-[1.5px] border-ink-600 bg-ink-850 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-400"
+                          ? "rounded-lg border border-live-500 bg-live-500/12 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-live-500"
+                          : "rounded-lg border border-ink-600 bg-ink-850 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-400"
                       }
                     >
                       {s.liveReleaseId ? "● Live" : "Draft"}
                     </span>
                     {s.parentSiteId ? (
-                      <span className="rounded-lg border-[1.5px] border-flux-500 bg-flux-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-flux-300">
+                      <span className="rounded-lg border border-flux-500 bg-flux-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-flux-300">
                         ⑂ {nameById.get(s.parentSiteId) ? `branch of ${nameById.get(s.parentSiteId)}` : "branch"}
                       </span>
                     ) : null}

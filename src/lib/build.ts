@@ -166,7 +166,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
     }
     if (slowdown > 0) await new Promise((r) => setTimeout(r, slowdown));
 
-    const html = renderPageHtml({
+    const html = await renderPageHtml({
       title: page.title,
       path: page.path,
       body: (revision.body as unknown as PageBody)?.root ?? [],
@@ -188,7 +188,7 @@ export async function buildRelease(releaseId: string): Promise<BuildOutcome> {
   // teaser lists that link to them.
   for (const post of Object.values(posts)) {
     if (post.missing) continue;
-    const html = renderPageHtml({
+    const html = await renderPageHtml({
       title: post.title,
       path: postPath(post.slug),
       body: postPageNodes(post),

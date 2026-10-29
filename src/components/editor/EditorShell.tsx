@@ -750,7 +750,7 @@ function Tabs({
           className={cx(
             "flex-1 px-2 py-2.5 text-[12px] font-medium transition-colors",
             active === t.id
-              ? "border-b-2 border-flux-500 text-ink-100"
+              ? "border-b border-flux-500 text-ink-100"
               : "text-ink-500 hover:text-ink-300",
           )}
         >

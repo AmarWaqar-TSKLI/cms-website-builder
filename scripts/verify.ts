@@ -688,8 +688,11 @@ async function main() {
       releaseIdOf(domainHtml) === live,
       "the custom domain resolved to a different release than the slug",
     );
+    // Links are relative to where the site is mounted: /s/<slug>/about on the
+    // app host, /about on the customer's own domain. Compare with that removed.
+    const unmounted = (html: string) => pageMarkup(html).replaceAll(`href="/s/${slug}`, 'href="');
     assert(
-      sha(pageMarkup(domainHtml)) === sha(pageMarkup(hostedHtml)),
+      sha(unmounted(domainHtml)) === sha(unmounted(hostedHtml)),
       "the custom domain rendered different page markup than the slug",
     );
 
