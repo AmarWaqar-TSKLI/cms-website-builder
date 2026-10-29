@@ -373,7 +373,6 @@ export function EditorShell(boot: EditorBootstrap) {
       */}
       {readOnly && (
         <div className="flex shrink-0 items-center gap-3 border-b border-warn-500/30 bg-warn-500/10 px-4 py-2.5">
-          <span className="text-[13px]">👁</span>
           <span className="text-[12.5px] text-warn-500">
             <strong className="font-semibold">Read only.</strong>{" "}
             {lock.lockedBy

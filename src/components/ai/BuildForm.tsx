@@ -90,7 +90,7 @@ export function BuildForm() {
             disabled={busy || description.trim().length < 3}
             className="shrink-0 rounded-xl bg-flux-500 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy ? "Building…" : "Build my site ✨"}
+            {busy ? "Building…" : "Build my site"}
           </button>
         </div>
       </div>

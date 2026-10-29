@@ -48,13 +48,13 @@ export function HubActions({ user }: { user: { name: string; email: string } }) 
         href="/build"
         className="rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400"
       >
-        ✨ New AI site
+        New AI site
       </Link>
       <Link
         href="/templates"
         className="rounded-lg border border-ink-700 px-3 py-2 text-[12.5px] font-medium text-ink-200 transition-colors hover:border-ink-600"
       >
-        🎨 Templates
+        Templates
       </Link>
       <button
         type="button"

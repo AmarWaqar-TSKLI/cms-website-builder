@@ -893,7 +893,7 @@ export function DashboardShell({
       <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo.">
       <section className="min-w-0 overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
-          <span aria-hidden>⑂</span> Branches
+          Branches
         </div>
 
         {site.parentSiteId ? (
@@ -1167,7 +1167,7 @@ export function DashboardShell({
               disabled={busy === "branch"}
               className="mt-3 rounded-lg border border-ink-700 px-4 py-2 text-[13px] font-semibold text-ink-100 transition-colors hover:border-ink-500 disabled:opacity-40"
             >
-              {busy === "branch" ? "Branching…" : "⑂ Branch this site"}
+              {busy === "branch" ? "Branching…" : "Branch this site"}
             </button>
           </>
         )}
@@ -1177,7 +1177,7 @@ export function DashboardShell({
       <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
       <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
-          <span aria-hidden>✨</span> AI rebrand
+          AI rebrand
         </div>
         <h2 className="display mt-2 text-[20px] text-ink-100">Reimagine the whole site in one line</h2>
         <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
@@ -1256,7 +1256,7 @@ export function DashboardShell({
       {/* ── 4a-ii. AI translate ──────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
-          <span aria-hidden>🌍</span> AI translate
+          AI translate
         </div>
         <h2 className="display mt-2 text-[20px] text-ink-100">Go multilingual in one click</h2>
         <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-300">
@@ -1632,7 +1632,7 @@ function Hero({
             variant="secondary"
             title="Describe a site in a sentence and let AI build it"
           >
-            ✨ New AI site
+            New AI site
           </LinkBtn>
         </div>
       </div>

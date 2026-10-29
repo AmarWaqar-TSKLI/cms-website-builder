@@ -37,9 +37,8 @@ export default async function SitesHub() {
     <main className="min-h-screen bg-ink-950">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-6 py-4 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5 text-[15px] font-semibold text-ink-100">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-flux-500 text-[15px] text-white">
-            ◈
-          </span>
+          <span className="tracking-tight">cms<span className="text-flux-500">/</span>builder</span>
+          <span className="text-ink-500">·</span>
           <span>Your workspace</span>
         </Link>
         <HubActions user={{ name: user.name, email: user.email }} />
@@ -67,7 +66,7 @@ export default async function SitesHub() {
           <div className="anim-pop rounded-3xl border border-dashed border-ink-700 px-6 py-20 text-center">
             <p className="display text-[22px] text-ink-100">Nothing here yet — good.</p>
             <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-ink-500">
-              Blank canvas energy. Hit <span className="font-semibold text-flux-300">✨ New AI site</span>{" "}
+              Blank canvas energy. Hit <span className="font-semibold text-flux-300">New AI site</span>{" "}
               and describe the thing, or <span className="font-semibold text-ink-300">＋ Blank site</span>{" "}
               to lay every block yourself.
             </p>
@@ -119,7 +118,7 @@ export default async function SitesHub() {
                     </span>
                     {s.parentSiteId ? (
                       <span className="rounded-lg border border-flux-500 bg-flux-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-flux-300">
-                        ⑂ {nameById.get(s.parentSiteId) ? `branch of ${nameById.get(s.parentSiteId)}` : "branch"}
+                        {nameById.get(s.parentSiteId) ? `branch of ${nameById.get(s.parentSiteId)}` : "branch"}
                       </span>
                     ) : null}
                   </div>

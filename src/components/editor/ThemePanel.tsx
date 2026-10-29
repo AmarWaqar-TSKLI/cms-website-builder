@@ -211,7 +211,7 @@ export function ThemePanel({
               title="Restyle the whole site to a random look"
               className="rounded-md border border-ink-800 bg-ink-950 px-2 py-0.5 text-[10.5px] text-ink-300 transition-colors hover:border-flux-500/50 hover:text-flux-300"
             >
-              ✨ Surprise me
+              Surprise me
             </button>
           </div>
           <p className="mb-2 text-[11px] leading-relaxed text-ink-500">

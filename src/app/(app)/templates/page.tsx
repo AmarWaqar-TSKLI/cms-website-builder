@@ -29,9 +29,8 @@ export default async function TemplatesPage() {
     <main className="min-h-screen bg-ink-950">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-6 py-4 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5 text-[15px] font-semibold text-ink-100">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-flux-500 text-[15px] text-white">
-            ◈
-          </span>
+          <span className="tracking-tight">cms<span className="text-flux-500">/</span>builder</span>
+          <span className="text-ink-500">·</span>
           <span>Your workspace</span>
         </Link>
         <Link
@@ -50,7 +49,7 @@ export default async function TemplatesPage() {
             colours and fonts — then change the words, colours and layout to make it yours. Prefer a
             blank page, or want it built for you? Head back and choose{" "}
             <span className="text-ink-300">＋ Blank site</span> or{" "}
-            <span className="text-flux-300">✨ New AI site</span>.
+            <span className="text-flux-300">New AI site</span>.
           </p>
         </div>
 

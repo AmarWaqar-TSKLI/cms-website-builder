@@ -19,9 +19,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     <main className="grid min-h-screen place-items-center bg-ink-950 px-6 py-10">
       <div className="w-full max-w-md rounded-2xl border border-ink-700 bg-ink-900/70 p-7">
         <div className="flex items-center gap-2.5 text-[15px] font-semibold text-ink-100">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-flux-500 text-[15px] text-white">
-            ◈
-          </span>
+          <span className="tracking-tight">cms<span className="text-flux-500">/</span>builder</span>
+          <span className="text-ink-500">·</span>
           Team invite
         </div>
 

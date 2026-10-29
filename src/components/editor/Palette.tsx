@@ -249,7 +249,7 @@ export function Palette({
             disabled={planBusy}
             className="w-full rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-50"
           >
-            {planBusy ? "Analysing your page…" : "✨ Suggest what to add"}
+            {planBusy ? "Analysing your page…" : "Suggest what to add"}
           </button>
           {planError ? <p className="mt-1.5 text-[11px] text-red-400">{planError}</p> : null}
           {plan ? (
@@ -291,7 +291,7 @@ export function Palette({
 
         <div className="mb-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-tight text-flux-400">
-            <span aria-hidden>✨</span> Ask AI
+            Ask AI
           </div>
           <input
             value={aiPrompt}
@@ -323,7 +323,7 @@ export function Palette({
               title="Rewrite the words already on this page in the tone you describe"
               className="flex-1 rounded-lg border border-flux-500/50 px-2 py-1.5 text-[12px] font-semibold text-flux-400 transition-colors hover:bg-flux-500/10 disabled:opacity-40"
             >
-              {aiBusy ? "…" : "↻ Rewrite page"}
+              {aiBusy ? "…" : "Rewrite page"}
             </button>
           </div>
           {aiBusy ? (
