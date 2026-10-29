@@ -74,7 +74,7 @@ function PromptDialog({
       aria-label={opts.title}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-ink-800 bg-ink-900 p-5 shadow-2xl shadow-black/40"
+        className="w-full max-w-sm border-2 border-coal bg-white p-5 shadow-[6px_6px_0_var(--color-coal)]"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 className="display text-[18px] text-ink-100">{opts.title}</h2>
@@ -123,7 +123,7 @@ function PromptDialog({
           <button
             type="button"
             onClick={submit}
-            className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400"
+            className="px-4 py-2 text-[13px] font-semibold bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
           >
             {opts.confirmLabel ?? "OK"}
           </button>

@@ -64,7 +64,8 @@ export function SiteSidebar({
   liveUrl: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
+  // Nullable once a Pages Router route exists (pages/api/internal/build-drain).
+  const pathname = usePathname() ?? "";
   const [busy, setBusy] = useState(false);
 
   const q = `?site=${currentSiteId}`;
@@ -140,16 +141,16 @@ export function SiteSidebar({
     );
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col border-r border-ink-800 bg-ink-900 px-3 py-4 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col border-r-2 border-coal bg-ink-900 px-3 py-4 lg:flex">
       {/* Workspace + site switcher */}
       <Link
         href="/sites"
-        className="group mx-1 flex items-center gap-2 text-[13px] font-bold tracking-tight text-ink-100"
+        className="mx-1 flex items-baseline gap-2 border-b-2 border-coal pb-3 font-[family-name:var(--font-display)] text-[19px] font-extrabold tracking-tight text-coal"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-lg border border-ink-800 bg-flux-500 text-[11px] text-white shadow-punch-sm transition-transform">
-          ◆
+        <span>
+          cms<span className="text-tomato">/</span>builder
         </span>
-        Workspace
+        <span className="kicker font-sans text-[10px] text-coal/55">Workspace</span>
       </Link>
 
       <div className="mt-3 px-1">
@@ -178,7 +179,7 @@ export function SiteSidebar({
       <div className="mt-3 flex gap-1.5 px-1">
         <Link
           href={editHref}
-          className="punchable flex flex-1 items-center justify-center gap-2 rounded-xl border border-ink-800 bg-flux-500 px-3 py-2 text-[13px] font-bold text-white hover:bg-flux-400 hover:shadow-punch-sm"
+          className="flex flex-1 items-center justify-center gap-2 px-3 py-2 text-[13px] font-bold bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
         >
           <Icon d={PATHS.edit} />
           Edit site

@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AUTH_BUTTON, AUTH_CARD, AUTH_ERROR, AUTH_INPUT, AUTH_LABEL } from "./styles";
 
 export function SignupForm() {
   const router = useRouter();
@@ -41,14 +42,13 @@ export function SignupForm() {
     }
   }
 
-  const input =
-    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-[13.5px] text-ink-100 outline-none transition-colors placeholder:text-ink-600 focus:border-flux-500";
-  const label = "mb-1.5 block text-[12px] font-medium text-ink-300";
+  const input = AUTH_INPUT;
+  const label = AUTH_LABEL;
 
   return (
     <form
       onSubmit={submit}
-      className="rounded-2xl border border-ink-800 bg-ink-900 p-6 shadow-2xl shadow-black/40"
+      className={AUTH_CARD}
     >
       <label className={label} htmlFor="name">Your name</label>
       <input
@@ -88,7 +88,7 @@ export function SignupForm() {
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-lg border border-fail-500/30 bg-fail-500/10 px-3 py-2 text-[12.5px] text-fail-500"
+          className={`mt-4 ${AUTH_ERROR}`}
         >
           {error}
         </p>
@@ -97,7 +97,7 @@ export function SignupForm() {
       <button
         type="submit"
         disabled={busy}
-        className="mt-5 w-full rounded-lg bg-flux-500 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`mt-6 ${AUTH_BUTTON}`}
       >
         {busy ? "Building your site…" : "Create my site — it’s free"}
       </button>

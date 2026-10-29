@@ -891,7 +891,7 @@ export function DashboardShell({
       {/* ── ZONE 2 · GROW — branching full-width (the diff review needs the
           room), then the two one-shot AI moves side by side beneath it. */}
       <Zone label="Grow it" pop="pink" hint="Branch it, restyle it, translate it — every move is one version, one undo.">
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
+      <section className="min-w-0 overflow-hidden border-2 border-coal bg-white p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           Branches
         </div>
@@ -930,7 +930,7 @@ export function DashboardShell({
                     structSel.size === 0 &&
                     !(mergeTheme && diff.theme.length > 0))
                 }
-                className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+                className="px-4 py-2 text-[13px] font-semibold disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
               >
                 {(() => {
                   if (busy === "merge") return "Merging…";
@@ -1175,7 +1175,7 @@ export function DashboardShell({
 
       {/* The one-shot AI moves, side by side under branching. */}
       <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
-      <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
+      <section className="overflow-hidden border-2 border-coal bg-white p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           AI rebrand
         </div>
@@ -1201,7 +1201,7 @@ export function DashboardShell({
           <button
             type="submit"
             disabled={busy === "rebrand" || !!watching || rebrandVibe.trim().length < 3}
-            className="shrink-0 rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+            className="shrink-0 px-4 py-2 text-[13px] font-semibold disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
           >
             {busy === "rebrand" ? "Rebranding…" : watching ? "Publishing…" : "Rebrand & publish"}
           </button>
@@ -1210,7 +1210,7 @@ export function DashboardShell({
             onClick={() => void getDirections()}
             disabled={busy === "directions" || busy === "rebrand" || !!watching}
             title="Let the AI propose three brand concepts to choose from"
-            className="shrink-0 rounded-lg border border-flux-500/50 px-4 py-2 text-[13px] font-semibold text-flux-400 transition-colors hover:bg-flux-500/10 disabled:opacity-40"
+            className="shrink-0 px-4 py-2 text-[13px] font-semibold disabled:opacity-40 border-2 border-coal text-coal hover:bg-sun transition-colors"
           >
             {busy === "directions" ? "Thinking…" : "Give me 3 directions"}
           </button>
@@ -1239,7 +1239,7 @@ export function DashboardShell({
                   type="button"
                   onClick={() => void runRebrand(d.vibe)}
                   disabled={busy === "rebrand" || !!watching}
-                  className="mt-2.5 w-full rounded-lg bg-flux-500 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+                  className="mt-2.5 w-full px-3 py-1.5 text-[12px] font-semibold disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
                 >
                   Use this
                 </button>
@@ -1254,7 +1254,7 @@ export function DashboardShell({
       </section>
 
       {/* ── 4a-ii. AI translate ──────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6">
+      <section className="overflow-hidden border-2 border-coal bg-white p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-flux-400">
           AI translate
         </div>
@@ -1302,7 +1302,7 @@ export function DashboardShell({
             type="button"
             onClick={() => void runTranslate()}
             disabled={busy === "translate" || !!watching || translateSel.size === 0}
-            className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+            className="px-4 py-2 text-[13px] font-semibold disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
           >
             {busy === "translate"
               ? "Translating…"
@@ -1646,7 +1646,7 @@ function Hero({
 function BuildingStrip() {
   return (
     <div className="relative h-[3px] w-full overflow-hidden bg-ink-800">
-      <div className="cms-build-sweep absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-flux-400 to-transparent" />
+      <div className="cms-build-sweep absolute inset-y-0 w-1/3 bg-tomato" />
       <style>{`
         @keyframes cms-build-sweep { 0% { transform: translateX(-100%);} 100% { transform: translateX(400%);} }
         .cms-build-sweep { animation: cms-build-sweep 1.5s linear infinite; }
@@ -2362,29 +2362,18 @@ function Zone({
   pop: "yellow" | "pink" | "violet";
   children: ReactNode;
 }) {
-  const chip =
-    pop === "yellow"
-      ? "bg-pop-yellow text-ink-100"
-      : pop === "pink"
-        ? "bg-pop-pink text-ink-100"
-        : "bg-flux-500 text-white";
-  const wash =
-    pop === "yellow"
-      ? "bg-pop-yellow/[0.07]"
-      : pop === "pink"
-        ? "bg-pop-pink/[0.05]"
-        : "bg-flux-500/[0.05]";
+  // Each zone is a section of the printed page: an ink rule, a big headline
+  // whose full stop carries the zone's colour, and its one-line purpose.
+  const stop = pop === "yellow" ? "text-tomato" : pop === "pink" ? "text-cobalt" : "text-sun";
   return (
-    <section className={cx("relative mt-12 rounded-3xl border border-ink-800 p-4 sm:p-6", wash)}>
-      <span
-        className={cx(
-          "sticker absolute -top-3.5 left-5 inline-block rounded-lg border border-ink-800 px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] shadow-punch-sm",
-          chip,
-        )}
-      >
-        {label}
-      </span>
-      <p className="mb-4 mt-1 text-[12.5px] font-medium text-ink-500">{hint}</p>
+    <section className="mt-14 border-t-2 border-coal pt-6">
+      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+        <h2 className="display-mega text-[clamp(30px,4vw,46px)] text-coal">
+          {label}
+          <span className={stop}>.</span>
+        </h2>
+        <p className="max-w-[52ch] text-[14.5px] leading-relaxed text-coal/70">{hint}</p>
+      </div>
       {children}
     </section>
   );

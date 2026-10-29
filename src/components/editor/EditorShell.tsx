@@ -394,7 +394,7 @@ export function EditorShell(boot: EditorBootstrap) {
         </div>
       )}
 
-      <header className="flex h-13 shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-900 px-3 py-2.5">
+      <header className="flex h-13 shrink-0 items-center gap-3 border-b-2 border-coal bg-ink-900 px-3 py-2.5">
         {editingComponent ? (
           // Editing a reusable block: back means back to the page you came from,
           // not the dashboard. Losing that trail is the "how do I get back?" trap.
@@ -559,7 +559,7 @@ export function EditorShell(boot: EditorBootstrap) {
             onClick={() => setRightTab("publish")}
             disabled={readOnly}
             title={readOnly ? "Someone else is editing this page" : undefined}
-            className="rounded-lg bg-flux-500 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="px-3.5 py-1.5 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
           >
             Publish
           </button>
@@ -568,7 +568,7 @@ export function EditorShell(boot: EditorBootstrap) {
 
       <div className="flex min-h-0 flex-1">
         {/* ── Left ──────────────────────────────────────────────────────── */}
-        <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-900">
+        <aside className="flex w-60 shrink-0 flex-col border-r-2 border-coal bg-ink-900">
           <Tabs
             tabs={[
               { id: "blocks", label: "Blocks" },
@@ -604,7 +604,7 @@ export function EditorShell(boot: EditorBootstrap) {
         {/* ── Canvas ────────────────────────────────────────────────────── */}
         <main className="min-w-0 flex-1 overflow-y-auto bg-ink-850 p-5">
           <div
-            className="mx-auto overflow-hidden rounded-xl border border-ink-700 shadow-2xl shadow-black/40 transition-all duration-300"
+            className="mx-auto overflow-hidden border-2 border-coal shadow-[6px_6px_0_var(--color-coal)] transition-all duration-300"
             style={{ maxWidth: frameWidth ? `${frameWidth}px` : "1240px" }}
           >
             <div className="flex items-center gap-2 border-b border-ink-700 bg-ink-900 px-3 py-2">
@@ -673,7 +673,7 @@ export function EditorShell(boot: EditorBootstrap) {
         </main>
 
         {/* ── Right ─────────────────────────────────────────────────────── */}
-        <aside className="flex w-[19rem] shrink-0 flex-col border-l border-ink-800 bg-ink-900">
+        <aside className="flex w-[19rem] shrink-0 flex-col border-l-2 border-coal bg-ink-900">
           <Tabs
             tabs={[
               { id: "design", label: "Block" },
@@ -859,7 +859,7 @@ function PageMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
-          <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-xl border border-ink-800 bg-ink-900 p-1 shadow-xl">
+          <div className="absolute left-0 top-full z-50 mt-1 w-56 border-2 border-coal bg-white p-1 shadow-[4px_4px_0_var(--color-coal)]">
             <div className="px-2.5 py-1.5 text-[11px] text-ink-500">
               {page.title} <span className="font-mono text-ink-600">{page.path}</span>
             </div>

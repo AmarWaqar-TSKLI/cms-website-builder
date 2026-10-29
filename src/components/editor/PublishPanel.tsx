@@ -123,7 +123,7 @@ export function PublishPanel({
         type="button"
         onClick={publish}
         disabled={busy}
-        className="w-full rounded-xl bg-flux-500 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full px-4 py-2.5 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
       >
         {busy ? "Publishing…" : "Publish changes"}
       </button>

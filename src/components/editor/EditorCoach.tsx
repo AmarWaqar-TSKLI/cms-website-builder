@@ -57,10 +57,10 @@ export function EditorCoach() {
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
       <div
         ref={cardRef}
-        className="pointer-events-auto w-full max-w-lg rounded-2xl border border-flux-500/30 bg-ink-900 p-4 shadow-2xl shadow-black/20"
+        className="pointer-events-auto w-full max-w-lg border-2 border-coal bg-white p-5 shadow-[6px_6px_0_var(--color-coal)]"
       >
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[14px] font-semibold text-ink-100">
+          <p className="display text-[19px] leading-tight text-coal">
             First time here? The whole editor, in four moves
           </p>
           <button
@@ -75,12 +75,12 @@ export function EditorCoach() {
         <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
           {MOVES.map((m) => (
             <li key={m.n} className="flex items-start gap-2.5">
-              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-flux-500 text-[11px] font-semibold text-white">
+              <span className="shrink-0 font-[family-name:var(--font-display)] text-[22px] leading-none font-extrabold text-tomato">
                 {m.n}
               </span>
               <span>
-                <span className="block text-[12.5px] font-medium text-ink-100">{m.t}</span>
-                <span className="block text-[11.5px] leading-snug text-ink-400">{m.d}</span>
+                <span className="block text-[13.5px] font-semibold text-coal">{m.t}</span>
+                <span className="block text-[12.5px] leading-snug text-coal/70">{m.d}</span>
               </span>
             </li>
           ))}
@@ -88,7 +88,7 @@ export function EditorCoach() {
         <button
           type="button"
           onClick={dismiss}
-          className="mt-3 w-full rounded-xl bg-flux-500 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400"
+          className="btn-poster mt-4 w-full justify-center bg-tomato text-[14px] text-paper"
         >
           Got it — let&rsquo;s build
         </button>

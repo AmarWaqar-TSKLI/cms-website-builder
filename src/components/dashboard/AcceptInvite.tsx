@@ -3,6 +3,7 @@
 /** The accept button on the invite page — POSTs the token, then heads to /sites. */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AUTH_ERROR } from "@/components/auth/styles";
 
 export function AcceptInvite({
   token,
@@ -41,20 +42,20 @@ export function AcceptInvite({
   }
 
   return (
-    <div className="mt-5">
+    <div className="mt-6">
       {mismatch ? (
-        <p className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12.5px] leading-relaxed text-amber-300">
+        <p className="mb-4 border-2 border-coal bg-sun px-3 py-2 text-[13px] leading-relaxed text-coal">
           You&rsquo;re signed in as <span className="font-mono">{userEmail}</span>, but this invite
           is for <span className="font-mono">{expectedEmail}</span> — accepting will be refused.
           Sign in with the invited email first.
         </p>
       ) : null}
-      {error ? <p className="mb-3 text-[13px] text-fail-500">{error}</p> : null}
+      {error ? <p role="alert" className={`mb-4 ${AUTH_ERROR}`}>{error}</p> : null}
       <button
         type="button"
         onClick={() => void accept()}
         disabled={busy}
-        className="rounded-lg bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+        className="btn-poster bg-tomato text-[14px] text-paper disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Joining…" : "Accept invite"}
       </button>

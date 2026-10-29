@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { HubActions } from "@/components/dashboard/HubActions";
+import { HubMasthead } from "@/components/dashboard/HubMasthead";
 
 export const dynamic = "force-dynamic";
 
@@ -34,106 +35,83 @@ export default async function SitesHub() {
   const sites = [...trunks.flatMap((t) => [t, ...branchesOf(t.id)]), ...orphans];
 
   return (
-    <main className="min-h-screen bg-ink-950">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-6 py-4 sm:px-10">
-        <Link href="/" className="flex items-center gap-2.5 text-[15px] font-semibold text-ink-100">
-          <span className="tracking-tight">cms<span className="text-flux-500">/</span>builder</span>
-          <span className="text-ink-500">·</span>
-          <span>Your workspace</span>
-        </Link>
+    <main className="min-h-screen bg-paper text-coal">
+      <HubMasthead section="Your workspace">
         <HubActions user={{ name: user.name, email: user.email }} />
-      </header>
+      </HubMasthead>
 
-      <div className="mx-auto max-w-6xl px-6 py-12 sm:px-10">
-        {/* The loud voice: an oversized hero header with a sticker count. */}
-        <div className="anim-rise mb-10 flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
+        <div className="anim-rise grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
-            <p className="mb-2 inline-block rounded-lg border border-ink-800 bg-pop-yellow px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-ink-100">
+            <p className="kicker text-tomato">
               {sites.length === 0
-                ? "day one"
-                : `${sites.length} site${sites.length === 1 ? "" : "s"} in the shop`}
+                ? "Day one"
+                : `${sites.length} site${sites.length === 1 ? "" : "s"} in this workspace`}
             </p>
-            <h1 className="display-mega text-[clamp(34px,6vw,56px)] text-ink-100">
-              Your websites
+            <h1 className="display-mega mt-4 text-[clamp(44px,7vw,84px)]">
+              Your <span className="mark-sun">websites.</span>
             </h1>
           </div>
-          <p className="max-w-[26ch] text-[13.5px] leading-relaxed text-ink-400">
-            Every card is a live little world — open one to build, publish, branch and roll back.
+          <p className="max-w-[34ch] text-[16px] leading-relaxed text-coal/75">
+            Open one to build, publish, branch and roll back. Every version stays one click away.
           </p>
         </div>
 
         {sites.length === 0 ? (
-          <div className="anim-pop rounded-3xl border border-dashed border-ink-700 px-6 py-20 text-center">
-            <p className="display text-[22px] text-ink-100">Nothing here yet — good.</p>
-            <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-ink-500">
-              Blank canvas energy. Hit <span className="font-semibold text-flux-300">New AI site</span>{" "}
-              and describe the thing, or <span className="font-semibold text-ink-300">＋ Blank site</span>{" "}
-              to lay every block yourself.
+          <div className="anim-pop mt-12 border-2 border-dashed border-coal px-6 py-20 text-center">
+            <p className="display text-[26px]">Nothing here yet.</p>
+            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-coal/75">
+              Start with <span className="font-semibold">New AI site</span> and describe the thing, or{" "}
+              <span className="font-semibold">Blank site</span> to lay every block yourself.
             </p>
           </div>
         ) : (
-          // Bento: the grid breathes — live sites read at a glance, branches sit
-          // right under their parent (the ordering above), every card is a tiny
-          // browser window because that's literally what it is.
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          // A ruled list, like a contents page: branches sit right under their
+          // parent (the ordering above), and the whole row is the link.
+          <ul className="mt-12 border-t-2 border-coal">
             {sites.map((s, i) => (
-              <Link
-                key={s.id}
-                href={`/dashboard?site=${s.id}`}
-                className={cxOrder(
-                  "punchable anim-rise group flex flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 hover:shadow-punch",
-                  i,
-                )}
-              >
-                {/* Window chrome — the card IS a website. */}
-                <div className="flex items-center gap-1.5 border-b border-ink-800 bg-ink-850 px-4 py-2.5">
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-pop-pink" />
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-pop-yellow" />
-                  <span className="h-2.5 w-2.5 rounded-full border border-ink-800 bg-live-500" />
-                  <span className="ml-2 truncate font-mono text-[10.5px] text-ink-500">
-                    {s.customDomain ?? `/s/${s.slug}`}
-                  </span>
-                </div>
-
-                <div className="flex flex-1 flex-col p-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <h2 className="display min-w-0 truncate text-[20px] text-ink-100">{s.name}</h2>
-                    <span
-                      aria-hidden
-                      className="shrink-0 text-[18px] text-ink-600 transition-transform duration-150 group-hover:translate-x-1 group-hover:text-flux-300"
-                    >
-                      →
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={
-                        s.liveReleaseId
-                          ? "rounded-lg border border-live-500 bg-live-500/12 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-live-500"
-                          : "rounded-lg border border-ink-600 bg-ink-850 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-400"
-                      }
-                    >
-                      {s.liveReleaseId ? "● Live" : "Draft"}
-                    </span>
-                    {s.parentSiteId ? (
-                      <span className="rounded-lg border border-flux-500 bg-flux-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-flux-300">
-                        {nameById.get(s.parentSiteId) ? `branch of ${nameById.get(s.parentSiteId)}` : "branch"}
+              <li key={s.id} className={cxOrder("anim-rise border-b-2 border-coal", i)}>
+                <Link
+                  href={`/dashboard?site=${s.id}`}
+                  className={`group grid gap-3 py-6 transition-colors hover:bg-white sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-8 sm:px-4 ${
+                    s.parentSiteId ? "sm:pl-12" : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                      <h2 className="display truncate text-[clamp(24px,3vw,34px)]">{s.name}</h2>
+                      <span className="truncate font-mono text-[13px] text-coal/60">
+                        {s.customDomain ?? `/s/${s.slug}`}
                       </span>
-                    ) : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13.5px] text-coal/70">
+                      <span
+                        className={
+                          s.liveReleaseId
+                            ? "kicker border-2 border-coal bg-live-500 px-2 py-0.5 text-[11px] text-white"
+                            : "kicker border-2 border-coal bg-paper-deep px-2 py-0.5 text-[11px]"
+                        }
+                      >
+                        {s.liveReleaseId ? "Live" : "Draft"}
+                      </span>
+                      {s.parentSiteId ? (
+                        <span className="kicker border-2 border-coal bg-cobalt px-2 py-0.5 text-[11px] text-paper">
+                          {nameById.get(s.parentSiteId) ? `Branch of ${nameById.get(s.parentSiteId)}` : "Branch"}
+                        </span>
+                      ) : null}
+                      <span>
+                        {s.pages.length} page{s.pages.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="truncate">{s.org.name}</span>
+                    </div>
                   </div>
-
-                  <div className="mt-auto flex items-center gap-2.5 pt-4 text-[11.5px] font-medium text-ink-500">
-                    <span>
-                      {s.pages.length} page{s.pages.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="h-1 w-1 rounded-full bg-ink-600" />
-                    <span className="truncate">{s.org.name}</span>
-                  </div>
-                </div>
-              </Link>
+                  <span className="text-[15px] font-semibold underline decoration-2 underline-offset-4 group-hover:text-tomato">
+                    Open dashboard <span aria-hidden>→</span>
+                  </span>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </main>

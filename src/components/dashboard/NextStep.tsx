@@ -97,7 +97,7 @@ export function NextStep({
           type="button"
           onClick={onPublish}
           disabled={publishing}
-          className="rounded-xl bg-flux-500 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="px-4 py-2.5 text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
         >
           {publishing ? "Publishing…" : firstTime ? "Publish my website" : "Publish my changes"}
         </button>

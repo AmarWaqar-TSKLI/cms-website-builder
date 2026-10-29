@@ -137,7 +137,7 @@ export function SetupChecklist({
                   (step.href ? (
                     <Link
                       href={step.href}
-                      className="mt-3 inline-flex rounded-xl bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
+                      className="mt-3 inline-flex px-4 py-2 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
                     >
                       {step.cta}
                     </Link>
@@ -146,7 +146,7 @@ export function SetupChecklist({
                       type="button"
                       onClick={step.onClick}
                       disabled={publishing}
-                      className="mt-3 inline-flex rounded-xl bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400"
+                      className="mt-3 inline-flex px-4 py-2 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-400 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
                     >
                       {publishing ? "Publishing…" : step.cta}
                     </button>

@@ -120,7 +120,7 @@ export function MediaField({
           type="button"
           disabled={busy}
           onClick={() => fileInput.current?.click()}
-          className="rounded-md border border-flux-500/40 px-2.5 py-1 text-[11px] font-medium text-flux-300 transition-colors hover:border-flux-500 hover:bg-flux-500/10 disabled:opacity-50"
+          className="px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 border-2 border-coal text-coal hover:bg-sun transition-colors"
         >
           Upload
         </button>

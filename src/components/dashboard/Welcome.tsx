@@ -139,11 +139,10 @@ export function Welcome({
 
   const current = steps[step];
   const isLast = step === steps.length - 1;
-  const accentText = current.accent === "reuse" ? "text-reuse-500" : "text-flux-300";
 
   return (
     <div
-      className="cms-welcome-overlay fixed inset-0 z-50 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
+      className="cms-welcome-overlay fixed inset-0 z-50 grid place-items-center bg-coal/45 p-4"
       onClick={dismiss}
     >
       <div
@@ -154,36 +153,36 @@ export function Welcome({
         aria-describedby="cms-welcome-body"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="cms-welcome-card w-full max-w-[480px] overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 shadow-2xl shadow-ink-950/20 outline-none"
+        className="cms-welcome-card w-full max-w-[480px] overflow-hidden border-2 border-coal bg-white shadow-[8px_8px_0_var(--color-coal)] outline-none"
       >
-        {/* Illustration banner — tinted to the step's accent. */}
-        <div
-          className={cx(
-            "relative grid h-40 place-items-center border-b border-ink-800",
-            current.accent === "reuse" ? "bg-reuse-500/[0.07]" : "bg-flux-500/[0.07]",
-          )}
-        >
-          <span className={cx("h-20 w-20", accentText)}>{current.art}</span>
+        {/* A printed step number on a tomato band, in place of an illustration. */}
+        <div className="relative flex h-32 items-end justify-between border-b-2 border-coal bg-tomato px-6 pb-4 text-paper">
+          <span className="font-[family-name:var(--font-display)] text-[72px] leading-none font-extrabold">
+            {String(step + 1).padStart(2, "0")}
+          </span>
+          <span className="kicker mb-2 text-paper/80">
+            of {String(steps.length).padStart(2, "0")}
+          </span>
           <button
             type="button"
             onClick={dismiss}
             aria-label="Skip the intro"
-            className="absolute right-3 top-3 rounded-lg px-2 py-1 text-[11.5px] text-ink-500 transition-colors hover:bg-ink-850 hover:text-ink-200"
+            className="absolute right-4 top-3 text-[13px] font-medium text-paper underline decoration-2 underline-offset-4 hover:text-coal"
           >
             Skip
           </button>
         </div>
 
         <div className="p-6">
-          <p className={cx("text-[11px] font-semibold uppercase tracking-[0.14em]", accentText)}>
+          <p className="kicker text-tomato">
             {current.eyebrow}
           </p>
-          <h2 id="cms-welcome-title" className="display mt-2 text-[22px] leading-snug text-ink-100">
+          <h2 id="cms-welcome-title" className="display mt-2 text-[26px] leading-tight text-coal">
             {current.title}
           </h2>
           <p
             id="cms-welcome-body"
-            className="mt-2.5 min-h-[4.5rem] text-[13.5px] leading-relaxed text-ink-300"
+            className="mt-2.5 min-h-[4.5rem] text-[15px] leading-relaxed text-coal/80"
           >
             {current.body}
           </p>
@@ -200,8 +199,8 @@ export function Welcome({
                   aria-label={`Step ${i + 1}: ${s.title}`}
                   onClick={() => setStep(i)}
                   className={cx(
-                    "h-1.5 rounded-full transition-all",
-                    i === step ? "w-5 bg-flux-500" : "w-1.5 bg-ink-700 hover:bg-ink-600",
+                    "h-2 transition-all",
+                    i === step ? "w-6 bg-tomato" : "w-2 bg-coal/25 hover:bg-coal/50",
                   )}
                 />
               ))}
@@ -212,7 +211,7 @@ export function Welcome({
                 <button
                   type="button"
                   onClick={back}
-                  className="rounded-xl border border-ink-700 px-3.5 py-2 text-[13px] font-medium text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
+                  className="btn-poster bg-white px-3.5 py-2 text-[13.5px]"
                 >
                   Back
                 </button>
@@ -221,7 +220,7 @@ export function Welcome({
                 <Link
                   href={editHref}
                   onClick={dismiss}
-                  className="rounded-xl bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400"
+                  className="btn-poster bg-tomato px-4 py-2 text-[13.5px] text-paper"
                 >
                   Start building
                 </Link>
@@ -229,7 +228,7 @@ export function Welcome({
                 <button
                   type="button"
                   onClick={next}
-                  className="rounded-xl bg-flux-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-flux-400"
+                  className="btn-poster bg-tomato px-4 py-2 text-[13.5px] text-paper"
                 >
                   Next
                 </button>

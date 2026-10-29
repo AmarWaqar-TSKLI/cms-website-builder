@@ -25,16 +25,16 @@
 
 @theme {
   /* Neutrals. */
-  --color-ink-950: #faf8f4; /* page ground, a warm white */
-  --color-ink-900: #ffffff; /* cards, panels, bars */
-  --color-ink-850: #f3efe7; /* hover on a surface */
-  --color-ink-800: #e6e0d4; /* hairlines and borders */
-  --color-ink-700: #d3cbbb; /* stronger borders, inputs */
-  --color-ink-600: #a69e8f; /* placeholders, disabled */
-  --color-ink-500: #776f62; /* faint labels */
-  --color-ink-400: #574f44; /* secondary text */
-  --color-ink-300: #3d362d; /* body text */
-  --color-ink-200: #29231c; /* strong body */
+  --color-ink-950: #f3eee4; /* page ground: the poster's paper */
+  --color-ink-900: #fffdf9; /* cards, panels, bars: a white sheet on the paper */
+  --color-ink-850: #ebe4d6; /* hover on a surface */
+  --color-ink-800: #cdc2ad; /* hairlines and borders, a printed rule */
+  --color-ink-700: #a89c85; /* stronger borders, inputs */
+  --color-ink-600: #8a7f6c; /* placeholders, disabled */
+  --color-ink-500: #6b6255; /* faint labels */
+  --color-ink-400: #4a4237; /* secondary text */
+  --color-ink-300: #322c24; /* body text */
+  --color-ink-200: #221d17; /* strong body */
   --color-ink-100: #16130f; /* headings */
 
   /* The tool's accent: buttons, focus, selection, links. 300 is accent TEXT. */
@@ -69,10 +69,19 @@
   --font-mega: "Bricolage Grotesque", var(--font-sans);
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Soft shadows (the class names are kept so components need no edits). */
-  --shadow-punch-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-punch: 0 1px 3px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.04);
-  --shadow-punch-lg: 0 2px 6px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.06);
+  /* Hard ink shadows, like the landing's buttons: offset, never blurred. */
+  --shadow-punch-sm: 2px 2px 0 #16130f;
+  --shadow-punch: 4px 4px 0 #16130f;
+  --shadow-punch-lg: 6px 6px 0 #16130f;
+
+  /* Print has square corners. Pills and dots (rounded-full) are unaffected. */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 4px;
+  --radius-3xl: 6px;
 }
 
 /*
@@ -182,12 +191,12 @@ body {
 
 /*
   Focus. Every interactive thing must show where the keyboard is — declared once
-  here rather than remembered per component.
+  here rather than remembered per component. tabindex="-1" is a programmatic
+  focus target (a dialog taking focus on open), not something a keyboard lands on.
 */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+:where(a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--color-flux-500);
   outline-offset: 2px;
-  border-radius: 6px;
 }
 
 /* Scrollbars — the editor has a lot of panes. */
@@ -212,8 +221,8 @@ body {
 
 @utility panel {
   background: var(--color-ink-900);
-  border: 1px solid var(--color-ink-800);
-  border-radius: 10px;
+  border: 2px solid var(--color-coal);
+  border-radius: 0;
 }
 
 @utility mono-xs {

@@ -247,7 +247,7 @@ export function Palette({
             type="button"
             onClick={() => void runCopilot()}
             disabled={planBusy}
-            className="w-full rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-50"
+            className="w-full px-3 py-2 text-[12.5px] font-semibold disabled:opacity-50 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
           >
             {planBusy ? "Analysing your page…" : "Suggest what to add"}
           </button>
@@ -277,7 +277,7 @@ export function Palette({
                       <button
                         type="button"
                         onClick={() => addRec(r)}
-                        className="shrink-0 rounded-md bg-flux-500 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-flux-400"
+                        className="shrink-0 px-2.5 py-1 text-[11px] font-semibold bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
                       >
                         Add
                       </button>
@@ -312,7 +312,7 @@ export function Palette({
               onClick={() => void askAi()}
               disabled={aiBusy || aiPrompt.trim().length < 3}
               title="Compose a new section from your description and add it to the page"
-              className="flex-1 rounded-lg bg-flux-500 px-2 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40"
+              className="flex-1 px-2 py-1.5 text-[12px] font-semibold disabled:opacity-40 bg-tomato text-paper border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]"
             >
               {aiBusy ? "…" : "＋ Add section"}
             </button>
@@ -321,7 +321,7 @@ export function Palette({
               onClick={() => void aiRewrite()}
               disabled={aiBusy || aiPrompt.trim().length < 3}
               title="Rewrite the words already on this page in the tone you describe"
-              className="flex-1 rounded-lg border border-flux-500/50 px-2 py-1.5 text-[12px] font-semibold text-flux-400 transition-colors hover:bg-flux-500/10 disabled:opacity-40"
+              className="flex-1 px-2 py-1.5 text-[12px] font-semibold disabled:opacity-40 border-2 border-coal text-coal hover:bg-sun transition-colors"
             >
               {aiBusy ? "…" : "Rewrite page"}
             </button>

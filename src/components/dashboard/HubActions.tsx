@@ -43,38 +43,32 @@ export function HubActions({ user }: { user: { name: string; email: string } }) 
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Link
-        href="/build"
-        className="rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400"
-      >
+    <div className="flex flex-wrap items-center gap-3">
+      <Link href="/build" className="btn-poster bg-tomato px-3.5 py-2.5 text-[14px] text-paper">
         New AI site
       </Link>
-      <Link
-        href="/templates"
-        className="rounded-lg border border-ink-700 px-3 py-2 text-[12.5px] font-medium text-ink-200 transition-colors hover:border-ink-600"
-      >
+      <Link href="/templates" className="btn-poster bg-white px-3.5 py-2.5 text-[14px]">
         Templates
       </Link>
       <button
         type="button"
         onClick={newBlankSite}
         disabled={busy}
-        className="rounded-lg border border-ink-700 px-3 py-2 text-[12.5px] font-medium text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
+        className="btn-poster bg-white px-3.5 py-2.5 text-[14px] disabled:opacity-50"
       >
-        {busy ? "Creating…" : "＋ Blank site"}
+        {busy ? "Creating…" : "Blank site"}
       </button>
-      <span className="mx-1 hidden h-6 w-px bg-ink-800 sm:block" />
+      <span className="mx-1 hidden h-7 w-0.5 bg-coal sm:block" />
       <span
         title={user.email}
-        className="grid h-8 w-8 place-items-center rounded-full bg-flux-500/20 text-[12px] font-semibold text-flux-300"
+        className="grid h-9 w-9 place-items-center rounded-full border-2 border-coal bg-sun text-[12px] font-bold"
       >
         {initials || "?"}
       </span>
       <button
         type="button"
         onClick={signOut}
-        className="rounded-lg border border-ink-800 px-2.5 py-2 text-[12px] text-ink-400 transition-colors hover:border-ink-600 hover:text-ink-100"
+        className="text-[14px] font-medium underline decoration-2 underline-offset-4 hover:text-tomato"
       >
         Sign out
       </button>

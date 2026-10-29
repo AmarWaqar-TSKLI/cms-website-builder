@@ -24,23 +24,23 @@ type Size = "md" | "sm" | "xs";
 const FOCUS =
   "outline-none focus-visible:ring-2 focus-visible:ring-flux-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950";
 
+// The landing's poster button, scaled for a working screen: a solid block on a
+// hard ink shadow that lifts on hover and presses flat when clicked.
+const POSTER =
+  "border-2 border-coal shadow-[3px_3px_0_var(--color-coal)] transition-[transform,box-shadow] duration-100 hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_var(--color-coal)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_var(--color-coal)]";
+
 const VARIANT: Record<Variant, string> = {
-  // The violet voice, with the punch: lifts onto a hard ink shadow on hover,
-  // sits back down on press. The button physically pushes back.
-  primary:
-    "punchable border border-ink-800 bg-flux-500 text-white hover:bg-flux-400 hover:shadow-punch-sm",
-  // Paper with a firm border; earns its shadow on hover.
-  secondary:
-    "punchable border border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:shadow-punch-sm",
-  ghost: "border border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100 transition-colors",
-  quiet: "text-ink-400 hover:text-ink-100 hover:bg-ink-850 transition-colors",
-  danger: "border border-fail-500/40 text-fail-500 hover:border-fail-500 hover:bg-fail-500/8 transition-colors",
+  primary: `${POSTER} bg-tomato text-paper`,
+  secondary: `${POSTER} bg-white text-coal`,
+  ghost: "border-2 border-coal/25 text-coal hover:border-coal transition-colors",
+  quiet: "text-ink-400 hover:text-coal hover:bg-ink-850 transition-colors",
+  danger: "border-2 border-fail-500 text-fail-500 hover:bg-fail-500 hover:text-white transition-colors",
 };
 
 const SIZE: Record<Size, string> = {
-  md: "h-9 px-4 text-[13px] rounded-xl",
-  sm: "h-8 px-3 text-[12px] rounded-lg",
-  xs: "h-7 px-2.5 text-[11px] rounded-md",
+  md: "h-9 px-4 text-[13.5px]",
+  sm: "h-8 px-3 text-[12.5px]",
+  xs: "h-7 px-2.5 text-[11.5px]",
 };
 
 export function btn(variant: Variant = "secondary", size: Size = "md", className?: string) {
@@ -121,8 +121,8 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-2xl border bg-ink-900",
-        tone === "live" ? "border-live-500/45" : "border-ink-800",
+        "border-2 bg-white",
+        tone === "live" ? "border-live-500" : "border-coal",
         className,
       )}
     >
@@ -153,8 +153,8 @@ export function CardHead({
   return (
     <div className={cx("flex flex-wrap items-start justify-between gap-x-4 gap-y-2", className)}>
       <div className="min-w-0">
-        <h2 className="display text-[18px] text-ink-100">{title}</h2>
-        {hint && <p className="mt-1 max-w-prose text-[12.5px] leading-relaxed text-ink-400">{hint}</p>}
+        <h2 className="display text-[21px] text-coal">{title}</h2>
+        {hint && <p className="mt-1 max-w-prose text-[13.5px] leading-relaxed text-coal/70">{hint}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {technical && tables && (
@@ -188,20 +188,20 @@ export function Tile({
 }) {
   const inner = (
     <>
-      <div className="display text-[28px] leading-none text-ink-100" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <div className="display text-[32px] leading-none text-coal" style={{ fontVariantNumeric: "tabular-nums" }}>
         {value}
       </div>
-      <div className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">{label}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-ink-500">{sub}</div>}
+      <div className="kicker mt-2 text-[11px] text-coal/70">{label}</div>
+      {sub && <div className="mt-0.5 text-[12px] text-coal/55">{sub}</div>}
     </>
   );
-  const cls = "block rounded-2xl border border-ink-800 bg-ink-950/70 px-4 py-4";
+  const cls = "block border-2 border-coal bg-paper px-4 py-4";
   if (href) {
     return (
       <Link
         href={href}
         title={title}
-        className={cx(cls, "punchable hover:border-ink-600 hover:shadow-punch-sm", FOCUS)}
+        className={cx(cls, "transition-colors hover:bg-sun", FOCUS)}
       >
         {inner}
       </Link>
@@ -224,11 +224,11 @@ export function UnderTheHood({
   children: ReactNode;
 }) {
   return (
-    <details className="group rounded-2xl border border-ink-800 bg-ink-900/40 open:bg-ink-900/70">
+    <details className="group border-2 border-coal bg-paper open:bg-white">
       <summary
         className={cx(
-          "flex cursor-pointer list-none items-center gap-2 rounded-2xl px-5 py-3.5 text-[12.5px] text-ink-400",
-          "transition-colors hover:text-ink-100",
+          "flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-[13.5px] font-semibold text-coal",
+          "transition-colors hover:text-tomato",
           FOCUS,
         )}
       >
@@ -241,7 +241,7 @@ export function UnderTheHood({
         </svg>
         {summary}
       </summary>
-      <div className="max-w-[76ch] space-y-2.5 border-t border-ink-800 px-5 py-4 text-[12.5px] leading-relaxed text-ink-400">
+      <div className="max-w-[76ch] space-y-2.5 border-t-2 border-coal px-5 py-4 text-[13px] leading-relaxed text-coal/75">
         {children}
       </div>
     </details>

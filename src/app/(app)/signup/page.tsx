@@ -18,9 +18,9 @@ export default async function SignupPage() {
       sub="Sign up free — you'll get a fresh website with a starting page you can edit right away."
     >
       <SignupForm />
-      <p className="mt-5 text-[13px] text-ink-400">
+      <p className="mt-6 text-[13.5px] text-coal/80">
         Already have an account?{" "}
-        <a href="/login" className="font-semibold text-flux-300 transition-colors hover:text-flux-400">
+        <a href="/login" className="font-semibold underline decoration-2 underline-offset-4 hover:text-tomato">
           Sign in
         </a>
       </p>

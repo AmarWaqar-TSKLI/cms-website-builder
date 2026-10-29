@@ -68,7 +68,7 @@ export function BuildForm() {
 
   return (
     <form onSubmit={submit} className="w-full">
-      <div className="rounded-2xl border border-ink-800 bg-ink-900 p-2 shadow-2xl shadow-black/40 focus-within:border-flux-500/60">
+      <div className="border-2 border-coal bg-white p-2 shadow-[6px_6px_0_var(--color-coal)]">
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -76,19 +76,19 @@ export function BuildForm() {
           rows={3}
           maxLength={400}
           placeholder="e.g. a cozy coffee shop in Lisbon with fresh pastries and free wifi"
-          className="w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink-100 outline-none placeholder:text-ink-600 disabled:opacity-60"
+          className="w-full resize-none bg-transparent px-3 py-2.5 text-[17px] leading-relaxed text-coal outline-none placeholder:text-coal/40 disabled:opacity-60"
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(e);
           }}
         />
         <div className="flex items-center justify-between gap-3 px-1 pb-1">
-          <span className="pl-2 text-[11.5px] text-ink-600">
+          <span className="pl-2 font-mono text-[12px] text-coal/55">
             {busy ? STEPS[step] : "Press ⌘/Ctrl + Enter to build"}
           </span>
           <button
             type="submit"
             disabled={busy || description.trim().length < 3}
-            className="shrink-0 rounded-xl bg-flux-500 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-poster shrink-0 bg-tomato text-[14px] text-paper disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Building…" : "Build my site"}
           </button>
@@ -98,24 +98,27 @@ export function BuildForm() {
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-lg border border-fail-500/30 bg-fail-500/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-fail-500"
+          className="mt-5 border-2 border-tomato bg-tomato/10 px-3 py-2.5 text-[13.5px] leading-relaxed text-tomato-deep"
         >
           {error}
         </p>
       )}
 
       {!busy && !error && (
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-8">
+          <p className="kicker mb-3 text-coal/60">Or start from one of these</p>
+          <div className="flex flex-wrap gap-2.5">
           {EXAMPLES.map((ex) => (
             <button
               key={ex}
               type="button"
               onClick={() => setDescription(ex)}
-              className="rounded-full border border-ink-800 bg-ink-900 px-3 py-1.5 text-[12px] text-ink-400 transition-colors hover:border-ink-700 hover:text-ink-200"
+              className="border-2 border-coal bg-paper px-3 py-1.5 text-[13.5px] text-coal transition-colors hover:bg-sun"
             >
               {ex}
             </button>
           ))}
+          </div>
         </div>
       )}
     </form>

@@ -47,27 +47,25 @@ export function TemplateGallery({ templates }: { templates: TemplateCard[] }) {
   }
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2">
+    <div className="grid gap-8 sm:grid-cols-2">
       {templates.map((t) => (
         <div
           key={t.id}
           data-template-id={t.id}
-          className="flex flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900"
+          className="flex flex-col border-2 border-coal bg-white shadow-[6px_6px_0_var(--color-coal)]"
         >
-          <Preview tokens={t.tokens} name={t.name} />
+          <div className="border-b-2 border-coal">
+            <Preview tokens={t.tokens} name={t.name} />
+          </div>
           <div className="flex flex-1 flex-col p-5">
-            <div className="flex items-center gap-2">
-              <h2 className="display text-[18px] text-ink-100">{t.name}</h2>
-              <span className="rounded-full border border-ink-700 px-2 py-0.5 text-[10.5px] text-ink-400">
-                {t.category}
-              </span>
-            </div>
-            <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-ink-400">{t.tagline}</p>
+            <p className="kicker text-[11px] text-tomato">{t.category}</p>
+            <h2 className="display mt-1.5 text-[24px] text-coal">{t.name}</h2>
+            <p className="mt-2 flex-1 text-[14.5px] leading-relaxed text-coal/75">{t.tagline}</p>
             <button
               type="button"
               onClick={() => use(t.id)}
               disabled={!!busyId}
-              className="mt-4 rounded-lg bg-flux-500 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-50"
+              className="btn-poster mt-5 justify-center bg-tomato text-[14px] text-paper disabled:opacity-50"
             >
               {busyId === t.id ? "Creating your site…" : "Use this template"}
             </button>

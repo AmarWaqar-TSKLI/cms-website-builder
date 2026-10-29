@@ -5,10 +5,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-const INPUT =
-  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-[14px] text-ink-100 placeholder:text-ink-600 focus:border-flux-500 focus:outline-none";
-const BUTTON =
-  "w-full rounded-lg bg-flux-500 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-flux-400 disabled:opacity-40";
+import { AUTH_BUTTON, AUTH_CARD, AUTH_ERROR, AUTH_INPUT, AUTH_LABEL, AUTH_LINK } from "./styles";
+
+const INPUT = AUTH_INPUT;
+const BUTTON = AUTH_BUTTON;
 
 export function ForgotForm() {
   const [email, setEmail] = useState("");
@@ -41,29 +41,39 @@ export function ForgotForm() {
 
   if (done) {
     return (
-      <p className="text-[14px] leading-relaxed text-ink-300">
+      <p className={`${AUTH_CARD} text-[15px] leading-relaxed text-coal`}>
         If an account exists for <span className="font-mono text-[13px]">{email}</span>, a reset
         link is on its way. It works once and expires in an hour.
       </p>
     );
   }
   return (
-    <form onSubmit={submit} className="space-y-3">
-      {error && <p className="text-[13px] text-fail-500">{error}</p>}
-      <input
-        type="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@company.com"
-        className={INPUT}
-      />
+    <form onSubmit={submit} className={`${AUTH_CARD} space-y-5`}>
+      {error && (
+        <p role="alert" className={AUTH_ERROR}>
+          {error}
+        </p>
+      )}
+      <div>
+        <label className={AUTH_LABEL} htmlFor="email">
+          Email
+        </label>
+        <input
+          id="email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          className={INPUT}
+        />
+      </div>
       <button type="submit" disabled={busy || !email.trim()} className={BUTTON}>
         {busy ? "Sending…" : "Email me a reset link"}
       </button>
-      <p className="text-center text-[12.5px] text-ink-500">
+      <p className="border-t border-coal/20 pt-4 text-center text-[13.5px] text-coal/80">
         Remembered it?{" "}
-        <Link href="/login" className="text-flux-300 hover:underline">
+        <Link href="/login" className={AUTH_LINK}>
           Sign in
         </Link>
       </p>
@@ -101,17 +111,27 @@ export function ResetForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      {error && <p className="text-[13px] text-fail-500">{error}</p>}
-      <input
-        type="password"
-        required
-        minLength={8}
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="New password (8+ characters)"
-        className={INPUT}
-      />
+    <form onSubmit={submit} className={`${AUTH_CARD} space-y-5`}>
+      {error && (
+        <p role="alert" className={AUTH_ERROR}>
+          {error}
+        </p>
+      )}
+      <div>
+        <label className={AUTH_LABEL} htmlFor="password">
+          New password
+        </label>
+        <input
+          id="password"
+          type="password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="New password (8+ characters)"
+          className={INPUT}
+        />
+      </div>
       <button type="submit" disabled={busy || password.length < 8} className={BUTTON}>
         {busy ? "Saving…" : "Set new password"}
       </button>
